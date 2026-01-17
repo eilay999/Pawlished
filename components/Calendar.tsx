@@ -1,0 +1,341 @@
+
+import React, { useState, useEffect } from 'react';
+import { ChevronRight, ChevronLeft, Sparkles, Plus, Clock } from 'lucide-react';
+import { WEEK_DAYS } from '../constants';
+import { Appointment, Customer, DayCell } from '../types';
+import { analyzeSchedule } from '../services/geminiService';
+import { getJewishHoliday } from '../services/holidayService';
+
+interface CalendarProps {
+  currentDate: Date;
+  onDateChange: (date: Date) => void;
+  appointments: Appointment[];
+  customers: Customer[];
+  onDayClick: (date: Date) => void;
+  onAppointmentClick: (appointment: Appointment) => void;
+  onAppointmentMove: (appointmentId: string, newDate: Date) => void;
+}
+
+export const Calendar: React.FC<CalendarProps> = ({ 
+    currentDate, 
+    onDateChange, 
+    appointments, 
+    customers, 
+    onDayClick,
+    onAppointmentClick,
+    onAppointmentMove
+}) => {
+  const [calendarGrid, setCalendarGrid] = useState<DayCell[]>([]);
+  const [aiAnalysis, setAiAnalysis] = useState<string>('');
+  const [loadingAi, setLoadingAi] = useState(false);
+  const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
+
+  // Today's Date info for Header
+  const today = new Date();
+  const todayGregorian = today.toLocaleDateString('he-IL');
+
+  // Generate Calendar Grid
+  useEffect(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const todayRef = new Date(); 
+
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
+    
+    // 0 = Sunday, 1 = Monday, etc.
+    const startDayOfWeek = firstDayOfMonth.getDay(); 
+    
+    const daysInMonth = lastDayOfMonth.getDate();
+    
+    const grid: DayCell[] = [];
+
+    // Helper to check if a date is today
+    const isDateToday = (d: Date) => {
+        return d.getDate() === todayRef.getDate() &&
+               d.getMonth() === todayRef.getMonth() &&
+               d.getFullYear() === todayRef.getFullYear();
+    };
+
+    // Previous month padding
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const date = new Date(year, month - 1, prevMonthLastDay - i);
+      grid.push({
+        date,
+        isCurrentMonth: false,
+        isToday: isDateToday(date),
+        events: [],
+        holiday: getJewishHoliday(date)
+      });
+    }
+
+    // Current month days
+    for (let i = 1; i <= daysInMonth; i++) {
+      const date = new Date(year, month, i);
+      
+      // Find appointments for this day
+      const daysEvents = appointments.filter(app => 
+        app.date.getDate() === i && 
+        app.date.getMonth() === month &&
+        app.date.getFullYear() === year
+      ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      grid.push({
+        date,
+        isCurrentMonth: true,
+        isToday: isDateToday(date),
+        events: daysEvents,
+        holiday: getJewishHoliday(date)
+      });
+    }
+
+    // Next month padding to fill grid
+    const remainingCells = 42 - grid.length;
+    for (let i = 1; i <= remainingCells; i++) {
+      const date = new Date(year, month + 1, i);
+      grid.push({
+        date,
+        isCurrentMonth: false,
+        isToday: isDateToday(date),
+        events: [],
+        holiday: getJewishHoliday(date)
+      });
+    }
+
+    setCalendarGrid(grid);
+  }, [currentDate, appointments]);
+
+  const handlePrevMonth = () => {
+    onDateChange(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    onDateChange(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const handleToday = () => {
+    onDateChange(new Date());
+  };
+
+  const handleAiAnalyze = async () => {
+    setLoadingAi(true);
+    const result = await analyzeSchedule(currentDate, appointments, customers);
+    setAiAnalysis(result);
+    setLoadingAi(false);
+  };
+
+  // --- Drag and Drop Handlers ---
+  const handleDragStart = (e: React.DragEvent, appointmentId: string) => {
+    e.dataTransfer.setData("appointmentId", appointmentId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, date: Date) => {
+    e.preventDefault(); 
+    if (dragOverDate?.getTime() !== date.getTime()) {
+        setDragOverDate(date);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    const appointmentId = e.dataTransfer.getData("appointmentId");
+    if (appointmentId) {
+        onAppointmentMove(appointmentId, targetDate);
+    }
+    setDragOverDate(null);
+  };
+
+
+  const monthName = currentDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="flex-1 bg-white m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100">
+      {/* Calendar Header */}
+      <div className="p-4 flex items-center justify-between bg-white sticky top-0 z-10 border-b border-gray-50 shrink-0">
+        
+        <div className="flex items-center gap-4">
+             <h2 className="text-2xl font-bold text-gray-800 capitalize tracking-tight">{monthName}</h2>
+             
+             {/* Today's Date Indicator */}
+             <div className="hidden md:flex flex-col border-r-2 border-gray-100 pr-4 mr-2">
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">היום</span>
+                <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                     <span>{todayGregorian}</span>
+                </div>
+            </div>
+             
+             {/* AI Button */}
+             <button 
+                onClick={handleAiAnalyze}
+                className="flex items-center gap-2 text-sm text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-full transition-colors font-medium"
+                disabled={loadingAi}
+             >
+                <Sparkles className="w-4 h-4" />
+                {loadingAi ? 'מנתח...' : 'ניתוח יומי'}
+             </button>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100">
+            <button 
+                onClick={handleNextMonth}
+                className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-500 hover:text-gray-800 transition-all"
+            >
+                <ChevronRight className="w-5 h-5" />
+            </button>
+            <button 
+                onClick={handleToday}
+                className="px-3 py-1 hover:bg-white hover:shadow-sm text-gray-600 hover:text-gray-900 text-sm font-bold rounded-lg transition-all"
+            >
+                היום
+            </button>
+            <button 
+                onClick={handlePrevMonth}
+                className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-gray-500 hover:text-gray-800 transition-all"
+            >
+                <ChevronLeft className="w-5 h-5" />
+            </button>
+        </div>
+      </div>
+
+      {/* AI Analysis Result */}
+      {aiAnalysis && (
+        <div className="mx-4 mb-2 bg-gradient-to-r from-purple-50 to-white px-4 py-2 rounded-xl text-purple-900 text-xs border border-purple-100 flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
+            <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+            <p className="leading-relaxed font-medium">{aiAnalysis}</p>
+        </div>
+      )}
+
+      {/* Grid Header */}
+      <div className="grid grid-cols-7 border-b border-gray-100 px-4 bg-gray-50/50 shrink-0">
+        {WEEK_DAYS.map(day => (
+          <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500">
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Grid Content */}
+      <div className="grid grid-cols-7 auto-rows-fr flex-1 px-4 pb-4 gap-2 pt-2 overflow-hidden">
+        {calendarGrid.map((cell, index) => {
+          // Robust check for drag target (including year)
+          const isDragTarget = dragOverDate && 
+                               dragOverDate.getDate() === cell.date.getDate() && 
+                               dragOverDate.getMonth() === cell.date.getMonth() &&
+                               dragOverDate.getFullYear() === cell.date.getFullYear();
+
+          return (
+            <div 
+                key={index}
+                onClick={() => onDayClick(cell.date)}
+                onDragOver={(e) => handleDragOver(e, cell.date)}
+                onDrop={(e) => handleDrop(e, cell.date)}
+                className={`
+                    relative rounded-xl p-1.5 transition-all cursor-pointer group flex flex-col justify-between border
+                    ${cell.isCurrentMonth ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/30 border-transparent text-gray-300 opacity-50'}
+                    ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
+                    ${isDragTarget ? 'bg-blue-100 border-blue-400 border-dashed ring-2 ring-blue-200 z-20 scale-[1.05] shadow-lg' : ''}
+                `}
+            >
+                {/* Header: Date & Add Icon */}
+                <div className="flex justify-between items-start pointer-events-none mb-1">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-blue-100 rounded-full text-blue-600 pointer-events-auto">
+                        <Plus className="w-3 h-3" />
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
+                         {/* Holiday Indicator */}
+                         {cell.holiday && (
+                            <span className="text-[9px] font-bold text-pink-600 bg-pink-50 px-1 py-0.5 rounded-md truncate max-w-[60px]" title={cell.holiday}>
+                                {cell.holiday}
+                            </span>
+                         )}
+
+                        <div className={`
+                            w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all
+                            ${cell.isToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 group-hover:bg-gray-100'}
+                        `}>
+                            {cell.date.getDate()}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Events - With overflow auto to allow scrolling */}
+                <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 max-h-[120px] lg:max-h-full">
+                    {cell.events.map((event, i) => {
+                        const customer = customers.find(c => c.id === event.customerId);
+                        const isCancelled = event.status === 'CANCELLED';
+                        const isCompleted = event.status === 'COMPLETED';
+                        
+                        return (
+                            <div 
+                                key={i} 
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, event.id)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAppointmentClick(event);
+                                }}
+                                className={`
+                                    flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing
+                                    ${isCancelled 
+                                        ? 'bg-gray-50 border-gray-100 text-gray-400 opacity-70 line-through decoration-gray-400' 
+                                        : isCompleted 
+                                            ? 'bg-green-100 border-green-200 text-green-800 shadow-sm' 
+                                            : 'bg-gray-50 border-gray-100 text-gray-700 group-hover:border-blue-100 group-hover:bg-blue-50/50 hover:!bg-blue-100 hover:!border-blue-300 hover:text-blue-900'}
+                                `}
+                            >
+                                <div className={`w-1 h-1 rounded-full flex-shrink-0 ${
+                                    isCancelled ? 'bg-gray-400' : 
+                                    isCompleted ? 'bg-green-600' : 'bg-blue-400'
+                                }`}></div>
+                                <span className={`font-bold flex-shrink-0 ${isCancelled ? 'line-through decoration-gray-400' : ''}`}>
+                                    {event.date.toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}
+                                </span>
+                                <span className={`truncate font-medium ${isCancelled ? 'line-through decoration-gray-400' : ''}`}>
+                                    {customer ? customer.name : 'לא ידוע'}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Tooltip */}
+                {cell.events.length > 0 && !isDragTarget && (
+                    <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-xl p-3 shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+                        <div className="font-bold border-b border-gray-700 pb-2 mb-2 flex items-center gap-2">
+                            <Clock className="w-3 h-3 text-gray-400" />
+                            {cell.date.toLocaleDateString('he-IL')}
+                        </div>
+                        <div className="space-y-2">
+                            {cell.events.map(e => {
+                                const customer = customers.find(c => c.id === e.customerId);
+                                const isCancelled = e.status === 'CANCELLED';
+                                const isCompleted = e.status === 'COMPLETED';
+                                return (
+                                    <div key={e.id} className={`flex justify-between items-center gap-2 ${isCancelled ? 'opacity-50 line-through' : ''}`}>
+                                        <span className="text-gray-400 font-mono">
+                                            {e.date.toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}
+                                        </span>
+                                        <div className="text-right truncate flex-1">
+                                            <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
+                                                {customer ? customer.name : 'לא ידוע'}
+                                                {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
+                                            </span>
+                                            <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
