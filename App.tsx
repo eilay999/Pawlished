@@ -95,6 +95,13 @@ const App: React.FC = () => {
     setIsCustomerModalOpen(false);
   };
 
+  const handleDeleteCustomer = (customerId: string) => {
+    setCustomers(prev => prev.filter(c => c.id !== customerId));
+    setAppointments(prev => prev.filter(a => a.customerId !== customerId));
+    setIsCustomerModalOpen(false);
+    setEditingCustomer(null);
+  };
+
   const handleSaveAppointment = (savedAppointment: Appointment) => {
     setAppointments(prev => {
       const exists = prev.find(a => a.id === savedAppointment.id);
@@ -187,6 +194,7 @@ const App: React.FC = () => {
         customer={editingCustomer}
         onClose={() => setIsCustomerModalOpen(false)}
         onSave={handleSaveCustomer}
+        onDelete={handleDeleteCustomer}
       />
 
       {/* Appointment Modal */}

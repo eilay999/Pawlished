@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Dog, Calendar, User, Phone, Clock, CircleDollarSign } from 'lucide-react';
+import { X, Save, Dog, Calendar, User, Phone, Clock, CircleDollarSign, Trash2 } from 'lucide-react';
 import { Customer } from '../types';
 
 interface CustomerModalProps {
@@ -8,6 +8,7 @@ interface CustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (customer: Customer) => void;
+  onDelete?: (customerId: string) => void;
 }
 
 const FREQUENCY_OPTIONS = [
@@ -19,7 +20,7 @@ const FREQUENCY_OPTIONS = [
   { weeks: 12, label: '3 חודשים' },
 ];
 
-export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, onClose, onSave }) => {
+export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Partial<Customer>>({
     name: '',
     phone: '',
@@ -66,6 +67,14 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       lastVisit: formData.lastVisit || new Date(),
       defaultPrice: formData.defaultPrice
     });
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!customer || !onDelete) return;
+    const confirmed = window.confirm('למחוק את הלקוח וכל התורים שלו?');
+    if (!confirmed) return;
+    onDelete(customer.id);
     onClose();
   };
 
@@ -224,7 +233,19 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
         </form>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
+          {customer && onDelete ? (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              מחק לקוח
+            </button>
+          ) : (
+            <span />
+          )}
           <button 
             type="button"
             onClick={onClose} 
