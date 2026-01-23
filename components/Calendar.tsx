@@ -225,6 +225,14 @@ export const Calendar: React.FC<CalendarProps> = ({
                                dragOverDate.getDate() === cell.date.getDate() && 
                                dragOverDate.getMonth() === cell.date.getMonth() &&
                                dragOverDate.getFullYear() === cell.date.getFullYear();
+          
+          const lastVisitsForDay = customers.filter(c => {
+            const d = new Date(c.lastVisit);
+            d.setHours(0, 0, 0, 0);
+            const cd = new Date(cell.date);
+            cd.setHours(0, 0, 0, 0);
+            return d.getTime() === cd.getTime();
+          });
 
           return (
             <div 
@@ -261,6 +269,21 @@ export const Calendar: React.FC<CalendarProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Last Visit Markers */}
+                {lastVisitsForDay.length > 0 && (
+                  <div className="space-y-1 mb-1">
+                    {lastVisitsForDay.map(c => (
+                      <div
+                        key={`last-${c.id}`}
+                        className="text-[10px] px-1.5 py-1 rounded-md border border-gray-200 bg-gray-50 text-gray-600 truncate"
+                        title={`ביקור קודם: ${c.name}`}
+                      >
+                        ביקור קודם: {c.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Events - With overflow auto to allow scrolling */}
                 <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 max-h-[120px] lg:max-h-full">

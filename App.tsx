@@ -82,6 +82,19 @@ const App: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>(MOCK_APPOINTMENTS);
   const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [askedAppointmentIds, setAskedAppointmentIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('pawlished_asked_appt_ids');
+      const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+      return new Set(parsed);
+    } catch {
+      return new Set();
+    }
+  });
+  const [pendingCheck, setPendingCheck] = useState<{
+    appointment: Appointment;
+    customer: Customer;
+  } | null>(null);
   
   // Modal State
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -92,6 +105,13 @@ const App: React.FC = () => {
   const [selectedDateForAppointment, setSelectedDateForAppointment] = useState<Date>(new Date());
   const [preSelectedCustomerId, setPreSelectedCustomerId] = useState<string | undefined>(undefined);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(
+      'pawlished_asked_appt_ids',
+      JSON.stringify(Array.from(askedAppointmentIds))
+    );
+  }, [askedAppointmentIds]);
 
   useEffect(() => {
     let isMounted = true;
@@ -134,6 +154,29 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (pendingCheck) return;
+
+    const checkDueAppointments = () => {
+      const now = Date.now();
+      const nextDue = appointments
+        .filter(a => a.status === AppointmentStatus.SCHEDULED)
+        .filter(a => now >= new Date(a.date).getTime() + 30 * 60 * 1000)
+        .filter(a => !askedAppointmentIds.has(a.id))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+
+      if (!nextDue) return;
+      const customer = customers.find(c => c.id === nextDue.customerId);
+      if (!customer) return;
+
+      setPendingCheck({ appointment: nextDue, customer });
+    };
+
+    checkDueAppointments();
+    const timer = setInterval(checkDueAppointments, 60 * 1000);
+    return () => clearInterval(timer);
+  }, [appointments, customers, askedAppointmentIds, pendingCheck]);
+
   const handleDayClick = (date: Date) => {
     setSelectedDateForAppointment(date);
     setPreSelectedCustomerId(undefined); 
@@ -148,6 +191,7 @@ const App: React.FC = () => {
 
   const handleMoveAppointment = (appointmentId: string, newDate: Date) => {
       let updatedAppointment: Appointment | null = null;
+      let updatedCustomer: Customer | null = null;
       setAppointments(prev => prev.map(appt => {
           if (appt.id === appointmentId) {
               const updatedDate = new Date(newDate);
@@ -180,6 +224,16 @@ const App: React.FC = () => {
           return appt;
       }));
 
+      if (updatedAppointment) {
+        setCustomers(prev => prev.map(c => {
+          if (c.id === updatedAppointment!.customerId) {
+            updatedCustomer = { ...c, lastVisit: new Date(updatedAppointment!.date) };
+            return updatedCustomer;
+          }
+          return c;
+        }));
+      }
+
       if (updatedAppointment && supabase) {
         void supabase
           .from('appointments')
@@ -187,6 +241,17 @@ const App: React.FC = () => {
           .then(({ error }) => {
             if (error) {
               console.error('Supabase appointment move error', error);
+            }
+          });
+      }
+
+      if (updatedCustomer && supabase) {
+        void supabase
+          .from('customers')
+          .upsert(mapCustomerToDb(updatedCustomer))
+          .then(({ error }) => {
+            if (error) {
+              console.error('Supabase customer update error', error);
             }
           });
       }
@@ -227,6 +292,13 @@ const App: React.FC = () => {
     setAppointments(prev => prev.filter(a => a.customerId !== customerId));
     setIsCustomerModalOpen(false);
     setEditingCustomer(null);
+    setAskedAppointmentIds(prev => {
+      const next = new Set(prev);
+      appointments
+        .filter(a => a.customerId === customerId)
+        .forEach(a => next.delete(a.id));
+      return next;
+    });
 
     if (supabase) {
       void supabase
@@ -308,6 +380,14 @@ const App: React.FC = () => {
     setAppointments(prev => prev.filter(a => a.id !== appointmentId));
     setIsAppointmentModalOpen(false);
     setEditingAppointment(null);
+    setAskedAppointmentIds(prev => {
+      const next = new Set(prev);
+      next.delete(appointmentId);
+      return next;
+    });
+    if (pendingCheck?.appointment.id === appointmentId) {
+      setPendingCheck(null);
+    }
 
     if (supabase) {
       void supabase
@@ -406,6 +486,57 @@ const App: React.FC = () => {
         appointment={editingAppointment}
       />
 
+      {pendingCheck && (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-gray-100 bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-800">הלקוח הגיע?</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {pendingCheck.customer.name} • {pendingCheck.customer.petName} •{' '}
+                {new Date(pendingCheck.appointment.date).toLocaleTimeString('he-IL', {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            </div>
+            <div className="p-5 flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  const updated = { ...pendingCheck.appointment, status: AppointmentStatus.COMPLETED };
+                  handleSaveAppointment(updated);
+                  setAskedAppointmentIds(prev => new Set(prev).add(pendingCheck.appointment.id));
+                  setPendingCheck(null);
+                }}
+                className="w-full py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition-colors"
+              >
+                הגיע
+              </button>
+              <button
+                onClick={() => {
+                  const updated = { ...pendingCheck.appointment, status: AppointmentStatus.CANCELLED };
+                  handleSaveAppointment(updated);
+                  setAskedAppointmentIds(prev => new Set(prev).add(pendingCheck.appointment.id));
+                  setPendingCheck(null);
+                }}
+                className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
+              >
+                לא מגיע
+              </button>
+              <button
+                onClick={() => {
+                  const updated = { ...pendingCheck.appointment, status: AppointmentStatus.LATE };
+                  handleSaveAppointment(updated);
+                  setAskedAppointmentIds(prev => new Set(prev).add(pendingCheck.appointment.id));
+                  setPendingCheck(null);
+                }}
+                className="w-full py-2.5 rounded-xl bg-orange-500 text-white font-medium hover:bg-orange-600 transition-colors"
+              >
+                מאחר
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

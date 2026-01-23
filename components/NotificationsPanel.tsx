@@ -67,7 +67,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
     if (phone.startsWith('0')) phone = '972' + phone.substring(1);
     
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+    window.open(url, 'whatsapp');
   };
 
   const handleRunAutomation = () => {
