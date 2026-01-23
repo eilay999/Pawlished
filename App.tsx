@@ -121,22 +121,7 @@ const App: React.FC = () => {
       const mappedCustomers = (customersData || []).map(mapCustomerFromDb);
       const mappedAppointments = (appointmentsData || []).map(mapAppointmentFromDb);
 
-      if (mappedCustomers.length === 0 && mappedAppointments.length === 0) {
-        const { error: seedCustomersError } = await supabase
-          .from('customers')
-          .insert(MOCK_CUSTOMERS.map(mapCustomerToDb));
-        const { error: seedAppointmentsError } = await supabase
-          .from('appointments')
-          .insert(MOCK_APPOINTMENTS.map(mapAppointmentToDb));
-
-        if (seedCustomersError || seedAppointmentsError) {
-          console.error('Supabase seed error', seedCustomersError || seedAppointmentsError);
-          if (isMounted) {
-            setLoadError('Failed to seed Supabase. Using local data only.');
-          }
-          return;
-        }
-      } else if (isMounted) {
+      if (isMounted) {
         setCustomers(mappedCustomers);
         setAppointments(mappedAppointments);
       }
