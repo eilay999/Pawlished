@@ -276,10 +276,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                     {lastVisitsForDay.map(c => (
                       <div
                         key={`last-${c.id}`}
-                        className="text-[10px] px-1.5 py-1 rounded-md border border-gray-200 bg-gray-50 text-gray-600 truncate"
-                        title={`ביקור קודם: ${c.name}`}
+                        className="text-[10px] px-1.5 py-1 rounded-md border bg-green-100 border-green-200 text-green-800 shadow-sm truncate"
+                        title={`תור שבוצע: ${c.name}`}
                       >
-                        ביקור קודם: {c.name}
+                        תור שבוצע: {c.name}
                       </div>
                     ))}
                   </div>
