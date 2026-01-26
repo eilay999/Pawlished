@@ -155,7 +155,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   return (
     <div className="flex-1 bg-white m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100">
       {/* Calendar Header */}
-      <div className="p-4 flex items-center justify-between bg-white sticky top-0 z-10 border-b border-gray-50 shrink-0">
+      <div className="px-5 py-4 flex items-center justify-between bg-white sticky top-0 z-10 border-b border-gray-100 shrink-0">
         
         <div className="flex items-center gap-4">
              <h2 className="text-2xl font-bold text-gray-800 capitalize tracking-tight">{monthName}</h2>
@@ -211,7 +211,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       )}
 
       {/* Grid Header */}
-      <div className="grid grid-cols-7 border-b border-gray-100 px-4 bg-gray-50/50 shrink-0">
+      <div className="grid grid-cols-7 border-b border-gray-100 px-5 bg-gray-50/80 shrink-0">
         {WEEK_DAYS.map(day => (
           <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500">
             {day}
@@ -220,7 +220,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       {/* Grid Content */}
-      <div className="grid grid-cols-7 auto-rows-fr flex-1 px-4 pb-4 gap-2 pt-2 overflow-hidden">
+      <div className="grid grid-cols-7 auto-rows-fr flex-1 px-5 pb-5 gap-2.5 pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
         {calendarGrid.map((cell, index) => {
           // Robust check for drag target (including year)
           const isDragTarget = dragOverDate && 
@@ -243,8 +243,8 @@ export const Calendar: React.FC<CalendarProps> = ({
                 onDragOver={(e) => handleDragOver(e, cell.date)}
                 onDrop={(e) => handleDrop(e, cell.date)}
                 className={`
-                    relative rounded-xl p-1.5 transition-all cursor-pointer group flex flex-col justify-between border
-                    ${cell.isCurrentMonth ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/30 border-transparent text-gray-300 opacity-50'}
+                    relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[115px]
+                    ${cell.isCurrentMonth ? 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/40 border-gray-100 text-gray-300 opacity-60'}
                     ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
                     ${isDragTarget ? 'bg-blue-100 border-blue-400 border-dashed ring-2 ring-blue-200 z-20 scale-[1.05] shadow-lg' : ''}
                 `}
@@ -285,7 +285,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                         <div
                           key={`last-${c.id}`}
                           className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-md truncate border transition-colors cursor-pointer bg-green-100 border-green-200 text-green-800 shadow-sm hover:brightness-95"
-                          title={`תור שבוצע: ${c.name}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onCustomerClick(c);
