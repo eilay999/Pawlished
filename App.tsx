@@ -8,7 +8,7 @@ import { CustomerModal } from './components/CustomerModal';
 import { AppointmentModal } from './components/AppointmentModal';
 import { StatsView } from './components/StatsView';
 import { MOCK_APPOINTMENTS, MOCK_CUSTOMERS } from './constants';
-import { ViewType, Appointment, Customer, AppointmentStatus } from './types';
+import { ViewType, Appointment, Customer, AppointmentStatus, Task, TaskStatus } from './types';
 import { supabase } from './services/supabaseClient';
 
 type DbCustomer = {
@@ -30,6 +30,13 @@ type DbAppointment = {
   status: AppointmentStatus;
   notes: string | null;
   price: number;
+};
+
+type DbTask = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  created_at: string;
 };
 
 const mapCustomerFromDb = (row: DbCustomer): Customer => ({
@@ -74,6 +81,25 @@ const mapAppointmentToDb = (appointment: Appointment): DbAppointment => ({
   price: appointment.price,
 });
 
+const mapTaskFromDb = (row: DbTask): Task => ({
+  id: row.id,
+  title: row.title,
+  status: row.status,
+  createdAt: new Date(row.created_at),
+});
+
+const mapTaskToDb = (task: Task): DbTask => ({
+  id: task.id,
+  title: task.title,
+  status: task.status,
+  created_at: task.createdAt.toISOString(),
+});
+
+const isMissingTableError = (message?: string) => {
+  if (!message) return false;
+  return message.includes('relation "tasks" does not exist');
+};
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('CALENDAR');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -81,6 +107,7 @@ const App: React.FC = () => {
   // Data State
   const [appointments, setAppointments] = useState<Appointment[]>(MOCK_APPOINTMENTS);
   const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [askedAppointmentIds, setAskedAppointmentIds] = useState<Set<string>>(() => {
     try {
@@ -130,6 +157,10 @@ const App: React.FC = () => {
         .from('appointments')
         .select('*');
 
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*');
+
       if (customersError || appointmentsError) {
         console.error('Supabase load error', customersError || appointmentsError);
         if (isMounted) {
@@ -140,10 +171,16 @@ const App: React.FC = () => {
 
       const mappedCustomers = (customersData || []).map(mapCustomerFromDb);
       const mappedAppointments = (appointmentsData || []).map(mapAppointmentFromDb);
+      const mappedTasks = (tasksData || []).map(mapTaskFromDb);
 
       if (isMounted) {
         setCustomers(mappedCustomers);
         setAppointments(mappedAppointments);
+        if (tasksError && !isMissingTableError(tasksError.message)) {
+          console.error('Supabase tasks load error', tasksError);
+        } else {
+          setTasks(mappedTasks);
+        }
       }
     };
 
@@ -402,6 +439,43 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddTask = (title: string) => {
+    const newTask: Task = {
+      id: Math.random().toString(36).substr(2, 9),
+      title,
+      status: 'OPEN',
+      createdAt: new Date()
+    };
+    setTasks(prev => [newTask, ...prev]);
+
+    if (supabase) {
+      void supabase.from('tasks').insert(mapTaskToDb(newTask)).then(({ error }) => {
+        if (error) {
+          console.error('Supabase task insert error', error);
+        }
+      });
+    }
+  };
+
+  const handleToggleTask = (taskId: string) => {
+    let updatedTask: Task | null = null;
+    setTasks(prev => prev.map(t => {
+      if (t.id === taskId) {
+        updatedTask = { ...t, status: t.status === 'OPEN' ? 'DONE' : 'OPEN' };
+        return updatedTask;
+      }
+      return t;
+    }));
+
+    if (updatedTask && supabase) {
+      void supabase.from('tasks').upsert(mapTaskToDb(updatedTask)).then(({ error }) => {
+        if (error) {
+          console.error('Supabase task update error', error);
+        }
+      });
+    }
+  };
+
   return (
     <div className="flex h-screen w-full bg-[#f8f9fa] text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
       {loadError && (
@@ -446,6 +520,9 @@ const App: React.FC = () => {
           <StatsView 
             customers={customers}
             appointments={appointments}
+            tasks={tasks}
+            onAddTask={handleAddTask}
+            onToggleTask={handleToggleTask}
           />
         )}
       </main>

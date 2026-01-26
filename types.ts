@@ -27,6 +27,15 @@ export interface Appointment {
   price: number; // Added price field
 }
 
+export type TaskStatus = 'OPEN' | 'DONE';
+
+export interface Task {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  createdAt: Date;
+}
+
 export interface DayCell {
   date: Date;
   isCurrentMonth: boolean;

@@ -1,15 +1,19 @@
 
-import React from 'react';
-import { Customer, Appointment } from '../types';
+import React, { useState } from 'react';
+import { Customer, Appointment, Task } from '../types';
 import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity } from 'lucide-react';
 import { analyzeCustomerStatus } from '../utils';
 
 interface StatsViewProps {
   customers: Customer[];
   appointments: Appointment[];
+  tasks: Task[];
+  onAddTask: (title: string) => void;
+  onToggleTask: (taskId: string) => void;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, tasks, onAddTask, onToggleTask }) => {
+  const [taskTitle, setTaskTitle] = useState('');
   const today = new Date();
   today.setHours(0, 0, 0, 0); 
   
@@ -297,6 +301,62 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments })
                 </div>
             </div>
 
+        </div>
+
+        {/* Row 5: Tasks */}
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-800">משימות</h3>
+                <span className="text-xs text-gray-400">סה"כ: {tasks.length}</span>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+                <input
+                    type="text"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="הוסף משימה..."
+                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+                <button
+                    onClick={() => {
+                        const trimmed = taskTitle.trim();
+                        if (!trimmed) return;
+                        onAddTask(trimmed);
+                        setTaskTitle('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                    הוסף משימה
+                </button>
+            </div>
+
+            {tasks.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                    אין משימות כרגע
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {tasks.map(task => (
+                        <button
+                            key={task.id}
+                            onClick={() => onToggleTask(task.id)}
+                            className={`w-full text-right px-3 py-2 rounded-xl border flex items-center justify-between transition-colors ${
+                              task.status === 'DONE'
+                                ? 'bg-green-50 border-green-200 text-green-800'
+                                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            <span className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>
+                                {task.title}
+                            </span>
+                            <span className="text-xs font-bold">
+                                {task.status === 'DONE' ? 'בוצע' : 'פתוח'}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
       </div>
     </div>
