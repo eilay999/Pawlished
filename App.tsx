@@ -430,6 +430,7 @@ const App: React.FC = () => {
             onDateChange={setCurrentDate} 
             appointments={appointments}
             customers={customers}
+            onCustomerClick={handleEditCustomer}
             onDayClick={handleDayClick}
             onAppointmentClick={handleAppointmentClick}
             onAppointmentMove={handleMoveAppointment}

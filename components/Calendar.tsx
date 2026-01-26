@@ -11,6 +11,7 @@ interface CalendarProps {
   onDateChange: (date: Date) => void;
   appointments: Appointment[];
   customers: Customer[];
+  onCustomerClick: (customer: Customer) => void;
   onDayClick: (date: Date) => void;
   onAppointmentClick: (appointment: Appointment) => void;
   onAppointmentMove: (appointmentId: string, newDate: Date) => void;
@@ -21,6 +22,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     onDateChange, 
     appointments, 
     customers, 
+    onCustomerClick,
     onDayClick,
     onAppointmentClick,
     onAppointmentMove
@@ -276,8 +278,12 @@ export const Calendar: React.FC<CalendarProps> = ({
                     {lastVisitsForDay.map(c => (
                       <div
                         key={`last-${c.id}`}
-                        className="text-[10px] px-1.5 py-1 rounded-md border bg-green-100 border-green-200 text-green-800 shadow-sm truncate"
+                        className="text-[10px] px-1.5 py-1 rounded-md border bg-green-100 border-green-200 text-green-800 shadow-sm truncate cursor-pointer hover:brightness-95"
                         title={`תור שבוצע: ${c.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCustomerClick(c);
+                        }}
                       >
                         תור שבוצע: {c.name}
                       </div>
