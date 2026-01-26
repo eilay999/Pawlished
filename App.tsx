@@ -37,7 +37,7 @@ type DbTask = {
   title: string;
   status: TaskStatus;
   created_at: string;
-  start_date: string;
+  start_date: string | null;
 };
 
 const mapCustomerFromDb = (row: DbCustomer): Customer => ({
@@ -87,7 +87,7 @@ const mapTaskFromDb = (row: DbTask): Task => ({
   title: row.title,
   status: row.status,
   createdAt: new Date(row.created_at),
-  startDate: new Date(row.start_date),
+  startDate: new Date(row.start_date || row.created_at),
 });
 
 const mapTaskToDb = (task: Task): DbTask => ({
