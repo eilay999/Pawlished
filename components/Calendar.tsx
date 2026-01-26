@@ -275,19 +275,28 @@ export const Calendar: React.FC<CalendarProps> = ({
                 {/* Last Visit Markers */}
                 {lastVisitsForDay.length > 0 && (
                   <div className="space-y-1 mb-1">
-                    {lastVisitsForDay.map(c => (
-                      <div
-                        key={`last-${c.id}`}
-                        className="text-[10px] px-1.5 py-1 rounded-md border bg-green-100 border-green-200 text-green-800 shadow-sm truncate cursor-pointer hover:brightness-95"
-                        title={`תור שבוצע: ${c.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCustomerClick(c);
-                        }}
-                      >
-                        תור שבוצע: {c.name}
-                      </div>
-                    ))}
+                    {lastVisitsForDay.map(c => {
+                      const lastVisitTime = new Date(c.lastVisit).toLocaleTimeString('he-IL', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+
+                      return (
+                        <div
+                          key={`last-${c.id}`}
+                          className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-md truncate border transition-colors cursor-pointer bg-green-100 border-green-200 text-green-800 shadow-sm hover:brightness-95"
+                          title={`תור שבוצע: ${c.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCustomerClick(c);
+                          }}
+                        >
+                          <div className="w-1 h-1 rounded-full flex-shrink-0 bg-green-600"></div>
+                          <span className="font-bold flex-shrink-0">{lastVisitTime}</span>
+                          <span className="truncate font-medium">{c.name}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
