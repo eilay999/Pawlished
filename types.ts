@@ -34,6 +34,7 @@ export interface Task {
   title: string;
   status: TaskStatus;
   createdAt: Date;
+  startDate: Date;
 }
 
 export interface DayCell {

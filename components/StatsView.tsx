@@ -1,19 +1,27 @@
 
 import React, { useState } from 'react';
 import { Customer, Appointment, Task } from '../types';
-import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity, Trash2 } from 'lucide-react';
 import { analyzeCustomerStatus } from '../utils';
 
 interface StatsViewProps {
   customers: Customer[];
   appointments: Appointment[];
   tasks: Task[];
-  onAddTask: (title: string) => void;
+  onAddTask: (title: string, startDate: Date) => void;
   onToggleTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, tasks, onAddTask, onToggleTask }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, tasks, onAddTask, onToggleTask, onDeleteTask }) => {
   const [taskTitle, setTaskTitle] = useState('');
+  const [taskStartDate, setTaskStartDate] = useState(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const today = new Date();
   today.setHours(0, 0, 0, 0); 
   
@@ -318,11 +326,17 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     placeholder="הוסף משימה..."
                     className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 />
+                <input
+                    type="date"
+                    value={taskStartDate}
+                    onChange={(e) => setTaskStartDate(e.target.value)}
+                    className="border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
                 <button
                     onClick={() => {
                         const trimmed = taskTitle.trim();
                         if (!trimmed) return;
-                        onAddTask(trimmed);
+                        onAddTask(trimmed, new Date(taskStartDate));
                         setTaskTitle('');
                     }}
                     className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -338,22 +352,38 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
             ) : (
                 <div className="space-y-2">
                     {tasks.map(task => (
-                        <button
+                        <div
                             key={task.id}
-                            onClick={() => onToggleTask(task.id)}
                             className={`w-full text-right px-3 py-2 rounded-xl border flex items-center justify-between transition-colors ${
                               task.status === 'DONE'
                                 ? 'bg-green-50 border-green-200 text-green-800'
                                 : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                             }`}
                         >
-                            <span className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>
-                                {task.title}
-                            </span>
-                            <span className="text-xs font-bold">
-                                {task.status === 'DONE' ? 'בוצע' : 'פתוח'}
-                            </span>
-                        </button>
+                            <button
+                              onClick={() => onToggleTask(task.id)}
+                              className="flex-1 text-right"
+                            >
+                              <span className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>
+                                  {task.title}
+                              </span>
+                              <div className="text-[11px] text-gray-400 mt-1">
+                                  התחלה: {task.startDate.toLocaleDateString('he-IL')}
+                              </div>
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold">
+                                  {task.status === 'DONE' ? 'בוצע' : 'פתוח'}
+                              </span>
+                              <button
+                                onClick={() => onDeleteTask(task.id)}
+                                className="p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                aria-label="מחק משימה"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                        </div>
                     ))}
                 </div>
             )}

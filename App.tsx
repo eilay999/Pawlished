@@ -37,6 +37,7 @@ type DbTask = {
   title: string;
   status: TaskStatus;
   created_at: string;
+  start_date: string;
 };
 
 const mapCustomerFromDb = (row: DbCustomer): Customer => ({
@@ -86,6 +87,7 @@ const mapTaskFromDb = (row: DbTask): Task => ({
   title: row.title,
   status: row.status,
   createdAt: new Date(row.created_at),
+  startDate: new Date(row.start_date),
 });
 
 const mapTaskToDb = (task: Task): DbTask => ({
@@ -93,6 +95,7 @@ const mapTaskToDb = (task: Task): DbTask => ({
   title: task.title,
   status: task.status,
   created_at: task.createdAt.toISOString(),
+  start_date: task.startDate.toISOString(),
 });
 
 const isMissingTableError = (message?: string) => {
@@ -444,12 +447,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddTask = (title: string) => {
+  const handleAddTask = (title: string, startDate: Date) => {
     const newTask: Task = {
       id: Math.random().toString(36).substr(2, 9),
       title,
       status: 'OPEN',
-      createdAt: new Date()
+      createdAt: new Date(),
+      startDate
     };
     setTasks(prev => [newTask, ...prev]);
 
@@ -476,6 +480,17 @@ const App: React.FC = () => {
       void supabase.from('tasks').upsert(mapTaskToDb(updatedTask)).then(({ error }) => {
         if (error) {
           console.error('Supabase task update error', error);
+        }
+      });
+    }
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    if (supabase) {
+      void supabase.from('tasks').delete().eq('id', taskId).then(({ error }) => {
+        if (error) {
+          console.error('Supabase task delete error', error);
         }
       });
     }
@@ -529,6 +544,7 @@ const App: React.FC = () => {
             tasks={tasks}
             onAddTask={handleAddTask}
             onToggleTask={handleToggleTask}
+            onDeleteTask={handleDeleteTask}
           />
         )}
       </main>
