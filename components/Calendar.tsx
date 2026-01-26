@@ -13,6 +13,7 @@ interface CalendarProps {
   customers: Customer[];
   onCustomerClick: (customer: Customer) => void;
   onDayClick: (date: Date) => void;
+  onDayAddAppointment: (date: Date) => void;
   onAppointmentClick: (appointment: Appointment) => void;
   onAppointmentMove: (appointmentId: string, newDate: Date) => void;
 }
@@ -24,6 +25,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     customers, 
     onCustomerClick,
     onDayClick,
+    onDayAddAppointment,
     onAppointmentClick,
     onAppointmentMove
 }) => {
@@ -252,7 +254,16 @@ export const Calendar: React.FC<CalendarProps> = ({
                 {/* Header: Date & Add Icon */}
                 <div className="flex justify-between items-start pointer-events-none mb-1">
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-blue-100 rounded-full text-blue-600 pointer-events-auto">
-                        <Plus className="w-3 h-3" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDayAddAppointment(cell.date);
+                          }}
+                          className="flex items-center justify-center"
+                          aria-label="הוסף תור"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
                     </div>
                     
                     <div className="flex items-center gap-1">

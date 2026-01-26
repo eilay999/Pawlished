@@ -132,6 +132,7 @@ const App: React.FC = () => {
   const [selectedDateForAppointment, setSelectedDateForAppointment] = useState<Date>(new Date());
   const [preSelectedCustomerId, setPreSelectedCustomerId] = useState<string | undefined>(undefined);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null);
 
   useEffect(() => {
     localStorage.setItem(
@@ -219,6 +220,10 @@ const App: React.FC = () => {
     setPreSelectedCustomerId(undefined); 
     setEditingAppointment(null); 
     setIsAppointmentModalOpen(true);
+  };
+
+  const handleDaySelect = (date: Date) => {
+    setDayPanelDate(date);
   };
   
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -505,7 +510,8 @@ const App: React.FC = () => {
             appointments={appointments}
             customers={customers}
             onCustomerClick={handleEditCustomer}
-            onDayClick={handleDayClick}
+            onDayClick={handleDaySelect}
+            onDayAddAppointment={handleDayClick}
             onAppointmentClick={handleAppointmentClick}
             onAppointmentMove={handleMoveAppointment}
           />
@@ -537,6 +543,70 @@ const App: React.FC = () => {
           onCustomerClick={handleEditCustomer}
           onAppointmentUpdate={handleSaveAppointment}
         />
+      )}
+
+      {currentView === 'CALENDAR' && dayPanelDate && (
+        <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-white border-l border-gray-200 shadow-2xl z-[160] flex flex-col">
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+            <div>
+              <div className="text-xs text-gray-400">תורים ליום</div>
+              <div className="text-lg font-bold text-gray-800">
+                {dayPanelDate.toLocaleDateString('he-IL')}
+              </div>
+            </div>
+            <button
+              onClick={() => setDayPanelDate(null)}
+              className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
+              aria-label="סגור"
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {appointments
+              .filter(a => {
+                const d = new Date(a.date);
+                d.setHours(0, 0, 0, 0);
+                const target = new Date(dayPanelDate);
+                target.setHours(0, 0, 0, 0);
+                return d.getTime() === target.getTime() && a.status !== AppointmentStatus.CANCELLED;
+              })
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+              .map(a => {
+                const customer = customers.find(c => c.id === a.customerId);
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => handleAppointmentClick(a)}
+                    className="w-full text-right p-3 rounded-xl border border-gray-100 bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-gray-800">
+                        {customer ? customer.name : 'לקוח'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(a.date).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {a.service && (
+                      <div className="text-xs text-gray-500 mt-1 truncate">{a.service}</div>
+                    )}
+                  </button>
+                );
+              })}
+            {appointments.filter(a => {
+              const d = new Date(a.date);
+              d.setHours(0, 0, 0, 0);
+              const target = new Date(dayPanelDate);
+              target.setHours(0, 0, 0, 0);
+              return d.getTime() === target.getTime() && a.status !== AppointmentStatus.CANCELLED;
+            }).length === 0 && (
+              <div className="text-sm text-gray-400 text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                אין תורים ליום הזה
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Customer Modal */}
