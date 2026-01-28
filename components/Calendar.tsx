@@ -136,9 +136,9 @@ export const Calendar: React.FC<CalendarProps> = ({
   };
 
   const handleDragOver = (e: React.DragEvent, date: Date) => {
-    e.preventDefault(); 
+    e.preventDefault();
     if (dragOverDate?.getTime() !== date.getTime()) {
-        setDragOverDate(date);
+      setDragOverDate(date);
     }
   };
 
@@ -146,7 +146,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     e.preventDefault();
     const appointmentId = e.dataTransfer.getData("appointmentId");
     if (appointmentId) {
-        onAppointmentMove(appointmentId, targetDate);
+      onAppointmentMove(appointmentId, targetDate);
     }
     setDragOverDate(null);
   };
@@ -224,12 +224,10 @@ export const Calendar: React.FC<CalendarProps> = ({
       {/* Grid Content */}
       <div className="grid grid-cols-7 auto-rows-fr flex-1 px-5 pb-5 gap-2.5 pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
         {calendarGrid.map((cell, index) => {
-          // Robust check for drag target (including year)
-          const isDragTarget = dragOverDate && 
-                               dragOverDate.getDate() === cell.date.getDate() && 
+          const isDragTarget = dragOverDate &&
+                               dragOverDate.getDate() === cell.date.getDate() &&
                                dragOverDate.getMonth() === cell.date.getMonth() &&
                                dragOverDate.getFullYear() === cell.date.getFullYear();
-          
           const lastVisitsForDay = customers.filter(c => {
             const d = new Date(c.lastVisit);
             d.setHours(0, 0, 0, 0);
@@ -237,6 +235,8 @@ export const Calendar: React.FC<CalendarProps> = ({
             cd.setHours(0, 0, 0, 0);
             return d.getTime() === cd.getTime();
           });
+          const displayEvents = cell.events.slice(0, 1);
+          const extraCount = cell.events.length - 1;
 
           return (
             <div 
@@ -245,10 +245,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                 onDragOver={(e) => handleDragOver(e, cell.date)}
                 onDrop={(e) => handleDrop(e, cell.date)}
                 className={`
-                    relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[115px]
+                    relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[115px] overflow-hidden
                     ${cell.isCurrentMonth ? 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/40 border-gray-100 text-gray-300 opacity-60'}
                     ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
-                    ${isDragTarget ? 'bg-blue-100 border-blue-400 border-dashed ring-2 ring-blue-200 z-20 scale-[1.05] shadow-lg' : ''}
+                    ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
                 `}
             >
                 {/* Header: Date & Add Icon */}
@@ -310,48 +310,47 @@ export const Calendar: React.FC<CalendarProps> = ({
                   </div>
                 )}
 
-                {/* Events - With overflow auto to allow scrolling */}
-                <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 max-h-[120px] lg:max-h-full">
-                    {cell.events.map((event, i) => {
-                        const customer = customers.find(c => c.id === event.customerId);
-                        const isCancelled = event.status === 'CANCELLED';
-                        const isCompleted = event.status === 'COMPLETED';
-                        
+                {/* Events - show only first and count */}
+                <div className="space-y-1 overflow-hidden flex-1 max-h-[72px]">
+                    {displayEvents.map(e => {
+                        const customer = customers.find(c => c.id === e.customerId);
+                        const isCancelled = e.status === 'CANCELLED';
+                        const isCompleted = e.status === 'COMPLETED';
+                        const timeLabel = e.date.toLocaleTimeString('he-IL', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                        const statusClasses = isCancelled
+                          ? 'bg-gray-100 border-gray-200 text-gray-400 line-through'
+                          : isCompleted
+                          ? 'bg-green-50 border-green-200 text-green-700'
+                          : 'bg-blue-50 border-blue-200 text-blue-700';
+
                         return (
-                            <div 
-                                key={i} 
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, event.id)}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onAppointmentClick(event);
-                                }}
-                                className={`
-                                    flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing
-                                    ${isCancelled 
-                                        ? 'bg-gray-50 border-gray-100 text-gray-400 opacity-70 line-through decoration-gray-400' 
-                                        : isCompleted 
-                                            ? 'bg-green-100 border-green-200 text-green-800 shadow-sm' 
-                                            : 'bg-gray-50 border-gray-100 text-gray-700 group-hover:border-blue-100 group-hover:bg-blue-50/50 hover:!bg-blue-100 hover:!border-blue-300 hover:text-blue-900'}
-                                `}
-                            >
-                                <div className={`w-1 h-1 rounded-full flex-shrink-0 ${
-                                    isCancelled ? 'bg-gray-400' : 
-                                    isCompleted ? 'bg-green-600' : 'bg-blue-400'
-                                }`}></div>
-                                <span className={`font-bold flex-shrink-0 ${isCancelled ? 'line-through decoration-gray-400' : ''}`}>
-                                    {event.date.toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}
-                                </span>
-                                <span className={`truncate font-medium ${isCancelled ? 'line-through decoration-gray-400' : ''}`}>
-                                    {customer ? customer.name : 'לא ידוע'}
-                                </span>
-                            </div>
+                          <div
+                            key={e.id}
+                            draggable
+                            onDragStart={(evt) => handleDragStart(evt, e.id)}
+                            onClick={(evt) => {
+                              evt.stopPropagation();
+                              onAppointmentClick(e);
+                            }}
+                            className={`flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-pointer shadow-sm hover:brightness-95 ${statusClasses}`}
+                            title={`${timeLabel} - ${customer ? customer.name : 'Unknown customer'}`}
+                          >
+                            <span className="font-bold flex-shrink-0">{timeLabel}</span>
+                            <span className="truncate font-medium">{customer ? customer.name : 'Unknown customer'}</span>
+                          </div>
                         );
                     })}
+                    {extraCount > 0 && (
+                      <div className="text-[8px] text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-1 py-0.5 text-center">
+                        +{extraCount}
+                      </div>
+                    )}
                 </div>
-
                 {/* Tooltip */}
-                {cell.events.length > 0 && !isDragTarget && (
+                {cell.events.length > 0 && (
                     <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-xl p-3 shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
                         <div className="font-bold border-b border-gray-700 pb-2 mb-2 flex items-center gap-2">
                             <Clock className="w-3 h-3 text-gray-400" />
@@ -369,7 +368,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                         </span>
                                         <div className="text-right truncate flex-1">
                                             <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
-                                                {customer ? customer.name : 'לא ידוע'}
+                                                {customer ? customer.name : 'Unknown customer'}
                                                 {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
                                             </span>
                                             <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>
@@ -387,3 +386,4 @@ export const Calendar: React.FC<CalendarProps> = ({
     </div>
   );
 };
+
