@@ -355,14 +355,16 @@ export const Calendar: React.FC<CalendarProps> = ({
                             draggable
                             onDragStart={(evt) => handleDragStart(evt, e.id)}
                             onDragEnd={handleDragEnd}
-                            onMouseDown={(evt) => evt.stopPropagation()}
+                            onMouseDown={(evt) => {
+                              evt.stopPropagation();
+                              evt.preventDefault();
+                            }}
                             onClick={(evt) => {
                               evt.stopPropagation();
                               onAppointmentClick(e);
                             }}
-                            className={`flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`}
+                            className={`calendar-event flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`}
                             title={`${timeLabel} - ${customer ? customer.name : 'Unknown customer'}`}
-                            style={{ WebkitUserDrag: 'element' }}
                           >
                             <span className="font-bold flex-shrink-0">{timeLabel}</span>
                             <span className="truncate font-medium">{customer ? customer.name : 'Unknown customer'}</span>

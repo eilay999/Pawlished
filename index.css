@@ -7,6 +7,11 @@ body {
   background-color: #f3f4f6; /* bg-gray-100 */
 }
 
+.calendar-event {
+  -webkit-user-drag: element;
+  user-select: none;
+}
+
 /* Custom scrollbar for cleaner look */
 ::-webkit-scrollbar {
   width: 6px;
