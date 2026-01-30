@@ -135,6 +135,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     e.dataTransfer.setData("appointmentId", appointmentId);
     e.dataTransfer.setData("text/plain", appointmentId);
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 8, 8);
   };
 
   const handleDragOver = (e: React.DragEvent, date: Date) => {
@@ -359,8 +360,9 @@ export const Calendar: React.FC<CalendarProps> = ({
                               evt.stopPropagation();
                               onAppointmentClick(e);
                             }}
-                            className={`flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 ${statusClasses}`}
+                            className={`flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`}
                             title={`${timeLabel} - ${customer ? customer.name : 'Unknown customer'}`}
+                            style={{ WebkitUserDrag: 'element' }}
                           >
                             <span className="font-bold flex-shrink-0">{timeLabel}</span>
                             <span className="truncate font-medium">{customer ? customer.name : 'Unknown customer'}</span>
