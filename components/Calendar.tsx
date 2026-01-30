@@ -131,6 +131,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   // --- Drag and Drop Handlers ---
   const handleDragStart = (e: React.DragEvent, appointmentId: string) => {
+    e.stopPropagation();
     e.dataTransfer.setData("appointmentId", appointmentId);
     e.dataTransfer.setData("text/plain", appointmentId);
     e.dataTransfer.effectAllowed = "move";
@@ -163,6 +164,10 @@ export const Calendar: React.FC<CalendarProps> = ({
     if (appointmentId) {
       onAppointmentMove(appointmentId, targetDate);
     }
+    setDragOverDate(null);
+  };
+
+  const handleDragEnd = () => {
     setDragOverDate(null);
   };
 
@@ -348,6 +353,8 @@ export const Calendar: React.FC<CalendarProps> = ({
                             key={e.id}
                             draggable
                             onDragStart={(evt) => handleDragStart(evt, e.id)}
+                            onDragEnd={handleDragEnd}
+                            onMouseDown={(evt) => evt.stopPropagation()}
                             onClick={(evt) => {
                               evt.stopPropagation();
                               onAppointmentClick(e);
