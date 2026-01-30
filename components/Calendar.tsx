@@ -352,9 +352,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                         return (
                           <div
                             key={e.id}
-                            draggable
-                            onDragStart={(evt) => handleDragStart(evt, e.id)}
-                            onDragEnd={handleDragEnd}
                             onMouseDown={(evt) => {
                               evt.stopPropagation();
                             }}
@@ -365,6 +362,16 @@ export const Calendar: React.FC<CalendarProps> = ({
                             className={`calendar-event flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`}
                             title={`${timeLabel} - ${customer ? customer.name : 'Unknown customer'}`}
                           >
+                            <span
+                              className="flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
+                              draggable
+                              onDragStart={(evt) => handleDragStart(evt, e.id)}
+                              onDragEnd={handleDragEnd}
+                              title="גרור"
+                              aria-label="גרור"
+                            >
+                              ⋮⋮
+                            </span>
                             <span className="font-bold flex-shrink-0">{timeLabel}</span>
                             <span className="truncate font-medium">{customer ? customer.name : 'Unknown customer'}</span>
                           </div>
