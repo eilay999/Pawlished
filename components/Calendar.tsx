@@ -357,7 +357,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                             onDragEnd={handleDragEnd}
                             onMouseDown={(evt) => {
                               evt.stopPropagation();
-                              evt.preventDefault();
                             }}
                             onClick={(evt) => {
                               evt.stopPropagation();
