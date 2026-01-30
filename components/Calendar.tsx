@@ -249,7 +249,11 @@ export const Calendar: React.FC<CalendarProps> = ({
                                dragOverDate.getDate() === cell.date.getDate() &&
                                dragOverDate.getMonth() === cell.date.getMonth() &&
                                dragOverDate.getFullYear() === cell.date.getFullYear();
+          const eventCustomerIds = new Set(cell.events.map(e => e.customerId));
           const lastVisitsForDay = customers.filter(c => {
+            if (eventCustomerIds.has(c.id)) {
+              return false;
+            }
             const d = new Date(c.lastVisit);
             d.setHours(0, 0, 0, 0);
             const cd = new Date(cell.date);
