@@ -132,6 +132,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   // --- Drag and Drop Handlers ---
   const handleDragStart = (e: React.DragEvent, appointmentId: string) => {
     e.dataTransfer.setData("appointmentId", appointmentId);
+    e.dataTransfer.setData("text/plain", appointmentId);
     e.dataTransfer.effectAllowed = "move";
   };
 
@@ -139,6 +140,20 @@ export const Calendar: React.FC<CalendarProps> = ({
     e.preventDefault();
     if (dragOverDate?.getTime() !== date.getTime()) {
       setDragOverDate(date);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent, date: Date) => {
+    e.preventDefault();
+    if (dragOverDate?.getTime() !== date.getTime()) {
+      setDragOverDate(date);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent, date: Date) => {
+    e.preventDefault();
+    if (dragOverDate?.getTime() === date.getTime()) {
+      setDragOverDate(null);
     }
   };
 
@@ -243,6 +258,8 @@ export const Calendar: React.FC<CalendarProps> = ({
                 key={index}
                 onClick={() => onDayClick(cell.date)}
                 onDragOver={(e) => handleDragOver(e, cell.date)}
+                onDragEnter={(e) => handleDragEnter(e, cell.date)}
+                onDragLeave={(e) => handleDragLeave(e, cell.date)}
                 onDrop={(e) => handleDrop(e, cell.date)}
                 className={`
                     relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[115px] overflow-hidden
@@ -335,7 +352,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                               evt.stopPropagation();
                               onAppointmentClick(e);
                             }}
-                            className={`flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-pointer shadow-sm hover:brightness-95 ${statusClasses}`}
+                            className={`flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 ${statusClasses}`}
                             title={`${timeLabel} - ${customer ? customer.name : 'Unknown customer'}`}
                           >
                             <span className="font-bold flex-shrink-0">{timeLabel}</span>
