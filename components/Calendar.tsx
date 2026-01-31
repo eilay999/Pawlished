@@ -260,8 +260,11 @@ export const Calendar: React.FC<CalendarProps> = ({
             cd.setHours(0, 0, 0, 0);
             return d.getTime() === cd.getTime();
           });
-          const displayEvents = cell.events.slice(0, 1);
-          const extraCount = cell.events.length - 1;
+          const displayLastVisits = lastVisitsForDay.slice(0, 1);
+          const extraLastVisits = lastVisitsForDay.length - 1;
+          const maxVisibleEvents = 3;
+          const displayEvents = cell.events.slice(0, maxVisibleEvents);
+          const extraCount = cell.events.length - displayEvents.length;
 
           return (
             <div 
@@ -313,7 +316,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 {/* Last Visit Markers */}
                 {lastVisitsForDay.length > 0 && (
                   <div className="space-y-1 mb-1">
-                    {lastVisitsForDay.map(c => {
+                    {displayLastVisits.map(c => {
                       const lastVisitTime = new Date(c.lastVisit).toLocaleTimeString('he-IL', {
                         hour: '2-digit',
                         minute: '2-digit'
@@ -334,11 +337,16 @@ export const Calendar: React.FC<CalendarProps> = ({
                         </div>
                       );
                     })}
+                    {extraLastVisits > 0 && (
+                      <div className="text-[8px] text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-1 py-0.5 text-center">
+                        +{extraLastVisits}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* Events - show only first and count */}
-                <div className="space-y-1 overflow-hidden flex-1 max-h-[72px]">
+                <div className="space-y-0.5 overflow-hidden flex-1 max-h-[72px]">
                     {displayEvents.map(e => {
                         const customer = customers.find(c => c.id === e.customerId);
                         const isCancelled = e.status === 'CANCELLED';
@@ -352,6 +360,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                           : isCompleted
                           ? 'bg-green-50 border-green-200 text-green-700'
                           : 'bg-blue-50 border-blue-200 text-blue-700';
+                        const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
 
                         return (
                           <div
@@ -364,7 +373,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                               onAppointmentClick(e);
                             }}
                             className={`calendar-event flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`}
-                            title={`${timeLabel} - ${customer ? customer.name : 'Unknown customer'}`}
+                            title={`${timeLabel} - ${nameLabel}`}
                           >
                             <span
                               className="flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
@@ -376,8 +385,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                             >
                               ⋮⋮
                             </span>
-                            <span className="font-bold flex-shrink-0">{timeLabel}</span>
-                            <span className="truncate font-medium">{customer ? customer.name : 'Unknown customer'}</span>
+                            <span className="truncate font-medium">{nameLabel}</span>
                           </div>
                         );
                     })}
