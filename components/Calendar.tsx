@@ -362,6 +362,8 @@ export const Calendar: React.FC<CalendarProps> = ({
                           : 'bg-blue-50 border-blue-200 text-blue-700';
                         const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
 
+                        const chipClass = `calendar-event flex items-center gap-1 h-5 text-[8px] leading-tight px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
+
                         return (
                           <div
                             key={e.id}
@@ -372,7 +374,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                               evt.stopPropagation();
                               onAppointmentClick(e);
                             }}
-                            className={`calendar-event flex items-center gap-1 text-[8px] leading-tight px-1 py-0.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`}
+                            className={chipClass}
                             title={`${timeLabel} - ${nameLabel}`}
                           >
                             <span
@@ -390,7 +392,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                         );
                     })}
                     {extraCount > 0 && (
-                      <div className="text-[8px] text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-1 py-0.5 text-center">
+                      <div className="calendar-event flex items-center justify-center h-5 text-[8px] leading-tight px-1 rounded-md border border-gray-200 text-gray-500 bg-gray-100">
                         +{extraCount}
                       </div>
                     )}
