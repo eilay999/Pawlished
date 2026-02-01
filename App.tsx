@@ -103,6 +103,29 @@ const isMissingTableError = (message?: string) => {
   return message.includes('relation "tasks" does not exist');
 };
 
+const TASKS_STORAGE_KEY = 'pawlished_tasks';
+
+const loadTasksFromStorage = (): Task[] => {
+  try {
+    const raw = localStorage.getItem(TASKS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Array<{
+      id: string;
+      title: string;
+      status: TaskStatus;
+      createdAt: string;
+      startDate: string;
+    }>;
+    return parsed.map(task => ({
+      ...task,
+      createdAt: new Date(task.createdAt),
+      startDate: new Date(task.startDate)
+    }));
+  } catch {
+    return [];
+  }
+};
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('CALENDAR');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -145,11 +168,21 @@ const App: React.FC = () => {
   }, [askedAppointmentIds]);
 
   useEffect(() => {
+    const payload = tasks.map(task => ({
+      ...task,
+      createdAt: task.createdAt.toISOString(),
+      startDate: task.startDate.toISOString()
+    }));
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(payload));
+  }, [tasks]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const loadData = async () => {
       if (!supabase) {
         setLoadError('Supabase env vars are missing. Using local data only.');
+        setTasks(loadTasksFromStorage());
         return;
       }
 
@@ -169,6 +202,7 @@ const App: React.FC = () => {
         console.error('Supabase load error', customersError || appointmentsError);
         if (isMounted) {
           setLoadError('Failed to load data from Supabase. Using local data only.');
+          setTasks(loadTasksFromStorage());
         }
         return;
       }
@@ -176,14 +210,22 @@ const App: React.FC = () => {
       const mappedCustomers = (customersData || []).map(mapCustomerFromDb);
       const mappedAppointments = (appointmentsData || []).map(mapAppointmentFromDb);
       const mappedTasks = (tasksData || []).map(mapTaskFromDb);
+      const localTasks = loadTasksFromStorage();
+      const mergedTasks = mappedTasks.length === 0 && localTasks.length > 0
+        ? localTasks
+        : [
+            ...mappedTasks,
+            ...localTasks.filter(localTask => !mappedTasks.some(t => t.id === localTask.id))
+          ];
 
       if (isMounted) {
         setCustomers(mappedCustomers);
         setAppointments(mappedAppointments);
         if (tasksError && !isMissingTableError(tasksError.message)) {
           console.error('Supabase tasks load error', tasksError);
+          setTasks(loadTasksFromStorage());
         } else {
-          setTasks(mappedTasks);
+          setTasks(mergedTasks);
         }
       }
     };
