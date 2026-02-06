@@ -165,6 +165,19 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                         />
                     </div>
                 </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">??? ????</label>
+                    <div className="relative">
+                        <Dog className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all"
+                            placeholder="????: ????, ????????"
+                            value={formData.petType || ''}
+                            onChange={e => setFormData({...formData, petType: e.target.value})}
+                        />
+                    </div>
+                </div>
 
                 {/* Default Price Input */}
                 <div>
