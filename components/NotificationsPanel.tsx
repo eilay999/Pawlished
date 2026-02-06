@@ -98,6 +98,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
             <div className="flex flex-col">
                 <span className="text-base">התראות וניהול</span>
                 <span className="text-xs text-gray-400 font-normal">תמונת מצב יומית</span>
+                <span className="text-[10px] text-gray-400 font-normal">יעד לקוחות: 12 תקין | 13–15 וואו | 15+ מטורף</span>
             </div>
         </div>
       </div>

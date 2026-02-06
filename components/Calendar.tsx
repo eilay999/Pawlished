@@ -48,7 +48,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     const customer = customers.find(c => c.id === appt.customerId);
     if (!customer?.petType) return false;
     const petType = customer.petType.toLowerCase();
-    return petType.includes('׳›׳׳‘') || petType.includes('dog');
+    return petType.includes('כלב') || petType.includes('dog');
   }).length;
 
   // Generate Calendar Grid
@@ -198,7 +198,7 @@ export const Calendar: React.FC<CalendarProps> = ({
              
              {/* Today's Date Indicator */}
              <div className="hidden md:flex flex-col border-r-2 border-gray-100 pr-4 mr-2">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">׳”׳™׳•׳</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">היום</span>
                 <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
                      <span>{todayGregorian}</span>
                 </div>
@@ -211,9 +211,9 @@ export const Calendar: React.FC<CalendarProps> = ({
                 disabled={loadingAi}
              >
                 <Sparkles className="w-4 h-4" />
-                {loadingAi ? '׳׳ ׳×׳—...' : '׳ ׳™׳×׳•׳— ׳™׳•׳׳™'}
+                {loadingAi ? 'מנתח...' : 'ניתוח יומי'}
              </button>
-             <span className="text-[10px] text-gray-400 font-medium">יעד לקוחות: 12 תקין | 13–15 וואו | 15+ מטורף</span>
+             <span className="text-[10px] text-gray-400 font-medium">יעד לקוחות: 12 תקין | 13-15 ואו | 15+ מטורף</span>
         </div>
 
         {/* Controls */}
@@ -241,9 +241,9 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* AI Analysis Result */}
       <div className="mx-4 mt-2 mb-2 bg-green-50 text-green-800 text-xs border border-green-100 px-4 py-2 rounded-xl flex items-center justify-between shrink-0">
-        <span className="font-bold">׳׳˜׳¨׳” ׳©׳‘׳•׳¢׳™׳×: {weeklyDogCount}/{weeklyGoal} ׳›׳׳‘׳™׳</span>
+        <span className="font-bold">סיכום שבועי: {weeklyDogCount}/{weeklyGoal} כלבים</span>
         {weeklyDogCount >= weeklyGoal && (
-          <span className="bg-green-600 text-white px-2 py-0.5 rounded-full text-[10px]">׳”׳¦׳׳—׳”</span>
+          <span className="bg-green-600 text-white px-2 py-0.5 rounded-full text-[10px]">מצוין</span>
         )}
       </div>
       {aiAnalysis && (
