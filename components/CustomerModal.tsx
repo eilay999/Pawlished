@@ -21,15 +21,15 @@ const FREQUENCY_OPTIONS = [
 ]
 
 const PET_TYPES = [
-  '????',
-  '??? ????',
-  '???? ????',
-  '????',
-  '????????',
-  '??????',
-  '???? ????',
-  '????',
-  '???'
+  'פודל',
+  'טוי פודל',
+  'פודל ננסי',
+  'שיצו',
+  'פומרניין',
+  'מלטיפו',
+  'שיצו פודל',
+  'מלטז',
+  'אחר'
 ];
 
 export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, onClose, onSave, onDelete }) => {
@@ -52,7 +52,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       setFormData({
         ...customer,
         lastVisit: new Date(customer.lastVisit), // Ensure date object
-        petType: isKnownType ? customer.petType : '???'
+        petType: isKnownType ? customer.petType : 'אחר'
       });
     } else {
       // Reset for new customer
@@ -81,7 +81,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       name: formData.name || '',
       phone: formData.phone || '',
       petName: formData.petName || '',
-      petType: (formData.petType === '???' ? (customPetType.trim() || '???') : (formData.petType || 'Dog')) ,
+      petType: (formData.petType === 'אחר' ? (customPetType.trim() || 'אחר') : (formData.petType || 'Dog')) ,
       visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
       lastVisit: formData.lastVisit || new Date(),
       defaultPrice: formData.defaultPrice,
@@ -183,7 +183,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                     </div>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">??? ????</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">סוג הכלב</label>
                     <div className="relative">
                         <Dog className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
                         <select
@@ -196,11 +196,11 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                             ))}
                         </select>
                     </div>
-                    {formData.petType === '???' && (
+                    {formData.petType === 'אחר' && (
                       <input
                         type="text"
                         className="mt-2 w-full pr-3 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all"
-                        placeholder="??? ???"
+                        placeholder="הזן סוג"
                         value={customPetType}
                         onChange={e => setCustomPetType(e.target.value)}
                       />

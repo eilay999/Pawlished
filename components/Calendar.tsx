@@ -414,11 +414,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                           </div>
                         );
                     })}
-                    {extraCount > 0 && (
-                      <div className="calendar-event flex items-center justify-center h-5 text-[8px] leading-tight px-1 rounded-md border border-gray-200 text-gray-500 bg-gray-100">
-                        +{extraCount}
-                      </div>
-                    )}
+                    {/* Hide extra count indicator */}
                 </div>
                 {/* Tooltip */}
                 {cell.events.length > 0 && (
