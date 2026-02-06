@@ -313,7 +313,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                             onDayAddAppointment(cell.date);
                           }}
                           className="flex items-center justify-center"
-                          aria-label="????"
+                          aria-label="הוסף תור"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -383,7 +383,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                           : isCompleted
                           ? 'bg-green-50 border-green-200 text-green-700'
                           : 'bg-blue-50 border-blue-200 text-blue-700';
-                        const nameLabel = customer ? customer.name : '???? ?? ????';
+                        const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
 
                         const chipClass = `calendar-event flex items-center gap-1 h-5 text-[8px] leading-tight px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
 
@@ -405,10 +405,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                               draggable
                               onDragStart={(evt) => handleDragStart(evt, e.id)}
                               onDragEnd={handleDragEnd}
-                              title="????"
-                              aria-label="????"
+                              title="גרור להזזה"
+                              aria-label="גרור להזזה"
                             >
-                              ??
+                              ⋮⋮
                             </span>
                             <span className="truncate font-medium">{nameLabel}</span>
                           </div>
@@ -439,7 +439,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                         </span>
                                         <div className="text-right truncate flex-1">
                                             <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
-                                                {customer ? customer.name : '???? ?? ????'}
+                                                {customer ? customer.name : 'לקוח לא ידוע'}
                                                 {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
                                             </span>
                                             <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>
