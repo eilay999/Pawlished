@@ -327,7 +327,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     </div>
                     {selectedCustomer.notes && (
                         <div className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-2">
-                            <span className="font-semibold text-gray-700">????? ????:</span>{' '}
+                            <span className="font-semibold text-gray-700">הערות לקוח:</span>{' '}
                             <span className="text-gray-600">{selectedCustomer.notes}</span>
                         </div>
                     )}
