@@ -64,7 +64,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       name: formData.name || '',
       phone: formData.phone || '',
       petName: formData.petName || '',
-      petType: 'Dog', // Enforce Dog
+      petType: formData.petType || 'Dog',
       visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
       lastVisit: formData.lastVisit || new Date(),
       defaultPrice: formData.defaultPrice,
