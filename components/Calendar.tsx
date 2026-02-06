@@ -37,6 +37,19 @@ export const Calendar: React.FC<CalendarProps> = ({
   // Today's Date info for Header
   const today = new Date();
   const todayGregorian = today.toLocaleDateString('he-IL');
+  const weeklyGoal = 12;
+  const weekStart = new Date(currentDate);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const weeklyDogCount = appointments.filter(appt => {
+    if (appt.date < weekStart || appt.date >= weekEnd) return false;
+    const customer = customers.find(c => c.id === appt.customerId);
+    if (!customer?.petType) return false;
+    const petType = customer.petType.toLowerCase();
+    return petType.includes('׳›׳׳‘') || petType.includes('dog');
+  }).length;
 
   // Generate Calendar Grid
   useEffect(() => {
@@ -185,7 +198,7 @@ export const Calendar: React.FC<CalendarProps> = ({
              
              {/* Today's Date Indicator */}
              <div className="hidden md:flex flex-col border-r-2 border-gray-100 pr-4 mr-2">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">היום</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">׳”׳™׳•׳</span>
                 <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
                      <span>{todayGregorian}</span>
                 </div>
@@ -198,8 +211,9 @@ export const Calendar: React.FC<CalendarProps> = ({
                 disabled={loadingAi}
              >
                 <Sparkles className="w-4 h-4" />
-                {loadingAi ? 'מנתח...' : 'ניתוח יומי'}
+                {loadingAi ? '׳׳ ׳×׳—...' : '׳ ׳™׳×׳•׳— ׳™׳•׳׳™'}
              </button>
+             <span className="text-[10px] text-gray-400 font-medium">יעד לקוחות: 12 תקין | 13–15 וואו | 15+ מטורף</span>
         </div>
 
         {/* Controls */}
@@ -214,7 +228,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 onClick={handleToday}
                 className="px-3 py-1 hover:bg-white hover:shadow-sm text-gray-600 hover:text-gray-900 text-sm font-bold rounded-lg transition-all"
             >
-                היום
+                ׳”׳™׳•׳
             </button>
             <button 
                 onClick={handlePrevMonth}
@@ -226,6 +240,12 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       {/* AI Analysis Result */}
+      <div className="mx-4 mt-2 mb-2 bg-green-50 text-green-800 text-xs border border-green-100 px-4 py-2 rounded-xl flex items-center justify-between shrink-0">
+        <span className="font-bold">׳׳˜׳¨׳” ׳©׳‘׳•׳¢׳™׳×: {weeklyDogCount}/{weeklyGoal} ׳›׳׳‘׳™׳</span>
+        {weeklyDogCount >= weeklyGoal && (
+          <span className="bg-green-600 text-white px-2 py-0.5 rounded-full text-[10px]">׳”׳¦׳׳—׳”</span>
+        )}
+      </div>
       {aiAnalysis && (
         <div className="mx-4 mb-2 bg-gradient-to-r from-purple-50 to-white px-4 py-2 rounded-xl text-purple-900 text-xs border border-purple-100 flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
             <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
@@ -290,7 +310,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                             onDayAddAppointment(cell.date);
                           }}
                           className="flex items-center justify-center"
-                          aria-label="הוסף תור"
+                          aria-label="????"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -360,7 +380,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                           : isCompleted
                           ? 'bg-green-50 border-green-200 text-green-700'
                           : 'bg-blue-50 border-blue-200 text-blue-700';
-                        const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
+                        const nameLabel = customer ? customer.name : '???? ?? ????';
 
                         const chipClass = `calendar-event flex items-center gap-1 h-5 text-[8px] leading-tight px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
 
@@ -382,10 +402,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                               draggable
                               onDragStart={(evt) => handleDragStart(evt, e.id)}
                               onDragEnd={handleDragEnd}
-                              title="גרור"
-                              aria-label="גרור"
+                              title="????"
+                              aria-label="????"
                             >
-                              ⋮⋮
+                              ??
                             </span>
                             <span className="truncate font-medium">{nameLabel}</span>
                           </div>
@@ -416,7 +436,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                         </span>
                                         <div className="text-right truncate flex-1">
                                             <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
-                                                {customer ? customer.name : 'Unknown customer'}
+                                                {customer ? customer.name : '???? ?? ????'}
                                                 {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
                                             </span>
                                             <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>
