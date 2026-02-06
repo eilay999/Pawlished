@@ -108,6 +108,7 @@ const isMissingTableError = (message?: string) => {
 
 const TASKS_STORAGE_KEY = 'pawlished_tasks';
 const CUSTOMER_NOTES_KEY = 'pawlished_customer_notes';
+const CUSTOMERS_STORAGE_KEY = 'pawlished_customers';
 
 const loadCustomerNotesMap = (): Record<string, string> => {
   try {
@@ -157,6 +158,32 @@ const loadTasksFromStorage = (): Task[] => {
     }));
   } catch {
     return [];
+  }
+};
+
+const loadCustomersFromStorage = (): Customer[] => {
+  try {
+    const raw = localStorage.getItem(CUSTOMERS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Array<Omit<Customer, 'lastVisit'> & { lastVisit: string }>;
+    return parsed.map(c => ({
+      ...c,
+      lastVisit: new Date(c.lastVisit)
+    }));
+  } catch {
+    return [];
+  }
+};
+
+const saveCustomersToStorage = (list: Customer[]) => {
+  try {
+    const payload = list.map(c => ({
+      ...c,
+      lastVisit: c.lastVisit.toISOString()
+    }));
+    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore storage errors
   }
 };
 
@@ -216,7 +243,8 @@ const App: React.FC = () => {
     const loadData = async () => {
       if (!supabase) {
         setLoadError('Supabase env vars are missing. Using local data only.');
-        setCustomers(mergeNotesIntoCustomers(MOCK_CUSTOMERS));
+        const localCustomers = loadCustomersFromStorage();
+        setCustomers(mergeNotesIntoCustomers(localCustomers.length ? localCustomers : MOCK_CUSTOMERS));
         setTasks(loadTasksFromStorage());
         return;
       }
@@ -237,6 +265,10 @@ const App: React.FC = () => {
         console.error('Supabase load error', customersError || appointmentsError);
         if (isMounted) {
           setLoadError('Failed to load data from Supabase. Using local data only.');
+          const localCustomers = loadCustomersFromStorage();
+          if (localCustomers.length) {
+            setCustomers(mergeNotesIntoCustomers(localCustomers));
+          }
           setTasks(loadTasksFromStorage());
         }
         return;
@@ -255,6 +287,7 @@ const App: React.FC = () => {
 
       if (isMounted) {
         setCustomers(mappedCustomers);
+        saveCustomersToStorage(mappedCustomers);
         setAppointments(mappedAppointments);
         if (tasksError && !isMissingTableError(tasksError.message)) {
           console.error('Supabase tasks load error', tasksError);
@@ -428,11 +461,14 @@ const App: React.FC = () => {
 
     setCustomers(prev => {
       const exists = prev.find(c => c.id === updatedCustomer.id);
+      let next: Customer[];
       if (exists) {
-        return prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c);
+        next = prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c);
       } else {
-        return [...prev, updatedCustomer];
+        next = [...prev, updatedCustomer];
       }
+      saveCustomersToStorage(next);
+      return next;
     });
     setIsCustomerModalOpen(false);
 
@@ -451,7 +487,11 @@ const App: React.FC = () => {
       delete notesMap[customerId];
       saveCustomerNotesMap(notesMap);
     }
-    setCustomers(prev => prev.filter(c => c.id !== customerId));
+    setCustomers(prev => {
+      const next = prev.filter(c => c.id !== customerId);
+      saveCustomersToStorage(next);
+      return next;
+    });
     setAppointments(prev => prev.filter(a => a.customerId !== customerId));
     setIsCustomerModalOpen(false);
     setEditingCustomer(null);

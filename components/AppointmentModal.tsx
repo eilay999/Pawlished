@@ -336,7 +336,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                              ביקור אחרון: {new Date(selectedCustomer.lastVisit).toLocaleDateString('he-IL')}
                         </div>
                     <div className="text-xs text-gray-600">
-                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">????? ????</label>
+                        <div className="flex items-center justify-between mb-1"><label className="block text-[11px] font-semibold text-gray-700">????? ????</label><button type="button" className="text-[10px] text-red-500 hover:text-red-600 font-semibold" onClick={() => setCustomerNotes('')} disabled={!customerNotes.trim()}>??? ?????</button></div>
                         <textarea
                           className="w-full min-h-[70px] px-2.5 py-2 border border-gray-200 rounded-lg bg-white resize-y focus:ring-2 focus:ring-blue-500 outline-none"
                           placeholder="???? ????? ?? ?????..."
