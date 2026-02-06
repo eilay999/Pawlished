@@ -36,7 +36,11 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   // Today's Date info for Header
   const today = new Date();
-  const todayGregorian = today.toLocaleDateString('he-IL');
+  const todayGregorian = today.toLocaleDateString('he-IL', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  });
   const weeklyGoal = 12;
   const weekStart = new Date(currentDate);
   weekStart.setHours(0, 0, 0, 0);
@@ -213,7 +217,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                 <Sparkles className="w-4 h-4" />
                 {loadingAi ? 'מנתח...' : 'ניתוח יומי'}
              </button>
-             <span className="text-[10px] text-gray-400 font-medium">יעד לקוחות: 12 תקין | 13-15 ואו | 15+ מטורף</span>
         </div>
 
         {/* Controls */}
