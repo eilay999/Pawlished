@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { Calendar } from './components/Calendar';
@@ -220,6 +220,8 @@ const App: React.FC = () => {
   const [preSelectedCustomerId, setPreSelectedCustomerId] = useState<string | undefined>(undefined);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null);
+  const autosaveReadyRef = useRef(false);
+  const autosaveTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     localStorage.setItem(
@@ -296,6 +298,10 @@ const App: React.FC = () => {
           setTasks(mergedTasks);
         }
       }
+
+      if (isMounted) {
+        autosaveReadyRef.current = true;
+      }
     };
 
     void loadData();
@@ -304,6 +310,42 @@ const App: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  // Cloud autosave (debounced) for customers and appointments
+  useEffect(() => {
+    if (!supabase) return;
+    if (!autosaveReadyRef.current) return;
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      void supabase
+        .from('customers')
+        .upsert(customers.map(mapCustomerToDb))
+        .then(({ error }) => {
+          if (error) {
+            console.error('Supabase autosave customers error', error);
+          }
+        });
+
+      void supabase
+        .from('appointments')
+        .upsert(appointments.map(mapAppointmentToDb))
+        .then(({ error }) => {
+          if (error) {
+            console.error('Supabase autosave appointments error', error);
+          }
+        });
+    }, 1500);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [customers, appointments]);
 
   useEffect(() => {
     if (pendingCheck) return;
