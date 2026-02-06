@@ -231,7 +231,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 onClick={handleToday}
                 className="px-3 py-1 hover:bg-white hover:shadow-sm text-gray-600 hover:text-gray-900 text-sm font-bold rounded-lg transition-all"
             >
-                ׳”׳™׳•׳
+                היום
             </button>
             <button 
                 onClick={handlePrevMonth}
