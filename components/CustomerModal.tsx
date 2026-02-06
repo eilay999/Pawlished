@@ -28,7 +28,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
     petType: 'Dog',
     visitFrequencyWeeks: 4,
     lastVisit: new Date(),
-    defaultPrice: undefined
+    defaultPrice: undefined,
+    notes: ''
   });
 
   useEffect(() => {
@@ -46,7 +47,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
         petType: 'Dog',
         visitFrequencyWeeks: 4,
         lastVisit: new Date(),
-        defaultPrice: undefined
+        defaultPrice: undefined,
+        notes: ''
       });
     }
   }, [customer, isOpen]);
@@ -65,7 +67,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       petType: 'Dog', // Enforce Dog
       visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
       lastVisit: formData.lastVisit || new Date(),
-      defaultPrice: formData.defaultPrice
+      defaultPrice: formData.defaultPrice,
+      notes: formData.notes?.trim() || undefined
     });
     onClose();
   };
@@ -180,6 +183,16 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                     <p className="text-[10px] text-gray-400 mt-1">יופיע אוטומטית בקביעת תור</p>
                 </div>
             </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4 space-y-2">
+            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">הערות</h4>
+            <textarea
+              className="w-full min-h-[90px] px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 transition-all resize-y"
+              placeholder="הערות על הלקוח..."
+              value={formData.notes || ''}
+              onChange={e => setFormData({ ...formData, notes: e.target.value })}
+            />
           </div>
 
           <div className="border-t border-gray-100 pt-4 space-y-4 bg-blue-50 -mx-6 px-6 py-6 mt-2">

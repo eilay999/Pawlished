@@ -20,6 +20,7 @@ type DbCustomer = {
   last_visit: string;
   visit_frequency_weeks: number;
   default_price: number | null;
+  notes?: string | null;
 };
 
 type DbAppointment = {
@@ -49,6 +50,7 @@ const mapCustomerFromDb = (row: DbCustomer): Customer => ({
   lastVisit: new Date(row.last_visit),
   visitFrequencyWeeks: row.visit_frequency_weeks,
   defaultPrice: row.default_price ?? undefined,
+  notes: row.notes ?? undefined,
 });
 
 const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
@@ -70,6 +72,7 @@ const mapCustomerToDb = (customer: Customer): DbCustomer => ({
   last_visit: customer.lastVisit.toISOString(),
   visit_frequency_weeks: customer.visitFrequencyWeeks,
   default_price: customer.defaultPrice ?? null,
+  notes: customer.notes ?? null,
 });
 
 const mapAppointmentToDb = (appointment: Appointment): DbAppointment => ({

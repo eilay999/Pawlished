@@ -15,6 +15,7 @@ export interface Customer {
   lastVisit: Date; // The date of their last grooming
   visitFrequencyWeeks: number; // How often they should come (e.g., 4 weeks)
   defaultPrice?: number; // Optional fixed price for this specific customer
+  notes?: string; // Optional notes per customer
 }
 
 export interface Appointment {
