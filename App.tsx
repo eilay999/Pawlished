@@ -107,6 +107,37 @@ const isMissingTableError = (message?: string) => {
 };
 
 const TASKS_STORAGE_KEY = 'pawlished_tasks';
+const CUSTOMER_NOTES_KEY = 'pawlished_customer_notes';
+
+const loadCustomerNotesMap = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(CUSTOMER_NOTES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed || {};
+  } catch {
+    return {};
+  }
+};
+
+const saveCustomerNotesMap = (notes: Record<string, string>) => {
+  try {
+    localStorage.setItem(CUSTOMER_NOTES_KEY, JSON.stringify(notes));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const mergeNotesIntoCustomers = (list: Customer[]) => {
+  const notesMap = loadCustomerNotesMap();
+  return list.map(c => {
+    const localNote = notesMap[c.id];
+    if (localNote && !c.notes) {
+      return { ...c, notes: localNote };
+    }
+    return c;
+  });
+};
 
 const loadTasksFromStorage = (): Task[] => {
   try {
@@ -185,6 +216,7 @@ const App: React.FC = () => {
     const loadData = async () => {
       if (!supabase) {
         setLoadError('Supabase env vars are missing. Using local data only.');
+        setCustomers(mergeNotesIntoCustomers(MOCK_CUSTOMERS));
         setTasks(loadTasksFromStorage());
         return;
       }
@@ -210,7 +242,7 @@ const App: React.FC = () => {
         return;
       }
 
-      const mappedCustomers = (customersData || []).map(mapCustomerFromDb);
+      const mappedCustomers = mergeNotesIntoCustomers((customersData || []).map(mapCustomerFromDb));
       const mappedAppointments = (appointmentsData || []).map(mapAppointmentFromDb);
       const mappedTasks = (tasksData || []).map(mapTaskFromDb);
       const localTasks = loadTasksFromStorage();
@@ -358,6 +390,14 @@ const App: React.FC = () => {
   };
 
   const handleSaveCustomer = (updatedCustomer: Customer) => {
+    const notesMap = loadCustomerNotesMap();
+    if (updatedCustomer.notes && updatedCustomer.notes.trim()) {
+      notesMap[updatedCustomer.id] = updatedCustomer.notes.trim();
+    } else if (notesMap[updatedCustomer.id]) {
+      delete notesMap[updatedCustomer.id];
+    }
+    saveCustomerNotesMap(notesMap);
+
     setCustomers(prev => {
       const exists = prev.find(c => c.id === updatedCustomer.id);
       if (exists) {
@@ -378,6 +418,11 @@ const App: React.FC = () => {
   };
 
   const handleDeleteCustomer = (customerId: string) => {
+    const notesMap = loadCustomerNotesMap();
+    if (notesMap[customerId]) {
+      delete notesMap[customerId];
+      saveCustomerNotesMap(notesMap);
+    }
     setCustomers(prev => prev.filter(c => c.id !== customerId));
     setAppointments(prev => prev.filter(a => a.customerId !== customerId));
     setIsCustomerModalOpen(false);
