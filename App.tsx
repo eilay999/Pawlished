@@ -389,6 +389,34 @@ const App: React.FC = () => {
     setIsCustomerModalOpen(true);
   };
 
+  const handleUpdateCustomerNotes = (customerId: string, notes: string) => {
+    let updatedCustomer: Customer | null = null;
+    setCustomers(prev => prev.map(c => {
+      if (c.id !== customerId) return c;
+      updatedCustomer = { ...c, notes: notes || undefined };
+      return updatedCustomer;
+    }));
+
+    const notesMap = loadCustomerNotesMap();
+    if (notes && notes.trim()) {
+      notesMap[customerId] = notes.trim();
+    } else if (notesMap[customerId]) {
+      delete notesMap[customerId];
+    }
+    saveCustomerNotesMap(notesMap);
+
+    if (updatedCustomer && supabase) {
+      void supabase
+        .from('customers')
+        .upsert(mapCustomerToDb(updatedCustomer))
+        .then(({ error }) => {
+          if (error) {
+            console.error('Supabase customer notes update error', error);
+          }
+        });
+    }
+  };
+
   const handleSaveCustomer = (updatedCustomer: Customer) => {
     const notesMap = loadCustomerNotesMap();
     if (updatedCustomer.notes && updatedCustomer.notes.trim()) {
@@ -732,6 +760,7 @@ const App: React.FC = () => {
             setEditingAppointment(null);
         }}
         onSave={handleSaveAppointment}
+        onUpdateCustomerNotes={handleUpdateCustomerNotes}
         onDelete={handleDeleteAppointment}
         initialDate={selectedDateForAppointment}
         customers={customers}

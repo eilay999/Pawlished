@@ -8,6 +8,7 @@ interface AppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (appointment: Appointment) => void;
+  onUpdateCustomerNotes?: (customerId: string, notes: string) => void;
   onDelete?: (appointmentId: string) => void;
   initialDate?: Date;
   customers: Customer[];
@@ -32,7 +33,8 @@ const TIME_SLOTS = generateTimeSlots();
 export const AppointmentModal: React.FC<AppointmentModalProps> = ({ 
   isOpen, 
   onClose, 
-  onSave, 
+  onSave,
+  onUpdateCustomerNotes,
   onDelete,
   initialDate, 
   customers,
@@ -41,7 +43,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   appointment
 }) => {
   const [formData, setFormData] = useState({
-    customerId: '',
+      customerId: '',
     date: '',
     time: '09:00',
     service: 'תספורת מלאה',
@@ -49,6 +51,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     status: AppointmentStatus.SCHEDULED,
     notes: ''
   });
+  const [customerNotes, setCustomerNotes] = useState('');
 
   const [isCustomService, setIsCustomService] = useState(false);
   const [showError, setShowError] = useState(false);
@@ -142,6 +145,14 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       }, 100);
     }
   }, [isOpen, initialDate, preSelectedCustomerId, appointment]);
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setCustomerNotes('');
+      return;
+    }
+    setCustomerNotes(selectedCustomer.notes || '');
+  }, [selectedCustomer?.id]);
 
   const handleCustomerChange = (newCustomerId: string) => {
       const cust = customers.find(c => c.id === newCustomerId);
@@ -324,6 +335,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                             <History className="w-3 h-3 text-gray-400" />
                              ביקור אחרון: {new Date(selectedCustomer.lastVisit).toLocaleDateString('he-IL')}
                         </div>
+                    <div className="text-xs text-gray-600">
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">????? ????</label>
+                        <textarea
+                          className="w-full min-h-[70px] px-2.5 py-2 border border-gray-200 rounded-lg bg-white resize-y focus:ring-2 focus:ring-blue-500 outline-none"
+                          placeholder="???? ????? ?? ?????..."
+                          value={customerNotes}
+                          onChange={e => setCustomerNotes(e.target.value)}
+                        />
+                    </div>
+
                     </div>
                     {selectedCustomer.notes && (
                         <div className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-2">
