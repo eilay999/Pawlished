@@ -18,6 +18,18 @@ const FREQUENCY_OPTIONS = [
   { weeks: 8, label: 'חודשיים' },
   { weeks: 10, label: 'חודשיים וחצי' },
   { weeks: 12, label: '3 חודשים' },
+]
+
+const PET_TYPES = [
+  '????',
+  '??? ????',
+  '???? ????',
+  '????',
+  '????????',
+  '??????',
+  '???? ????',
+  '????',
+  '???'
 ];
 
 export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, onClose, onSave, onDelete }) => {
@@ -31,15 +43,20 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
     defaultPrice: undefined,
     notes: ''
   });
+  const [customPetType, setCustomPetType] = useState('');
 
   useEffect(() => {
     if (customer) {
+      const isKnownType = PET_TYPES.includes(customer.petType);
+      setCustomPetType(isKnownType ? '' : customer.petType);
       setFormData({
         ...customer,
-        lastVisit: new Date(customer.lastVisit) // Ensure date object
+        lastVisit: new Date(customer.lastVisit), // Ensure date object
+        petType: isKnownType ? customer.petType : '???'
       });
     } else {
       // Reset for new customer
+      setCustomPetType('');
       setFormData({
         name: '',
         phone: '',
@@ -64,7 +81,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       name: formData.name || '',
       phone: formData.phone || '',
       petName: formData.petName || '',
-      petType: formData.petType || 'Dog',
+      petType: (formData.petType === '???' ? (customPetType.trim() || '???') : (formData.petType || 'Dog')) ,
       visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
       lastVisit: formData.lastVisit || new Date(),
       defaultPrice: formData.defaultPrice,
@@ -169,14 +186,25 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                     <label className="block text-sm font-medium text-gray-700 mb-1">??? ????</label>
                     <div className="relative">
                         <Dog className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all"
-                            placeholder="????: ????, ????????"
+                        <select
+                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all appearance-none"
                             value={formData.petType || ''}
                             onChange={e => setFormData({...formData, petType: e.target.value})}
-                        />
+                        >
+                            {PET_TYPES.map(t => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                        </select>
                     </div>
+                    {formData.petType === '???' && (
+                      <input
+                        type="text"
+                        className="mt-2 w-full pr-3 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all"
+                        placeholder="??? ???"
+                        value={customPetType}
+                        onChange={e => setCustomPetType(e.target.value)}
+                      />
+                    )}
                 </div>
 
                 {/* Default Price Input */}
