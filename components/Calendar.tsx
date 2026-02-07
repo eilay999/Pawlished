@@ -54,6 +54,10 @@ export const Calendar: React.FC<CalendarProps> = ({
     const petType = customer.petType.toLowerCase();
     return petType.includes('כלב') || petType.includes('dog');
   }).length;
+  const nextMonthRef = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const isNextMonthView =
+    currentDate.getFullYear() === nextMonthRef.getFullYear() &&
+    currentDate.getMonth() === nextMonthRef.getMonth();
 
   // Generate Calendar Grid
   useEffect(() => {
@@ -191,6 +195,14 @@ export const Calendar: React.FC<CalendarProps> = ({
 
 
   const monthName = currentDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' });
+  const hideNextMonthRange =
+    isNextMonthView &&
+    new Date(currentDate.getFullYear(), currentDate.getMonth(), 8).getDay() === 0;
+  const visibleCells = hideNextMonthRange
+    ? calendarGrid.filter(
+        cell => !(cell.isCurrentMonth && cell.date.getDate() >= 8 && cell.date.getDate() <= 14)
+      )
+    : calendarGrid;
 
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
@@ -267,7 +279,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* Grid Content */}
       <div className="grid grid-cols-7 auto-rows-fr flex-1 px-5 pb-5 gap-2.5 pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-        {calendarGrid.map((cell, index) => {
+        {visibleCells.map((cell) => {
           const isDragTarget = dragOverDate &&
                                dragOverDate.getDate() === cell.date.getDate() &&
                                dragOverDate.getMonth() === cell.date.getMonth() &&
@@ -291,7 +303,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
           return (
             <div 
-                key={index}
+                key={cell.date.toISOString()}
                 onClick={() => onDayClick(cell.date)}
                 onDragOver={(e) => handleDragOver(e, cell.date)}
                 onDragEnter={(e) => handleDragEnter(e, cell.date)}
