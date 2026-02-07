@@ -2,7 +2,11 @@ import { GoogleGenAI } from "@google/genai";
 import { Appointment, Customer } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey =
+    import.meta.env.VITE_GEMINI_API_KEY ||
+    import.meta.env.VITE_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.API_KEY;
   if (!apiKey) {
     console.error("API Key not found in environment variables");
     return null;
@@ -47,8 +51,12 @@ Provide 3 concise, practical insights.
   `;
 
   try {
+    const model =
+      import.meta.env.VITE_GEMINI_MODEL ||
+      process.env.GEMINI_MODEL ||
+      "gemini-1.5-flash";
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model,
       contents: prompt,
     });
     return response.text || "No response received.";
