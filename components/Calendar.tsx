@@ -420,7 +420,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                     onAppointmentClick(e);
                                   }}
                                   className={chipClass}
-                                  title={`${timeLabel} - ${nameLabel}`}
+                                  title={`${timeLabel} - ${fullNameLabel}`}
                                 >
                                   <span
                                     className="hidden sm:flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
