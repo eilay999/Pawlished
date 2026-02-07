@@ -191,6 +191,12 @@ export const Calendar: React.FC<CalendarProps> = ({
 
 
   const monthName = currentDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' });
+  const weeks: DayCell[][] = [];
+  for (let i = 0; i < calendarGrid.length; i += 7) {
+    weeks.push(calendarGrid.slice(i, i + 7));
+  }
+  const visibleWeeks = weeks.filter(week => week.some(cell => cell.isCurrentMonth));
+
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
       {/* Calendar Header */}
@@ -265,200 +271,206 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       {/* Grid Content */}
-      <div className="grid grid-cols-7 auto-rows-fr flex-1 px-5 pb-5 gap-2.5 pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-        {calendarGrid.map((cell) => {
-          if (!cell.isCurrentMonth) {
-            return (
-              <div
-                key={cell.date.toISOString()}
-                className="rounded-2xl min-h-[115px] border border-transparent bg-transparent pointer-events-none"
-              />
-            );
-          }
-          const isDragTarget = dragOverDate &&
-                               dragOverDate.getDate() === cell.date.getDate() &&
-                               dragOverDate.getMonth() === cell.date.getMonth() &&
-                               dragOverDate.getFullYear() === cell.date.getFullYear();
-          const eventCustomerIds = new Set(cell.events.map(e => e.customerId));
-          const lastVisitsForDay = customers.filter(c => {
-            if (eventCustomerIds.has(c.id)) {
-              return false;
-            }
-            const d = new Date(c.lastVisit);
-            d.setHours(0, 0, 0, 0);
-            const cd = new Date(cell.date);
-            cd.setHours(0, 0, 0, 0);
-            return d.getTime() === cd.getTime();
-          });
-          const activeEvents = cell.events.filter(e => e.status !== 'CANCELLED');
-          const uniqueCustomerCount = new Set(activeEvents.map(e => e.customerId)).size;
-          const displayLastVisits = lastVisitsForDay.slice(0, 1);
-          const maxVisibleEvents = 4;
-          const displayEvents = cell.events.slice(0, maxVisibleEvents);
+      <div className="flex-1 px-5 pb-5 pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
+        <div className="h-full flex flex-col gap-2.5">
+          {visibleWeeks.map((week, weekIndex) => (
+            <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2.5 flex-1">
+              {week.map((cell) => {
+                if (!cell.isCurrentMonth) {
+                  return (
+                    <div
+                      key={cell.date.toISOString()}
+                      className="rounded-2xl min-h-[140px] border border-transparent bg-transparent pointer-events-none"
+                    />
+                  );
+                }
+                const isDragTarget = dragOverDate &&
+                                     dragOverDate.getDate() === cell.date.getDate() &&
+                                     dragOverDate.getMonth() === cell.date.getMonth() &&
+                                     dragOverDate.getFullYear() === cell.date.getFullYear();
+                const eventCustomerIds = new Set(cell.events.map(e => e.customerId));
+                const lastVisitsForDay = customers.filter(c => {
+                  if (eventCustomerIds.has(c.id)) {
+                    return false;
+                  }
+                  const d = new Date(c.lastVisit);
+                  d.setHours(0, 0, 0, 0);
+                  const cd = new Date(cell.date);
+                  cd.setHours(0, 0, 0, 0);
+                  return d.getTime() === cd.getTime();
+                });
+                const activeEvents = cell.events.filter(e => e.status !== 'CANCELLED');
+                const uniqueCustomerCount = new Set(activeEvents.map(e => e.customerId)).size;
+                const displayLastVisits = lastVisitsForDay.slice(0, 1);
+                const maxVisibleEvents = 4;
+                const displayEvents = cell.events.slice(0, maxVisibleEvents);
 
-          return (
-            <div 
-                key={cell.date.toISOString()}
-                onClick={() => onDayClick(cell.date)}
-                onDragOver={(e) => handleDragOver(e, cell.date)}
-                onDragEnter={(e) => handleDragEnter(e, cell.date)}
-                onDragLeave={(e) => handleDragLeave(e, cell.date)}
-                onDrop={(e) => handleDrop(e, cell.date)}
-                className={`
-                    relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[140px] overflow-hidden
-                    ${cell.isCurrentMonth ? 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/40 border-gray-100 text-gray-300 opacity-60'}
-                    ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
-                    ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
-                `}
-            >
-                {/* Header: Date & Add Icon */}
-                <div className="flex justify-between items-start pointer-events-none mb-1">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-blue-100 rounded-full text-blue-600 pointer-events-auto">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDayAddAppointment(cell.date);
-                          }}
-                          className="flex items-center justify-center"
-                          aria-label="הוסף תור"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                    </div>
-                    
-                    <div className="flex items-center gap-1">
-                         {/* Holiday Indicator */}
-                         {cell.holiday && (
-                            <span className="text-[9px] font-bold text-pink-600 bg-pink-50 px-1 py-0.5 rounded-md truncate max-w-[60px]" title={cell.holiday}>
-                                {cell.holiday}
-                            </span>
-                         )}
-
-                        <div className={`
-                            w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all
-                            ${cell.isToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 group-hover:bg-gray-100'}
-                        `}>
-                            {cell.date.getDate()}
-                        </div>
-                    </div>
-                </div>
-
-                {uniqueCustomerCount > 0 && (
-                  <div className="flex justify-end mb-1">
-                    <div className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
-                      {uniqueCustomerCount} לקוחות
-                    </div>
-                  </div>
-                )}
-
-                {/* Last Visit Markers */}
-                {lastVisitsForDay.length > 0 && (
-                  <div className="space-y-1 mb-1">
-                    {displayLastVisits.map(c => {
-                      const lastVisitTime = new Date(c.lastVisit).toLocaleTimeString('he-IL', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      });
-
-                      return (
-                        <div
-                          key={`last-${c.id}`}
-                          className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-md truncate border transition-colors cursor-pointer bg-green-100 border-green-200 text-green-800 shadow-sm hover:brightness-95"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onCustomerClick(c);
-                          }}
-                        >
-                          <div className="w-1 h-1 rounded-full flex-shrink-0 bg-green-600"></div>
-                          <span className="font-bold flex-shrink-0">{lastVisitTime}</span>
-                          <span className="truncate font-medium">{c.name}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Events - show only first and count */}
-                <div className="space-y-0.5 overflow-hidden flex-1 max-h-[96px]">
-                    {displayEvents.map(e => {
-                        const customer = customers.find(c => c.id === e.customerId);
-                        const isCancelled = e.status === 'CANCELLED';
-                        const isCompleted = e.status === 'COMPLETED';
-                        const timeLabel = e.date.toLocaleTimeString('he-IL', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        });
-                        const statusClasses = isCancelled
-                          ? 'bg-gray-100 border-gray-200 text-gray-400 line-through'
-                          : isCompleted
-                          ? 'bg-green-50 border-green-200 text-green-700'
-                          : 'bg-blue-50 border-blue-200 text-blue-700';
-                        const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
-
-                        const chipClass = `calendar-event flex items-center gap-1 h-5 text-[8px] leading-tight px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
-
-                        return (
-                          <div
-                            key={e.id}
-                            onMouseDown={(evt) => {
-                              evt.stopPropagation();
-                            }}
-                            onClick={(evt) => {
-                              evt.stopPropagation();
-                              onAppointmentClick(e);
-                            }}
-                            className={chipClass}
-                            title={`${timeLabel} - ${nameLabel}`}
-                          >
-                            <span
-                              className="flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
-                              draggable
-                              onDragStart={(evt) => handleDragStart(evt, e.id)}
-                              onDragEnd={handleDragEnd}
-                              title="גרור להזזה"
-                              aria-label="גרור להזזה"
-                            >
-                              ⋮⋮
-                            </span>
-                            <span className="truncate font-medium">{nameLabel}</span>
+                return (
+                  <div 
+                      key={cell.date.toISOString()}
+                      onClick={() => onDayClick(cell.date)}
+                      onDragOver={(e) => handleDragOver(e, cell.date)}
+                      onDragEnter={(e) => handleDragEnter(e, cell.date)}
+                      onDragLeave={(e) => handleDragLeave(e, cell.date)}
+                      onDrop={(e) => handleDrop(e, cell.date)}
+                      className={`
+                          relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[140px] overflow-hidden
+                          ${cell.isCurrentMonth ? 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/40 border-gray-100 text-gray-300 opacity-60'}
+                          ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
+                          ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
+                      `}
+                  >
+                      {/* Header: Date & Add Icon */}
+                      <div className="flex justify-between items-start pointer-events-none mb-1">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-blue-100 rounded-full text-blue-600 pointer-events-auto">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDayAddAppointment(cell.date);
+                                }}
+                                className="flex items-center justify-center"
+                                aria-label="הוסף תור"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
                           </div>
-                        );
-                    })}
-                    {/* Hide extra count indicator */}
-                </div>
-                {/* Tooltip */}
-                {cell.events.length > 0 && (
-                    <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-xl p-3 shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-                        <div className="font-bold border-b border-gray-700 pb-2 mb-2 flex items-center gap-2">
-                            <Clock className="w-3 h-3 text-gray-400" />
-                            {cell.date.toLocaleDateString('he-IL')}
+                          
+                          <div className="flex items-center gap-1">
+                               {/* Holiday Indicator */}
+                               {cell.holiday && (
+                                  <span className="text-[9px] font-bold text-pink-600 bg-pink-50 px-1 py-0.5 rounded-md truncate max-w-[60px]" title={cell.holiday}>
+                                      {cell.holiday}
+                                  </span>
+                               )}
+
+                              <div className={`
+                                  w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all
+                                  ${cell.isToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 group-hover:bg-gray-100'}
+                              `}>
+                                  {cell.date.getDate()}
+                              </div>
+                          </div>
+                      </div>
+
+                      {uniqueCustomerCount > 0 && (
+                        <div className="flex justify-end mb-1">
+                          <div className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
+                            {uniqueCustomerCount} לקוחות
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                            {cell.events.map(e => {
-                                const customer = customers.find(c => c.id === e.customerId);
-                                const isCancelled = e.status === 'CANCELLED';
-                                const isCompleted = e.status === 'COMPLETED';
-                                return (
-                                    <div key={e.id} className={`flex justify-between items-center gap-2 ${isCancelled ? 'opacity-50 line-through' : ''}`}>
-                                        <span className="text-gray-400 font-mono">
-                                            {e.date.toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}
-                                        </span>
-                                        <div className="text-right truncate flex-1">
-                                            <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
-                                                {customer ? customer.name : 'לקוח לא ידוע'}
-                                                {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
-                                            </span>
-                                            <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                      )}
+
+                      {/* Last Visit Markers */}
+                      {lastVisitsForDay.length > 0 && (
+                        <div className="space-y-1 mb-1">
+                          {displayLastVisits.map(c => {
+                            const lastVisitTime = new Date(c.lastVisit).toLocaleTimeString('he-IL', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+
+                            return (
+                              <div
+                                key={`last-${c.id}`}
+                                className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-md truncate border transition-colors cursor-pointer bg-green-100 border-green-200 text-green-800 shadow-sm hover:brightness-95"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCustomerClick(c);
+                                }}
+                              >
+                                <div className="w-1 h-1 rounded-full flex-shrink-0 bg-green-600"></div>
+                                <span className="font-bold flex-shrink-0">{lastVisitTime}</span>
+                                <span className="truncate font-medium">{c.name}</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                    </div>
-                )}
+                      )}
+
+                      {/* Events - show only first and count */}
+                      <div className="space-y-0.5 overflow-hidden flex-1 max-h-[96px]">
+                          {displayEvents.map(e => {
+                              const customer = customers.find(c => c.id === e.customerId);
+                              const isCancelled = e.status === 'CANCELLED';
+                              const isCompleted = e.status === 'COMPLETED';
+                              const timeLabel = e.date.toLocaleTimeString('he-IL', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              });
+                              const statusClasses = isCancelled
+                                ? 'bg-gray-100 border-gray-200 text-gray-400 line-through'
+                                : isCompleted
+                                ? 'bg-green-50 border-green-200 text-green-700'
+                                : 'bg-blue-50 border-blue-200 text-blue-700';
+                              const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
+
+                              const chipClass = `calendar-event flex items-center gap-1 h-5 text-[8px] leading-tight px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
+
+                              return (
+                                <div
+                                  key={e.id}
+                                  onMouseDown={(evt) => {
+                                    evt.stopPropagation();
+                                  }}
+                                  onClick={(evt) => {
+                                    evt.stopPropagation();
+                                    onAppointmentClick(e);
+                                  }}
+                                  className={chipClass}
+                                  title={`${timeLabel} - ${nameLabel}`}
+                                >
+                                  <span
+                                    className="flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
+                                    draggable
+                                    onDragStart={(evt) => handleDragStart(evt, e.id)}
+                                    onDragEnd={handleDragEnd}
+                                    title="גרור להזזה"
+                                    aria-label="גרור להזזה"
+                                  >
+                                    ⋮⋮
+                                  </span>
+                                  <span className="truncate font-medium">{nameLabel}</span>
+                                </div>
+                              );
+                          })}
+                          {/* Hide extra count indicator */}
+                      </div>
+                      {/* Tooltip */}
+                      {cell.events.length > 0 && (
+                          <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-xl p-3 shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+                              <div className="font-bold border-b border-gray-700 pb-2 mb-2 flex items-center gap-2">
+                                  <Clock className="w-3 h-3 text-gray-400" />
+                                  {cell.date.toLocaleDateString('he-IL')}
+                              </div>
+                              <div className="space-y-2">
+                                  {cell.events.map(e => {
+                                      const customer = customers.find(c => c.id === e.customerId);
+                                      const isCancelled = e.status === 'CANCELLED';
+                                      const isCompleted = e.status === 'COMPLETED';
+                                      return (
+                                          <div key={e.id} className={`flex justify-between items-center gap-2 ${isCancelled ? 'opacity-50 line-through' : ''}`}>
+                                              <span className="text-gray-400 font-mono">
+                                                  {e.date.toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}
+                                              </span>
+                                              <div className="text-right truncate flex-1">
+                                                  <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
+                                                      {customer ? customer.name : 'לקוח לא ידוע'}
+                                                      {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
+                                                  </span>
+                                                  <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+                      )}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );
