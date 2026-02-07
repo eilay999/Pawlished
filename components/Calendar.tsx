@@ -265,7 +265,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-x-auto">
           <div className="min-w-[760px] md:min-w-0">
-            <div className="grid grid-cols-7 border-b border-gray-100 px-3 md:px-5 bg-gray-50/80 shrink-0">
+            <div className="grid grid-cols-7 border-b border-sky-100 px-3 md:px-5 bg-gradient-to-r from-sky-50 via-white to-emerald-50 shrink-0">
               {WEEK_DAYS.map(day => (
                 <div key={day} className="py-1.5 text-center text-[11px] font-semibold text-gray-500">
                   {day}

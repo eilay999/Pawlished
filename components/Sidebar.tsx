@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQ
                 onClick={() => onChangeView(item.id)}
                 className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-200 group ${
                   isActive 
-                    ? 'bg-blue-50 text-blue-700 font-bold shadow-sm' 
+                    ? 'bg-gradient-to-l from-blue-50 to-emerald-50 text-blue-700 font-bold shadow-sm' 
                     : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
