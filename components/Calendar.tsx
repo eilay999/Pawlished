@@ -54,10 +54,6 @@ export const Calendar: React.FC<CalendarProps> = ({
     const petType = customer.petType.toLowerCase();
     return petType.includes('כלב') || petType.includes('dog');
   }).length;
-  const nextMonthRef = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  const isNextMonthView =
-    currentDate.getFullYear() === nextMonthRef.getFullYear() &&
-    currentDate.getMonth() === nextMonthRef.getMonth();
 
   // Generate Calendar Grid
   useEffect(() => {
@@ -195,15 +191,6 @@ export const Calendar: React.FC<CalendarProps> = ({
 
 
   const monthName = currentDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' });
-  const hideNextMonthRange =
-    isNextMonthView &&
-    new Date(currentDate.getFullYear(), currentDate.getMonth(), 8).getDay() === 0;
-  const visibleCells = hideNextMonthRange
-    ? calendarGrid.filter(
-        cell => !(cell.isCurrentMonth && cell.date.getDate() >= 8 && cell.date.getDate() <= 14)
-      )
-    : calendarGrid;
-
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
       {/* Calendar Header */}
@@ -279,7 +266,15 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* Grid Content */}
       <div className="grid grid-cols-7 auto-rows-fr flex-1 px-5 pb-5 gap-2.5 pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-        {visibleCells.map((cell) => {
+        {calendarGrid.map((cell) => {
+          if (!cell.isCurrentMonth) {
+            return (
+              <div
+                key={cell.date.toISOString()}
+                className="rounded-2xl min-h-[115px] border border-transparent bg-transparent pointer-events-none"
+              />
+            );
+          }
           const isDragTarget = dragOverDate &&
                                dragOverDate.getDate() === cell.date.getDate() &&
                                dragOverDate.getMonth() === cell.date.getMonth() &&
