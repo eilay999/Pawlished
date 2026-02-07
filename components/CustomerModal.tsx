@@ -28,8 +28,7 @@ const PET_TYPES = [
   'פומרניין',
   'מלטיפו',
   'שיצו פודל',
-  'מלטז',
-  'אחר'
+  'מלטז'
 ];
 
 export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, onClose, onSave, onDelete }) => {
@@ -37,31 +36,26 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
     name: '',
     phone: '',
     petName: '',
-    petType: 'Dog',
+    petType: '',
     visitFrequencyWeeks: 4,
     lastVisit: new Date(),
     defaultPrice: undefined,
     notes: ''
   });
-  const [customPetType, setCustomPetType] = useState('');
-
   useEffect(() => {
     if (customer) {
-      const isKnownType = PET_TYPES.includes(customer.petType);
-      setCustomPetType(isKnownType ? '' : customer.petType);
       setFormData({
         ...customer,
         lastVisit: new Date(customer.lastVisit), // Ensure date object
-        petType: isKnownType ? customer.petType : 'אחר'
+        petType: customer.petType || ''
       });
     } else {
       // Reset for new customer
-      setCustomPetType('');
       setFormData({
         name: '',
         phone: '',
         petName: '',
-        petType: 'Dog',
+        petType: '',
         visitFrequencyWeeks: 4,
         lastVisit: new Date(),
         defaultPrice: undefined,
@@ -69,6 +63,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       });
     }
   }, [customer, isOpen]);
+
 
   if (!isOpen) return null;
 
@@ -81,7 +76,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       name: formData.name || '',
       phone: formData.phone || '',
       petName: formData.petName || '',
-      petType: (formData.petType === 'אחר' ? (customPetType.trim() || 'אחר') : (formData.petType || 'Dog')) ,
+      petType: formData.petType?.trim() || '',
       visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
       lastVisit: formData.lastVisit || new Date(),
       defaultPrice: formData.defaultPrice,
@@ -186,25 +181,21 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                     <label className="block text-sm font-medium text-gray-700 mb-1">סוג הכלב</label>
                     <div className="relative">
                         <Dog className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
-                        <select
-                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all appearance-none"
+                        <input
+                            type="text"
+                            list="pet-types"
+                            required
+                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all"
+                            placeholder="בחר/י או הקלד/י סוג"
                             value={formData.petType || ''}
                             onChange={e => setFormData({...formData, petType: e.target.value})}
-                        >
-                            {PET_TYPES.map(t => (
-                              <option key={t} value={t}>{t}</option>
-                            ))}
-                        </select>
+                        />
+                        <datalist id="pet-types">
+                          {PET_TYPES.map(t => (
+                            <option key={t} value={t} />
+                          ))}
+                        </datalist>
                     </div>
-                    {formData.petType === 'אחר' && (
-                      <input
-                        type="text"
-                        className="mt-2 w-full pr-3 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all"
-                        placeholder="הזן סוג"
-                        value={customPetType}
-                        onChange={e => setCustomPetType(e.target.value)}
-                      />
-                    )}
                 </div>
 
                 {/* Default Price Input */}

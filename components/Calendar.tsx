@@ -284,10 +284,8 @@ export const Calendar: React.FC<CalendarProps> = ({
             return d.getTime() === cd.getTime();
           });
           const displayLastVisits = lastVisitsForDay.slice(0, 1);
-          const extraLastVisits = lastVisitsForDay.length - 1;
           const maxVisibleEvents = 3;
           const displayEvents = cell.events.slice(0, maxVisibleEvents);
-          const extraCount = cell.events.length - displayEvents.length;
 
           return (
             <div 
@@ -360,11 +358,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                         </div>
                       );
                     })}
-                    {extraLastVisits > 0 && (
-                      <div className="text-[8px] text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-1 py-0.5 text-center">
-                        +{extraLastVisits}
-                      </div>
-                    )}
                   </div>
                 )}
 
