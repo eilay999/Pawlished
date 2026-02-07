@@ -261,21 +261,23 @@ export const Calendar: React.FC<CalendarProps> = ({
         </div>
       )}
 
-      {/* Grid Header */}
-      <div className="grid grid-cols-7 border-b border-gray-100 px-3 md:px-5 bg-gray-50/80 shrink-0">
-        {WEEK_DAYS.map(day => (
-          <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500">
-            {day}
-          </div>
-        ))}
-      </div>
+      {/* Grid Header + Content (Scrollable on Mobile) */}
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-x-auto">
+          <div className="min-w-[760px] md:min-w-0">
+            <div className="grid grid-cols-7 border-b border-gray-100 px-3 md:px-5 bg-gray-50/80 shrink-0">
+              {WEEK_DAYS.map(day => (
+                <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500">
+                  {day}
+                </div>
+              ))}
+            </div>
 
-      {/* Grid Content */}
-      <div className="flex-1 px-3 md:px-5 pb-4 md:pb-5 pt-2 md:pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-        <div className="h-full flex flex-col gap-2.5">
-          {visibleWeeks.map((week, weekIndex) => (
-            <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2.5 flex-1">
-              {week.map((cell) => {
+            <div className="px-3 md:px-5 pb-4 md:pb-5 pt-2 md:pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
+              <div className="h-full flex flex-col gap-2.5">
+                {visibleWeeks.map((week, weekIndex) => (
+                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2.5 flex-1">
+                    {week.map((cell) => {
                 if (!cell.isCurrentMonth) {
                   return (
                     <div
@@ -466,10 +468,13 @@ export const Calendar: React.FC<CalendarProps> = ({
                           </div>
                       )}
                   </div>
-                );
-              })}
+                    );
+                  })}
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </div>

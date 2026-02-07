@@ -20,7 +20,7 @@ export const analyzeSchedule = async (
   customers: Customer[]
 ): Promise<string> => {
   const ai = getAiClient();
-  if (!ai) return "Missing API key.";
+  if (!ai) return "אין מפתח AI מוגדר.";
 
   const daysAppointments = appointments.filter(
     (app) =>
@@ -62,6 +62,6 @@ Provide 3 concise, practical insights.
     return response.text || "No response received.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Could not analyze schedule. Please try again later.";
+    return "לא ניתן לנתח כרגע. נסה שוב מאוחר יותר.";
   }
 };
