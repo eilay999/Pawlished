@@ -283,6 +283,8 @@ export const Calendar: React.FC<CalendarProps> = ({
             cd.setHours(0, 0, 0, 0);
             return d.getTime() === cd.getTime();
           });
+          const activeEvents = cell.events.filter(e => e.status !== 'CANCELLED');
+          const uniqueCustomerCount = new Set(activeEvents.map(e => e.customerId)).size;
           const displayLastVisits = lastVisitsForDay.slice(0, 1);
           const maxVisibleEvents = 3;
           const displayEvents = cell.events.slice(0, maxVisibleEvents);
@@ -333,6 +335,14 @@ export const Calendar: React.FC<CalendarProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {uniqueCustomerCount > 0 && (
+                  <div className="flex justify-end mb-1">
+                    <div className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
+                      {uniqueCustomerCount} לקוחות
+                    </div>
+                  </div>
+                )}
 
                 {/* Last Visit Markers */}
                 {lastVisitsForDay.length > 0 && (
