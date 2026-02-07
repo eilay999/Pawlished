@@ -264,7 +264,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       {/* Grid Header + Content (Scrollable on Mobile) */}
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-x-auto">
-          <div className="min-w-[840px] md:min-w-0">
+          <div className="min-w-[900px] md:min-w-0">
             <div className="grid grid-cols-7 border-b border-sky-100 px-3 md:px-5 bg-gradient-to-r from-sky-50 via-white to-emerald-50 shrink-0">
               {WEEK_DAYS.map(day => (
                 <div key={day} className="py-1.5 text-center text-[11px] font-semibold text-gray-500">
@@ -274,9 +274,9 @@ export const Calendar: React.FC<CalendarProps> = ({
             </div>
 
             <div className="px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-              <div className="h-full flex flex-col gap-2.5">
+              <div className="h-full flex flex-col gap-3 md:gap-2.5">
                 {visibleWeeks.map((week, weekIndex) => (
-                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2.5 flex-1">
+                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-3 md:gap-2.5 flex-1">
                     {week.map((cell) => {
                 if (!cell.isCurrentMonth) {
                   return (
@@ -316,7 +316,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                       onDragLeave={(e) => handleDragLeave(e, cell.date)}
                       onDrop={(e) => handleDrop(e, cell.date)}
                       className={`
-                          relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[125px] md:min-h-[130px] overflow-hidden
+                          relative rounded-2xl p-2.5 md:p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[125px] md:min-h-[130px] overflow-hidden
                           ${cell.isCurrentMonth ? 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/40 border-gray-100 text-gray-300 opacity-60'}
                           ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
                           ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
