@@ -84,8 +84,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
   };
 
   return (
-    <div className="flex-1 bg-white m-3 rounded-2xl shadow-sm flex flex-col overflow-y-auto border border-gray-100 custom-scrollbar">
-      <div className="p-8 pb-6 border-b border-gray-100">
+    <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-y-auto border border-gray-100 custom-scrollbar backdrop-blur-sm">
+      <div className="p-8 pb-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50">
          <h2 className="text-3xl font-bold text-gray-800 tracking-tight">סטטיסטיקה ודוחות</h2>
          <p className="text-gray-500 mt-1">מבט על הכנסות העסק, ביטולים ושימור לקוחות</p>
       </div>

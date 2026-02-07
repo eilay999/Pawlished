@@ -21,9 +21,9 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
   );
 
   return (
-    <div className="flex-1 bg-white m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100">
+    <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
       {/* Header */}
-      <div className="p-6 border-b border-gray-100 flex justify-between items-center gap-4 shrink-0 bg-white">
+      <div className="p-6 border-b border-gray-100 flex justify-between items-center gap-4 shrink-0 bg-gradient-to-r from-blue-50 via-white to-emerald-50">
         <div>
             <h2 className="text-2xl font-bold text-gray-800">לקוחות</h2>
             <p className="text-sm text-gray-500">ניהול כרטיסי לקוחות, תדירות וסטטוס תורים</p>
@@ -39,7 +39,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
       </div>
 
       {/* Toolbar */}
-      <div className="p-4 bg-gray-50 border-b border-gray-100 shrink-0">
+      <div className="p-4 bg-blue-50/60 border-b border-gray-100 shrink-0">
         <div className="relative max-w-md">
             <Search className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
             <input 

@@ -193,9 +193,9 @@ export const Calendar: React.FC<CalendarProps> = ({
   const monthName = currentDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="flex-1 bg-white m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100">
+    <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
       {/* Calendar Header */}
-      <div className="px-5 py-4 flex items-center justify-between bg-white sticky top-0 z-10 border-b border-gray-100 shrink-0">
+      <div className="px-5 py-4 flex items-center justify-between bg-gradient-to-r from-blue-50 via-white to-emerald-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         
         <div className="flex items-center gap-4">
              <h2 className="text-2xl font-bold text-gray-800 capitalize tracking-tight">{monthName}</h2>

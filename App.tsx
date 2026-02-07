@@ -697,7 +697,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#f8f9fa] text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
+    <div className="flex h-screen w-full bg-gradient-to-br from-blue-50 via-white to-emerald-50 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
       {loadError && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[200] bg-amber-50 text-amber-900 border border-amber-200 text-xs px-3 py-1.5 rounded-full shadow-sm">
           {loadError}
