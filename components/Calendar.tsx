@@ -265,18 +265,18 @@ export const Calendar: React.FC<CalendarProps> = ({
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-x-hidden">
           <div className="min-w-0">
-            <div className="grid grid-cols-7 border-b border-sky-100 px-3 md:px-5 bg-gradient-to-r from-sky-50 via-white to-emerald-50 shrink-0">
-              {WEEK_DAYS.map(day => (
-                <div key={day} className="py-1.5 text-center text-[11px] font-semibold text-gray-500">
-                  {day}
-                </div>
-              ))}
+        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-sky-100 px-3 md:px-5 bg-gradient-to-r from-sky-50 via-white to-emerald-50 shrink-0">
+          {WEEK_DAYS.map(day => (
+            <div key={day} className="py-1.5 text-center text-[11px] font-semibold text-gray-500">
+              {day}
             </div>
+          ))}
+        </div>
 
         <div className="px-1.5 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
           <div className="h-full flex flex-col gap-1.5 sm:gap-2.5">
             {visibleWeeks.map((week, weekIndex) => (
-              <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-1.5 sm:gap-2.5 flex-1">
+              <div key={`week-${weekIndex}`} className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 gap-1.5 sm:gap-2.5 flex-1">
                     {week.map((cell) => {
                 if (!cell.isCurrentMonth) {
                   return (
