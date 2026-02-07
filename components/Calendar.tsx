@@ -273,10 +273,10 @@ export const Calendar: React.FC<CalendarProps> = ({
               ))}
             </div>
 
-            <div className="px-2 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-              <div className="h-full flex flex-col gap-2 sm:gap-2.5">
-                {visibleWeeks.map((week, weekIndex) => (
-                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2 sm:gap-2.5 flex-1">
+        <div className="px-1.5 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
+          <div className="h-full flex flex-col gap-1.5 sm:gap-2.5">
+            {visibleWeeks.map((week, weekIndex) => (
+              <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-1.5 sm:gap-2.5 flex-1">
                     {week.map((cell) => {
                 if (!cell.isCurrentMonth) {
                   return (
@@ -406,7 +406,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                 : 'bg-blue-50 border-blue-200 text-blue-700';
                               const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
 
-                              const chipClass = `calendar-event flex items-center gap-1 h-4 sm:h-5 text-[7px] sm:text-[8px] leading-tight px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
+                              const chipClass = `calendar-event flex items-center gap-1 h-4 sm:h-5 text-[7px] sm:text-[8px] leading-tight px-0.5 sm:px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
 
                               return (
                                 <div
@@ -422,7 +422,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                   title={`${timeLabel} - ${nameLabel}`}
                                 >
                                   <span
-                                    className="flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
+                                    className="hidden sm:flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
                                     draggable
                                     onDragStart={(evt) => handleDragStart(evt, e.id)}
                                     onDragEnd={handleDragEnd}
