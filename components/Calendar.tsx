@@ -200,10 +200,10 @@ export const Calendar: React.FC<CalendarProps> = ({
   return (
     <div className="flex-1 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
       {/* Calendar Header */}
-      <div className="px-3 md:px-5 py-4 flex items-center justify-between bg-gradient-to-r from-blue-50 via-white to-emerald-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
+      <div className="px-3 md:px-5 py-2 md:py-3 flex items-center justify-between bg-gradient-to-r from-blue-50 via-white to-emerald-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         
         <div className="flex items-center gap-4">
-             <h2 className="text-2xl font-bold text-gray-800 capitalize tracking-tight">{monthName}</h2>
+             <h2 className="text-xl md:text-2xl font-bold text-gray-800 capitalize tracking-tight">{monthName}</h2>
              
              {/* Today's Date Indicator */}
              <div className="hidden md:flex flex-col border-r-2 border-gray-100 pr-4 mr-2">
@@ -248,14 +248,14 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       {/* AI Analysis Result */}
-      <div className="mx-4 mt-2 mb-2 bg-green-50 text-green-800 text-xs border border-green-100 px-4 py-2 rounded-xl flex items-center justify-between shrink-0">
+      <div className="mx-3 md:mx-4 mt-1.5 md:mt-2 mb-1.5 md:mb-2 bg-green-50 text-green-800 text-[11px] border border-green-100 px-3 py-1.5 rounded-xl flex items-center justify-between shrink-0">
         <span className="font-bold">סיכום שבועי: {weeklyDogCount}/{weeklyGoal} כלבים</span>
         {weeklyDogCount >= weeklyGoal && (
           <span className="bg-green-600 text-white px-2 py-0.5 rounded-full text-[10px]">מצוין</span>
         )}
       </div>
       {aiAnalysis && (
-        <div className="mx-4 mb-2 bg-gradient-to-r from-purple-50 to-white px-4 py-2 rounded-xl text-purple-900 text-xs border border-purple-100 flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
+        <div className="mx-3 md:mx-4 mb-1.5 md:mb-2 bg-gradient-to-r from-purple-50 to-white px-3 py-1.5 rounded-xl text-purple-900 text-[11px] border border-purple-100 flex items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
             <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
             <p className="leading-relaxed font-medium">{aiAnalysis}</p>
         </div>
@@ -267,22 +267,22 @@ export const Calendar: React.FC<CalendarProps> = ({
           <div className="min-w-[760px] md:min-w-0">
             <div className="grid grid-cols-7 border-b border-gray-100 px-3 md:px-5 bg-gray-50/80 shrink-0">
               {WEEK_DAYS.map(day => (
-                <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500">
+                <div key={day} className="py-1.5 text-center text-[11px] font-semibold text-gray-500">
                   {day}
                 </div>
               ))}
             </div>
 
-            <div className="px-3 md:px-5 pb-4 md:pb-5 pt-2 md:pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-              <div className="h-full flex flex-col gap-2.5">
+            <div className="px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
+              <div className="h-full flex flex-col gap-2">
                 {visibleWeeks.map((week, weekIndex) => (
-                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2.5 flex-1">
+                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2 flex-1">
                     {week.map((cell) => {
                 if (!cell.isCurrentMonth) {
                   return (
                     <div
                       key={cell.date.toISOString()}
-                      className="rounded-2xl min-h-[140px] border border-transparent bg-transparent pointer-events-none"
+                      className="rounded-2xl min-h-[125px] md:min-h-[130px] border border-transparent bg-transparent pointer-events-none"
                     />
                   );
                 }
@@ -316,7 +316,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                       onDragLeave={(e) => handleDragLeave(e, cell.date)}
                       onDrop={(e) => handleDrop(e, cell.date)}
                       className={`
-                          relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[140px] overflow-hidden
+                          relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[125px] md:min-h-[130px] overflow-hidden
                           ${cell.isCurrentMonth ? 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/40 border-gray-100 text-gray-300 opacity-60'}
                           ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
                           ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
@@ -390,7 +390,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                       )}
 
                       {/* Events - show only first and count */}
-                      <div className="space-y-0.5 overflow-hidden flex-1 max-h-[96px]">
+                      <div className="space-y-0.5 overflow-hidden flex-1 max-h-[90px]">
                           {displayEvents.map(e => {
                               const customer = customers.find(c => c.id === e.customerId);
                               const isCancelled = e.status === 'CANCELLED';
