@@ -129,7 +129,17 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
         </div>
 
         {/* Row 2: Operational Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="bg-white border border-gray-100 p-5 rounded-2xl flex flex-col justify-between">
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-blue-50 rounded-full text-blue-600">
+                        <Users className="w-5 h-5" />
+                    </div>
+                    <span className="font-bold text-gray-600">סה״כ לקוחות</span>
+                </div>
+                <div className="text-3xl font-bold text-gray-800">{totalCustomers}</div>
+                <div className="text-xs text-gray-400 mt-1">במאגר הלקוחות</div>
+            </div>
             <div className="bg-white border border-gray-100 p-5 rounded-2xl flex flex-col justify-between">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-green-50 rounded-full text-green-600">
