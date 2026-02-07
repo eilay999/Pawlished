@@ -264,7 +264,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       {/* Grid Header + Content (Scrollable on Mobile) */}
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-x-auto">
-          <div className="min-w-[760px] md:min-w-0">
+          <div className="min-w-[840px] md:min-w-0">
             <div className="grid grid-cols-7 border-b border-sky-100 px-3 md:px-5 bg-gradient-to-r from-sky-50 via-white to-emerald-50 shrink-0">
               {WEEK_DAYS.map(day => (
                 <div key={day} className="py-1.5 text-center text-[11px] font-semibold text-gray-500">
@@ -274,9 +274,9 @@ export const Calendar: React.FC<CalendarProps> = ({
             </div>
 
             <div className="px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
-              <div className="h-full flex flex-col gap-2">
+              <div className="h-full flex flex-col gap-2.5">
                 {visibleWeeks.map((week, weekIndex) => (
-                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2 flex-1">
+                  <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2.5 flex-1">
                     {week.map((cell) => {
                 if (!cell.isCurrentMonth) {
                   return (
