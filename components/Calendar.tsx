@@ -293,7 +293,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           const activeEvents = cell.events.filter(e => e.status !== 'CANCELLED');
           const uniqueCustomerCount = new Set(activeEvents.map(e => e.customerId)).size;
           const displayLastVisits = lastVisitsForDay.slice(0, 1);
-          const maxVisibleEvents = 3;
+          const maxVisibleEvents = 4;
           const displayEvents = cell.events.slice(0, maxVisibleEvents);
 
           return (
@@ -305,7 +305,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 onDragLeave={(e) => handleDragLeave(e, cell.date)}
                 onDrop={(e) => handleDrop(e, cell.date)}
                 className={`
-                    relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[115px] overflow-hidden
+                    relative rounded-2xl p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[140px] overflow-hidden
                     ${cell.isCurrentMonth ? 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md' : 'bg-gray-50/40 border-gray-100 text-gray-300 opacity-60'}
                     ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : ''}
                     ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
@@ -379,7 +379,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 )}
 
                 {/* Events - show only first and count */}
-                <div className="space-y-0.5 overflow-hidden flex-1 max-h-[72px]">
+                <div className="space-y-0.5 overflow-hidden flex-1 max-h-[96px]">
                     {displayEvents.map(e => {
                         const customer = customers.find(c => c.id === e.customerId);
                         const isCancelled = e.status === 'CANCELLED';
