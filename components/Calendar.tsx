@@ -198,9 +198,9 @@ export const Calendar: React.FC<CalendarProps> = ({
   const visibleWeeks = weeks.filter(week => week.some(cell => cell.isCurrentMonth));
 
   return (
-    <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
+    <div className="flex-1 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
       {/* Calendar Header */}
-      <div className="px-5 py-4 flex items-center justify-between bg-gradient-to-r from-blue-50 via-white to-emerald-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
+      <div className="px-3 md:px-5 py-4 flex items-center justify-between bg-gradient-to-r from-blue-50 via-white to-emerald-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         
         <div className="flex items-center gap-4">
              <h2 className="text-2xl font-bold text-gray-800 capitalize tracking-tight">{monthName}</h2>
@@ -262,7 +262,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       )}
 
       {/* Grid Header */}
-      <div className="grid grid-cols-7 border-b border-gray-100 px-5 bg-gray-50/80 shrink-0">
+      <div className="grid grid-cols-7 border-b border-gray-100 px-3 md:px-5 bg-gray-50/80 shrink-0">
         {WEEK_DAYS.map(day => (
           <div key={day} className="py-2 text-center text-xs font-semibold text-gray-500">
             {day}
@@ -271,7 +271,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       {/* Grid Content */}
-      <div className="flex-1 px-5 pb-5 pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
+      <div className="flex-1 px-3 md:px-5 pb-4 md:pb-5 pt-2 md:pt-3 overflow-hidden bg-gradient-to-b from-white to-gray-50/40">
         <div className="h-full flex flex-col gap-2.5">
           {visibleWeeks.map((week, weekIndex) => (
             <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2.5 flex-1">
