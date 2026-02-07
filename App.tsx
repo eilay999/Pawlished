@@ -7,7 +7,6 @@ import { CustomersView } from './components/CustomersView';
 import { CustomerModal } from './components/CustomerModal';
 import { AppointmentModal } from './components/AppointmentModal';
 import { StatsView } from './components/StatsView';
-import { MOCK_APPOINTMENTS, MOCK_CUSTOMERS } from './constants';
 import { ViewType, Appointment, Customer, AppointmentStatus, Task, TaskStatus } from './types';
 import { supabase } from './services/supabaseClient';
 
@@ -192,8 +191,8 @@ const App: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   
   // Data State
-  const [appointments, setAppointments] = useState<Appointment[]>(MOCK_APPOINTMENTS);
-  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [askedAppointmentIds, setAskedAppointmentIds] = useState<Set<string>>(() => {
@@ -246,7 +245,7 @@ const App: React.FC = () => {
       if (!supabase) {
         setLoadError('Supabase env vars are missing. Using local data only.');
         const localCustomers = loadCustomersFromStorage();
-        setCustomers(mergeNotesIntoCustomers(localCustomers.length ? localCustomers : MOCK_CUSTOMERS));
+        setCustomers(mergeNotesIntoCustomers(localCustomers));
         setTasks(loadTasksFromStorage());
         return;
       }
