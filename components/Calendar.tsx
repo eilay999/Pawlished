@@ -355,7 +355,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                       </div>
 
                       {uniqueCustomerCount > 0 && (
-                        <div className="flex justify-end mb-1">
+                        <div className="hidden sm:flex justify-end mb-1">
                           <div className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
                             {uniqueCustomerCount} לקוחות
                           </div>
@@ -364,7 +364,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
                       {/* Last Visit Markers */}
                       {lastVisitsForDay.length > 0 && (
-                        <div className="space-y-1 mb-1">
+                        <div className="hidden sm:block space-y-1 mb-1">
                           {displayLastVisits.map(c => {
                             const lastVisitTime = new Date(c.lastVisit).toLocaleTimeString('he-IL', {
                               hour: '2-digit',
@@ -404,9 +404,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                                 : isCompleted
                                 ? 'bg-green-50 border-green-200 text-green-700'
                                 : 'bg-blue-50 border-blue-200 text-blue-700';
-                              const nameLabel = customer ? customer.name : 'לקוח לא ידוע';
+                              const fullNameLabel = customer ? customer.name : 'לקוח לא ידוע';
+                              const shortNameLabel = fullNameLabel.split(' ')[0] || fullNameLabel;
 
-                              const chipClass = `calendar-event flex items-center gap-1 h-4 sm:h-5 text-[7px] sm:text-[8px] leading-tight px-0.5 sm:px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
+                              const chipClass = `calendar-event flex items-center gap-1 h-4 sm:h-5 text-[8px] sm:text-[8px] leading-tight px-0.5 sm:px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
 
                               return (
                                 <div
@@ -431,7 +432,8 @@ export const Calendar: React.FC<CalendarProps> = ({
                                   >
                                     ⋮⋮
                                   </span>
-                                  <span className="truncate font-medium">{nameLabel}</span>
+                                  <span className="truncate font-medium sm:hidden">{shortNameLabel}</span>
+                                  <span className="truncate font-medium hidden sm:inline">{fullNameLabel}</span>
                                 </div>
                               );
                           })}
