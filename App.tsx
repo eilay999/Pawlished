@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Palette } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
@@ -852,7 +852,7 @@ const App: React.FC = () => {
               className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
               aria-label="סגור"
             >
-              ×
+              ֳ—
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -975,7 +975,7 @@ const App: React.FC = () => {
                 }}
                 className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
               >
-                לא מגיע
+                לא הגיע
               </button>
               <button
                 onClick={() => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Palette, RotateCcw, X } from 'lucide-react';
 import { applyTheme, DEFAULT_THEME, loadTheme, saveTheme, ThemeSettings } from '../theme';
 

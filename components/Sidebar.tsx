@@ -1,4 +1,4 @@
-import React from 'react';
+ï»¿import React from 'react';
 import { Calendar, Users, TrendingUp, Scissors, Plus, Palette } from 'lucide-react';
 import { ViewType } from '../types';
 
@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQ
               className="w-full mt-3 bg-white border border-gray-200 text-gray-700 font-medium py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
             >
               <Palette className="w-5 h-5 text-blue-600" />
-              <span>òéöåá</span>
+              <span>×¢×™×¦×•×‘</span>
             </button>
           )}
         </div>
