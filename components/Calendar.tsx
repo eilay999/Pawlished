@@ -1,8 +1,8 @@
-
+﻿
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, Sparkles, Plus, Clock } from 'lucide-react';
 import { WEEK_DAYS } from '../constants';
-import { Appointment, Customer, DayCell } from '../types';
+import { Appointment, AppointmentStatus, Customer, DayCell } from '../types';
 import { analyzeSchedule } from '../services/geminiService';
 import { getJewishHoliday } from '../services/holidayService';
 
@@ -49,10 +49,12 @@ export const Calendar: React.FC<CalendarProps> = ({
   weekEnd.setDate(weekEnd.getDate() + 7);
   const weeklyDogCount = appointments.filter(appt => {
     if (appt.date < weekStart || appt.date >= weekEnd) return false;
+    if (appt.status === AppointmentStatus.CANCELLED) return false;
     const customer = customers.find(c => c.id === appt.customerId);
-    if (!customer?.petType) return false;
-    const petType = customer.petType.toLowerCase();
-    return petType.includes('כלב') || petType.includes('dog');
+    const petType = (customer?.petType || '').toLowerCase();
+    if (!petType) return true;
+    if (petType.includes('חתול') || petType.includes('cat')) return false;
+    return true;
   }).length;
 
   // Generate Calendar Grid
@@ -458,7 +460,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                               </span>
                                               <div className="text-right truncate flex-1">
                                                   <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
-                                                      {customer ? customer.name : 'לקוח לא ידוע'}
+                                                       {customer ? customer.name : 'לקוח לא ידוע'}
                                                       {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
                                                   </span>
                                                   <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>

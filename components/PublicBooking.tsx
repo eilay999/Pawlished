@@ -4,7 +4,7 @@ import { Appointment, AppointmentStatus, Customer } from '../types';
 
 type BookingStep = 'PHONE' | 'OTP' | 'DETAILS' | 'BOOKING' | 'DONE';
 
-const DAY_NAMES = ['׳¨׳׳©׳•׳', '׳©׳ ׳™', '׳©׳׳™׳©׳™', '׳¨׳‘׳™׳¢׳™', '׳—׳׳™׳©׳™', '׳©׳™׳©׳™', '׳©׳‘׳×'];
+const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 const WEEKLY_SLOTS: Record<number, string[]> = {
   0: ['08:01', '11:00'],
@@ -115,7 +115,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     setError(null);
     const e164 = toE164(phone);
     if (!e164) {
-      setError('׳”׳–׳ ׳׳¡׳₪׳¨ ׳˜׳׳₪׳•׳ ׳×׳§׳™׳.');
+      setError('הזן מספר טלפון תקין.');
       return;
     }
     setIsLoading(true);
@@ -127,13 +127,13 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       });
       const data = await resp.json();
       if (!resp.ok) {
-        setError(data?.error || '׳©׳׳™׳—׳× ׳§׳•׳“ ׳ ׳›׳©׳׳”.');
+        setError(data?.error || 'שליחת קוד נכשלה.');
         return;
       }
       setVerifiedPhone(e164);
       setStep('OTP');
     } catch {
-      setError('׳©׳׳™׳—׳× ׳§׳•׳“ ׳ ׳›׳©׳׳”.');
+      setError('שליחת קוד נכשלה.');
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +142,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const handleVerifyOtp = async () => {
     setError(null);
     if (!otp.trim()) {
-      setError('׳”׳–׳ ׳§׳•׳“ ׳׳™׳׳•׳×.');
+      setError('הזן קוד אימות.');
       return;
     }
     setIsLoading(true);
@@ -154,7 +154,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       });
       const data = await resp.json();
       if (!resp.ok) {
-        setError(data?.error || '׳§׳•׳“ ׳©׳’׳•׳™. ׳ ׳¡׳” ׳©׳•׳‘.');
+        setError(data?.error || 'קוד שגוי. נסה שוב.');
         return;
       }
 
@@ -171,7 +171,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
         setStep('DETAILS');
       }
     } catch {
-      setError('׳§׳•׳“ ׳©׳’׳•׳™. ׳ ׳¡׳” ׳©׳•׳‘.');
+      setError('קוד שגוי. נסה שוב.');
     } finally {
       setIsLoading(false);
     }
@@ -191,7 +191,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
   const handleContinueDetails = () => {
     if (!newCustomer.name.trim() || !newCustomer.petName.trim() || !newCustomer.petType.trim()) {
-      setError('׳׳׳ ׳©׳, ׳©׳ ׳›׳׳‘ ׳•׳¡׳•׳’.');
+      setError('מלא שם, שם כלב וסוג.');
       return;
     }
     setError(null);
@@ -200,13 +200,13 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
   const handleConfirmBooking = () => {
     if (!selectedSlot) {
-      setError('׳‘׳—׳¨ ׳×׳׳¨׳™׳ ׳•׳©׳¢׳”.');
+      setError('בחר תאריך ושעה.');
       return;
     }
 
     const slotDate = makeSlotDate(selectedSlot.date, selectedSlot.time);
     if (!isSlotAvailable(selectedSlot.date, selectedSlot.time)) {
-      setError('׳”׳©׳¢׳” ׳›׳‘׳¨ ׳ ׳×׳₪׳¡׳”. ׳‘׳—׳¨ ׳©׳¢׳” ׳׳—׳¨׳×.');
+      setError('השעה כבר נתפסה. בחר שעה אחרת.');
       return;
     }
 
@@ -229,7 +229,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       id: Math.random().toString(36).substr(2, 9),
       customerId: customer.id,
       date: slotDate,
-      service: '׳×׳•׳¨ ׳׳§׳•׳—',
+      service: 'תור לקוח',
       status: AppointmentStatus.SCHEDULED,
       notes: '',
       price: customer.defaultPrice ?? 0
@@ -248,8 +248,8 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">׳§׳‘׳™׳¢׳× ׳×׳•׳¨</h1>
-            <p className="text-sm text-gray-500">׳׳₪׳©׳¨ ׳׳§׳‘׳•׳¢ ׳¢׳“ ׳©׳‘׳•׳¢׳™׳™׳ ׳§׳“׳™׳׳”</p>
+            <h1 className="text-2xl font-bold text-gray-900">קביעת תור</h1>
+            <p className="text-sm text-gray-500">אפשר לקבוע עד שבועיים קדימה</p>
           </div>
           <Calendar className="w-6 h-6 text-blue-600" />
         </div>
@@ -264,12 +264,12 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           {step === 'PHONE' && (
             <div className="space-y-3">
               <label className="text-sm text-gray-600 flex items-center gap-2">
-                <Phone className="w-4 h-4" /> ׳׳¡׳₪׳¨ ׳˜׳׳₪׳•׳
+                <Phone className="w-4 h-4" /> מספר טלפון
               </label>
               <input
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
-                placeholder="׳׳“׳•׳’׳׳”: 050-1234567"
+                placeholder="לדוגמה: 050-1234567"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
               />
               <button
@@ -277,7 +277,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 disabled={isLoading}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
               >
-                {isLoading ? '׳©׳•׳׳— ׳§׳•׳“...' : '׳©׳׳— ׳§׳•׳“ ׳׳™׳׳•׳×'}
+                {isLoading ? 'שולח קוד...' : 'שלח קוד אימות'}
               </button>
             </div>
           )}
@@ -285,12 +285,12 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           {step === 'OTP' && (
             <div className="space-y-3">
               <label className="text-sm text-gray-600 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4" /> ׳”׳–׳ ׳§׳•׳“ ׳׳™׳׳•׳×
+                <ShieldCheck className="w-4 h-4" /> הזן קוד אימות
               </label>
               <input
                 value={otp}
                 onChange={e => setOtp(e.target.value)}
-                placeholder="׳§׳•׳“ ׳׳”ײ¾SMS"
+                placeholder="קוד מהוואטסאפ"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
               />
               <button
@@ -298,18 +298,18 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 disabled={isLoading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-3 font-medium"
               >
-                {isLoading ? '׳‘׳•׳“׳§...' : '׳׳׳× ׳§׳•׳“'}
+                {isLoading ? 'בודק...' : 'אמת קוד'}
               </button>
             </div>
           )}
 
           {step === 'DETAILS' && (
             <div className="space-y-4">
-              <div className="text-sm text-gray-600">׳׳§׳•׳— ׳—׳“׳© ג€“ ׳׳׳ ׳₪׳¨׳˜׳™׳</div>
+              <div className="text-sm text-gray-600">לקוח חדש – מלא פרטים</div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <User className="w-4 h-4" /> ׳©׳ ׳׳׳
+                    <User className="w-4 h-4" /> שם מלא
                   </label>
                   <input
                     value={newCustomer.name}
@@ -319,7 +319,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <Dog className="w-4 h-4" /> ׳©׳ ׳”׳›׳׳‘
+                    <Dog className="w-4 h-4" /> שם הכלב
                   </label>
                   <input
                     value={newCustomer.petName}
@@ -329,7 +329,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-xs text-gray-500 flex items-center gap-2">
-                    ׳¡׳•׳’ ׳”׳›׳׳‘
+                    סוג הכלב
                   </label>
                   <input
                     value={newCustomer.petType}
@@ -342,7 +342,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 onClick={handleContinueDetails}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
               >
-                ׳”׳׳©׳ ׳׳§׳‘׳™׳¢׳× ׳×׳•׳¨
+                המשך לקביעת תור
               </button>
             </div>
           )}
@@ -350,17 +350,17 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           {step === 'BOOKING' && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600">
-                ׳‘׳—׳¨ ׳×׳׳¨׳™׳ ׳•׳©׳¢׳” (׳¢׳“ ׳©׳‘׳•׳¢׳™׳™׳ ׳§׳“׳™׳׳”)
+                בחר תאריך ושעה (עד שבועיים קדימה)
               </div>
               <div className="space-y-3">
                 {upcomingDays.map(day => (
                   <div key={day.date.toISOString()} className="border border-gray-100 rounded-2xl p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div className="font-semibold text-gray-800">
-                        {DAY_NAMES[day.date.getDay()]} ג€¢ {day.date.toLocaleDateString('he-IL')}
+                        {DAY_NAMES[day.date.getDay()]} • {day.date.toLocaleDateString('he-IL')}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {day.times.length} ׳×׳•׳¨׳™׳ ׳׳₪׳©׳¨׳™׳™׳
+                        {day.times.length} תורים אפשריים
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -395,7 +395,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 onClick={handleConfirmBooking}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-3 font-medium"
               >
-                ׳׳™׳©׳•׳¨ ׳×׳•׳¨
+                אישור תור
               </button>
             </div>
           )}
@@ -403,10 +403,10 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           {step === 'DONE' && (
             <div className="text-center space-y-3 py-6">
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
-              <div className="text-lg font-bold text-gray-800">׳”׳×׳•׳¨ ׳ ׳§׳‘׳¢ ׳‘׳”׳¦׳׳—׳”!</div>
+              <div className="text-lg font-bold text-gray-800">התור נקבע בהצלחה!</div>
               {selectedSlot && (
                 <div className="text-sm text-gray-500">
-                  {selectedSlot.date.toLocaleDateString('he-IL')} ׳‘׳©׳¢׳” {selectedSlot.time}
+                  {selectedSlot.date.toLocaleDateString('he-IL')} בשעה {selectedSlot.time}
                 </div>
               )}
             </div>
@@ -417,3 +417,4 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   );
 };
 
+
