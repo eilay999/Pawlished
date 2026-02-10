@@ -2,9 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+
+  --brand-50-rgb: 239, 246, 255;
+  --brand-100-rgb: 219, 234, 254;
+  --brand-200-rgb: 191, 219, 254;
+  --brand-300-rgb: 147, 197, 253;
+  --brand-500-rgb: 59, 130, 246;
+
+  --accent-50: #ecfdf5;
+  --accent-100: #d1fae5;
+  --accent-200: #a7f3d0;
+  --accent-300: #6ee7b7;
+  --accent-500: #10b981;
+  --accent-600: #059669;
+  --accent-700: #047857;
+
+  --accent-50-rgb: 236, 253, 245;
+  --accent-100-rgb: 209, 250, 229;
+  --accent-200-rgb: 167, 243, 208;
+  --accent-300-rgb: 110, 231, 183;
+  --accent-500-rgb: 16, 185, 129;
+  --accent-600-rgb: 5, 150, 105;
+  --accent-700-rgb: 4, 120, 87;
+
+  --app-bg: #f3f4f6;
+}
+
 body {
   font-family: 'Rubik', sans-serif;
-  background-color: #f3f4f6; /* bg-gray-100 */
+  background-color: var(--app-bg);
 }
 
 .calendar-event {
@@ -23,3 +57,60 @@ body {
   background: #cbd5e1;
   border-radius: 3px;
 }
+
+/* Theme overrides for primary (blue) */
+.bg-blue-50 { background-color: var(--brand-50) !important; }
+.bg-blue-100 { background-color: var(--brand-100) !important; }
+.bg-blue-600 { background-color: var(--brand-600) !important; }
+.bg-blue-700 { background-color: var(--brand-700) !important; }
+
+.bg-blue-50\/80 { background-color: rgba(var(--brand-50-rgb), 0.8) !important; }
+.bg-blue-50\/60 { background-color: rgba(var(--brand-50-rgb), 0.6) !important; }
+.bg-blue-50\/30 { background-color: rgba(var(--brand-50-rgb), 0.3) !important; }
+
+.text-blue-700 { color: var(--brand-700) !important; }
+.text-blue-600 { color: var(--brand-600) !important; }
+.text-blue-500 { color: var(--brand-500) !important; }
+.text-blue-500\/80 { color: rgba(var(--brand-500-rgb), 0.8) !important; }
+
+.border-blue-100 { border-color: var(--brand-100) !important; }
+.border-blue-200 { border-color: var(--brand-200) !important; }
+.border-blue-300 { border-color: var(--brand-300) !important; }
+
+.ring-blue-100 { --tw-ring-color: rgba(var(--brand-100-rgb), 0.9) !important; }
+.ring-blue-200 { --tw-ring-color: rgba(var(--brand-200-rgb), 0.9) !important; }
+.ring-blue-500 { --tw-ring-color: rgba(var(--brand-500-rgb), 1) !important; }
+
+.focus\:ring-blue-500:focus { --tw-ring-color: rgba(var(--brand-500-rgb), 1) !important; }
+.focus\:ring-blue-500\/50:focus { --tw-ring-color: rgba(var(--brand-500-rgb), 0.5) !important; }
+.focus\:ring-blue-500\/40:focus { --tw-ring-color: rgba(var(--brand-500-rgb), 0.4) !important; }
+
+.hover\:bg-blue-50:hover { background-color: var(--brand-50) !important; }
+.hover\:bg-blue-100:hover { background-color: var(--brand-100) !important; }
+.hover\:border-blue-300:hover { border-color: var(--brand-300) !important; }
+
+.shadow-blue-200 { --tw-shadow-color: rgba(var(--brand-200-rgb), 0.6) !important; }
+.shadow-blue-300 { --tw-shadow-color: rgba(var(--brand-300-rgb), 0.6) !important; }
+
+.from-blue-50 {
+  --tw-gradient-from: var(--brand-50) !important;
+  --tw-gradient-stops: var(--brand-50), var(--tw-gradient-to, rgb(0 0 0 / 0)) !important;
+}
+
+/* Theme overrides for accent (emerald) */
+.bg-emerald-50 { background-color: var(--accent-50) !important; }
+.bg-emerald-100 { background-color: var(--accent-100) !important; }
+.bg-emerald-500 { background-color: var(--accent-500) !important; }
+.bg-emerald-600 { background-color: var(--accent-600) !important; }
+.bg-emerald-700 { background-color: var(--accent-700) !important; }
+.bg-emerald-100\/60 { background-color: rgba(var(--accent-100-rgb), 0.6) !important; }
+
+.text-emerald-600 { color: var(--accent-600) !important; }
+.text-emerald-700 { color: var(--accent-700) !important; }
+.text-emerald-600\/80 { color: rgba(var(--accent-600-rgb), 0.8) !important; }
+
+.border-emerald-200 { border-color: var(--accent-200) !important; }
+.border-emerald-300 { border-color: var(--accent-300) !important; }
+
+.to-emerald-50 { --tw-gradient-to: var(--accent-50) !important; }
+.to-emerald-100\/60 { --tw-gradient-to: rgba(var(--accent-100-rgb), 0.6) !important; }

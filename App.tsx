@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Palette } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { Calendar } from './components/Calendar';
@@ -7,8 +8,12 @@ import { CustomersView } from './components/CustomersView';
 import { CustomerModal } from './components/CustomerModal';
 import { AppointmentModal } from './components/AppointmentModal';
 import { StatsView } from './components/StatsView';
+import { PublicBooking } from './components/PublicBooking';
+import { ThemePanel } from './components/ThemePanel';
 import { ViewType, Appointment, Customer, AppointmentStatus, Task, TaskStatus } from './types';
+import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
 import { supabase } from './services/supabaseClient';
+import { applyTheme, loadTheme } from './theme';
 
 type DbCustomer = {
   id: string;
@@ -30,6 +35,7 @@ type DbAppointment = {
   status: AppointmentStatus;
   notes: string | null;
   price: number;
+  cancellation_fee?: number | null;
 };
 
 type DbTask = {
@@ -60,6 +66,7 @@ const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
   status: row.status,
   notes: row.notes ?? undefined,
   price: row.price,
+  cancellationFee: row.cancellation_fee ?? undefined
 });
 
 const mapCustomerToDb = (customer: Customer): DbCustomer => ({
@@ -82,6 +89,7 @@ const mapAppointmentToDb = (appointment: Appointment): DbAppointment => ({
   status: appointment.status,
   notes: appointment.notes ?? null,
   price: appointment.price,
+  cancellation_fee: appointment.cancellationFee ?? null
 });
 
 const mapTaskFromDb = (row: DbTask): Task => ({
@@ -219,8 +227,32 @@ const App: React.FC = () => {
   const [preSelectedCustomerId, setPreSelectedCustomerId] = useState<string | undefined>(undefined);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null);
+  const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
+  const [isAdminOverride, setIsAdminOverride] = useState(() => {
+    try {
+      return localStorage.getItem('pawlished_admin') === '1';
+    } catch {
+      return false;
+    }
+  });
   const autosaveReadyRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
+  const isPublicEntry = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return (
+      path.includes('booking') ||
+      params.get('booking') === '1' ||
+      params.get('public') === '1' ||
+      hash.includes('booking')
+    );
+  }, []);
+  const isPublicBooking = isPublicEntry && !isAdminOverride;
+
+  useEffect(() => {
+    applyTheme(loadTheme());
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(
@@ -568,19 +600,41 @@ const App: React.FC = () => {
   };
 
   const handleSaveAppointment = (savedAppointment: Appointment) => {
-    setAppointments(prev => {
-      const exists = prev.find(a => a.id === savedAppointment.id);
-      if (exists) {
-        return prev.map(a => a.id === savedAppointment.id ? savedAppointment : a);
+    const existingAppointment = appointments.find(a => a.id === savedAppointment.id);
+    let normalizedAppointment: Appointment = { ...savedAppointment };
+
+    if (normalizedAppointment.status === AppointmentStatus.CANCELLED) {
+      if (!existingAppointment || existingAppointment.status !== AppointmentStatus.CANCELLED) {
+        const hoursDiff =
+          (normalizedAppointment.date.getTime() - Date.now()) / (1000 * 60 * 60);
+        const fee =
+          hoursDiff >= 0 && hoursDiff <= CANCELLATION_FEE_WINDOW_HOURS
+            ? CANCELLATION_FEE_AMOUNT
+            : 0;
+        normalizedAppointment = { ...normalizedAppointment, cancellationFee: fee };
+      } else {
+        normalizedAppointment = {
+          ...normalizedAppointment,
+          cancellationFee: existingAppointment.cancellationFee ?? normalizedAppointment.cancellationFee
+        };
       }
-      return [...prev, savedAppointment];
+    } else if (existingAppointment?.status === AppointmentStatus.CANCELLED && existingAppointment.cancellationFee) {
+      normalizedAppointment = { ...normalizedAppointment, cancellationFee: 0 };
+    }
+
+    setAppointments(prev => {
+      const exists = prev.find(a => a.id === normalizedAppointment.id);
+      if (exists) {
+        return prev.map(a => a.id === normalizedAppointment.id ? normalizedAppointment : a);
+      }
+      return [...prev, normalizedAppointment];
     });
 
     let updatedCustomer: Customer | null = null;
-    if (savedAppointment.status === AppointmentStatus.COMPLETED) {
-      const existingCustomer = customers.find(c => c.id === savedAppointment.customerId);
+    if (normalizedAppointment.status === AppointmentStatus.COMPLETED) {
+      const existingCustomer = customers.find(c => c.id === normalizedAppointment.customerId);
       if (existingCustomer) {
-        const newDate = new Date(savedAppointment.date);
+        const newDate = new Date(normalizedAppointment.date);
         const currentLastVisit = new Date(existingCustomer.lastVisit);
         if (newDate > currentLastVisit) {
           updatedCustomer = { ...existingCustomer, lastVisit: newDate };
@@ -600,7 +654,7 @@ const App: React.FC = () => {
     if (supabase) {
       void supabase
         .from('appointments')
-        .upsert(mapAppointmentToDb(savedAppointment))
+        .upsert(mapAppointmentToDb(normalizedAppointment))
         .then(({ error }) => {
           if (error) {
             console.error('Supabase appointment upsert error', error);
@@ -695,6 +749,29 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAdminAccess = (phone: string) => {
+    try {
+      localStorage.setItem('pawlished_admin', '1');
+      localStorage.setItem('pawlished_admin_phone', phone);
+    } catch {
+      // ignore storage errors
+    }
+    setIsAdminOverride(true);
+    setCurrentView('CALENDAR');
+  };
+
+  if (isPublicBooking) {
+    return (
+      <PublicBooking
+        appointments={appointments}
+        customers={customers}
+        onSaveCustomer={handleSaveCustomer}
+        onSaveAppointment={handleSaveAppointment}
+        onAdminAccess={handleAdminAccess}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen w-full bg-gradient-to-br from-blue-50 via-white to-emerald-100/60 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
       {loadError && (
@@ -713,6 +790,7 @@ const App: React.FC = () => {
             setEditingAppointment(null);
             setIsAppointmentModalOpen(true);
         }}
+        onOpenTheme={() => setIsThemePanelOpen(true)}
       />
 
       {/* Center Content */}
@@ -849,6 +927,19 @@ const App: React.FC = () => {
         onCreateNewCustomer={handleAddCustomer}
         appointment={editingAppointment}
       />
+
+      <ThemePanel
+        isOpen={isThemePanelOpen}
+        onClose={() => setIsThemePanelOpen(false)}
+      />
+
+      <button
+        onClick={() => setIsThemePanelOpen(true)}
+        className="md:hidden fixed bottom-20 right-4 z-50 bg-white border border-gray-200 text-gray-700 p-3 rounded-full shadow-lg active:scale-90 transition-transform flex items-center justify-center"
+        aria-label="עיצוב"
+      >
+        <Palette className="w-6 h-6 text-blue-600" />
+      </button>
 
       {pendingCheck && (
         <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">

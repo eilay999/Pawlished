@@ -1,14 +1,15 @@
 import React from 'react';
-import { Calendar, Users, TrendingUp, Scissors, Plus } from 'lucide-react';
+import { Calendar, Users, TrendingUp, Scissors, Plus, Palette } from 'lucide-react';
 import { ViewType } from '../types';
 
 interface SidebarProps {
   currentView: ViewType;
   onChangeView: (view: ViewType) => void;
   onQuickAdd: () => void;
+  onOpenTheme?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQuickAdd }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQuickAdd, onOpenTheme }) => {
   
   const navItems = [
     { id: 'CALENDAR' as ViewType, label: 'יומן', icon: Calendar },
@@ -58,6 +59,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQ
             <Plus className="w-5 h-5" />
             <span>תור מהיר</span>
           </button>
+          {onOpenTheme && (
+            <button
+              onClick={onOpenTheme}
+              className="w-full mt-3 bg-white border border-gray-200 text-gray-700 font-medium py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+            >
+              <Palette className="w-5 h-5 text-blue-600" />
+              <span>�����</span>
+            </button>
+          )}
         </div>
       </div>
 

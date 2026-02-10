@@ -1,7 +1,7 @@
-
+﻿
 import { Appointment, AppointmentStatus, Customer } from './types';
 
-export const WEEK_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+export const WEEK_DAYS = ['׳¨׳׳©׳•׳', '׳©׳ ׳™', '׳©׳׳™׳©׳™', '׳¨׳‘׳™׳¢׳™', '׳—׳׳™׳©׳™', '׳©׳™׳©׳™', '׳©׳‘׳×'];
 
 const today = new Date();
 
@@ -17,18 +17,21 @@ const twentyThreeDaysAgo = new Date(); twentyThreeDaysAgo.setDate(today.getDate(
 const eightDaysAgo = new Date(); eightDaysAgo.setDate(today.getDate() - 8);
 
 export const SERVICE_PRICES: Record<string, number> = {
-    'תספורת מלאה': 250,
-    'גזירת ציפורניים': 50,
-    'רחצה וסירוק': 150,
-    'טיפול נגד פרעושים': 100
+    '׳×׳¡׳₪׳•׳¨׳× ׳׳׳׳”': 250,
+    '׳’׳–׳™׳¨׳× ׳¦׳™׳₪׳•׳¨׳ ׳™׳™׳': 50,
+    '׳¨׳—׳¦׳” ׳•׳¡׳™׳¨׳•׳§': 150,
+    '׳˜׳™׳₪׳•׳ ׳ ׳’׳“ ׳₪׳¨׳¢׳•׳©׳™׳': 100
 };
+
+export const CANCELLATION_FEE_AMOUNT = 50;
+export const CANCELLATION_FEE_WINDOW_HOURS = 24;
 
 export const MOCK_CUSTOMERS: Customer[] = [
   { 
     id: 'c1', 
-    name: 'ישראל ישראלי', 
+    name: '׳™׳©׳¨׳׳ ׳™׳©׳¨׳׳׳™', 
     phone: '050-1234567', 
-    petName: 'רקס', 
+    petName: '׳¨׳§׳¡', 
     petType: 'Dog',
     lastVisit: twoMonthsAgo, // LATE
     visitFrequencyWeeks: 4,
@@ -36,27 +39,27 @@ export const MOCK_CUSTOMERS: Customer[] = [
   },
   { 
     id: 'c2', 
-    name: 'מיכל כהן', 
+    name: '׳׳™׳›׳ ׳›׳”׳', 
     phone: '052-7654321', 
-    petName: 'לונה', 
+    petName: '׳׳•׳ ׳”', 
     petType: 'Dog',
     lastVisit: oneMonthAgo, // Has appointment TODAY
     visitFrequencyWeeks: 4 
   },
   { 
     id: 'c3', 
-    name: 'דני לוי', 
+    name: '׳“׳ ׳™ ׳׳•׳™', 
     phone: '054-1122334', 
-    petName: 'סימבה', 
+    petName: '׳¡׳™׳׳‘׳”', 
     petType: 'Dog',
     lastVisit: twentyThreeDaysAgo, // SOON (Frequency 4 weeks)
     visitFrequencyWeeks: 4 
   },
   {
     id: 'c_test',
-    name: 'נועה (כל שבועיים)',
+    name: '׳ ׳•׳¢׳” (׳›׳ ׳©׳‘׳•׳¢׳™׳™׳)',
     phone: '050-5555555',
-    petName: 'טופי',
+    petName: '׳˜׳•׳₪׳™',
     petType: 'Dog',
     lastVisit: eightDaysAgo, // SOON (Frequency 2 weeks -> Due in 6 days)
     visitFrequencyWeeks: 2,
@@ -69,7 +72,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     id: 'a1',
     customerId: 'c2', 
     date: new Date(today.setHours(14, 30, 0, 0)),
-    service: 'רחצה וסירוק',
+    service: '׳¨׳—׳¦׳” ׳•׳¡׳™׳¨׳•׳§',
     status: AppointmentStatus.SCHEDULED,
     price: 150
   },
@@ -77,7 +80,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     id: 'a2',
     customerId: 'c1',
     date: twoMonthsAgo,
-    service: 'תספורת מלאה',
+    service: '׳×׳¡׳₪׳•׳¨׳× ׳׳׳׳”',
     status: AppointmentStatus.COMPLETED,
     price: 250
   },
@@ -85,7 +88,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     id: 'a3',
     customerId: 'c3',
     date: twentyThreeDaysAgo,
-    service: 'גזירת ציפורניים',
+    service: '׳’׳–׳™׳¨׳× ׳¦׳™׳₪׳•׳¨׳ ׳™׳™׳',
     status: AppointmentStatus.COMPLETED,
     price: 50
   },
@@ -93,8 +96,9 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     id: 'a_test',
     customerId: 'c_test',
     date: eightDaysAgo,
-    service: 'רחצה',
+    service: '׳¨׳—׳¦׳”',
     status: AppointmentStatus.COMPLETED,
     price: 100
   }
 ];
+

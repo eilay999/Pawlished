@@ -26,6 +26,7 @@ export interface Appointment {
   status: AppointmentStatus;
   notes?: string;
   price: number; // Added price field
+  cancellationFee?: number;
 }
 
 export type TaskStatus = 'OPEN' | 'DONE';

@@ -36,10 +36,19 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
   const activeAppointments = thisMonthAllAppointments.filter(a => a.status !== 'CANCELLED');
   const cancelledAppointments = thisMonthAllAppointments.filter(a => a.status === 'CANCELLED');
 
-  const monthlyRevenue = activeAppointments.reduce((sum, app) => sum + (app.price || 0), 0);
-  const yearlyRevenue = appointments.filter(a => a.date.getFullYear() === currentYear && a.status !== 'CANCELLED')
-                                    .reduce((sum, app) => sum + (app.price || 0), 0);
-  const cancellationLoss = cancelledAppointments.reduce((sum, app) => sum + (app.price || 0), 0);
+  const cancellationFees = cancelledAppointments.reduce((sum, app) => sum + (app.cancellationFee || 0), 0);
+  const monthlyRevenue = activeAppointments.reduce((sum, app) => sum + (app.price || 0), 0) + cancellationFees;
+  const yearlyCancellationFees = appointments
+    .filter(a => a.date.getFullYear() === currentYear && a.status === 'CANCELLED')
+    .reduce((sum, app) => sum + (app.cancellationFee || 0), 0);
+  const yearlyRevenue =
+    appointments
+      .filter(a => a.date.getFullYear() === currentYear && a.status !== 'CANCELLED')
+      .reduce((sum, app) => sum + (app.price || 0), 0) + yearlyCancellationFees;
+  const cancellationLoss = cancelledAppointments.reduce(
+    (sum, app) => sum + Math.max(0, (app.price || 0) - (app.cancellationFee || 0)),
+    0
+  );
   
   const totalAppointmentsCount = thisMonthAllAppointments.length;
   const cancelledCount = cancelledAppointments.length;
