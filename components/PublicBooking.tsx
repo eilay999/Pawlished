@@ -1,8 +1,8 @@
 ﻿import React, { useMemo, useState } from 'react';
-import { Calendar, Phone, ShieldCheck, User, Dog, CheckCircle2 } from 'lucide-react';
+import { Calendar, Phone, User, Dog, CheckCircle2 } from 'lucide-react';
 import { Appointment, AppointmentStatus, Customer } from '../types';
 
-type BookingStep = 'PHONE' | 'OTP' | 'DETAILS' | 'BOOKING' | 'DONE';
+type BookingStep = 'PHONE' | 'DETAILS' | 'BOOKING' | 'DONE';
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -67,8 +67,6 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 }) => {
   const [step, setStep] = useState<BookingStep>('PHONE');
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState('');
   const [existingCustomer, setExistingCustomer] = useState<Customer | null>(null);
@@ -111,69 +109,26 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     return !bookedSlots.has(slot.getTime());
   };
 
-  const handleSendOtp = async () => {
+  const handleContinueWithPhone = () => {
     setError(null);
     const e164 = toE164(phone);
     if (!e164) {
       setError('הזן מספר טלפון תקין.');
       return;
     }
-    setIsLoading(true);
-    try {
-      const resp = await fetch('/api/whatsapp-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', phone: e164 })
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        setError(data?.error || 'שליחת קוד נכשלה.');
-        return;
-      }
-      setVerifiedPhone(e164);
-      setStep('OTP');
-    } catch {
-      setError('שליחת קוד נכשלה.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const handleVerifyOtp = async () => {
-    setError(null);
-    if (!otp.trim()) {
-      setError('הזן קוד אימות.');
+    setVerifiedPhone(e164);
+    const normalized = normalizePhoneForCompare(e164);
+    if (ADMIN_PHONES.includes(normalized)) {
+      onAdminAccess?.(normalized);
       return;
     }
-    setIsLoading(true);
-    try {
-      const resp = await fetch('/api/whatsapp-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify', phone: verifiedPhone, code: otp.trim() })
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        setError(data?.error || 'קוד שגוי. נסה שוב.');
-        return;
-      }
-
-      const normalized = normalizePhoneForCompare(verifiedPhone);
-      if (ADMIN_PHONES.includes(normalized)) {
-        onAdminAccess?.(normalized);
-        return;
-      }
-      const existing = customers.find(c => normalizePhoneForCompare(c.phone) === normalized) || null;
-      setExistingCustomer(existing);
-      if (existing) {
-        setStep('BOOKING');
-      } else {
-        setStep('DETAILS');
-      }
-    } catch {
-      setError('קוד שגוי. נסה שוב.');
-    } finally {
-      setIsLoading(false);
+    const existing = customers.find(c => normalizePhoneForCompare(c.phone) === normalized) || null;
+    setExistingCustomer(existing);
+    if (existing) {
+      setStep('BOOKING');
+    } else {
+      setStep('DETAILS');
     }
   };
 
@@ -273,32 +228,10 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
               />
               <button
-                onClick={handleSendOtp}
-                disabled={isLoading}
+                onClick={handleContinueWithPhone}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
               >
-                {isLoading ? 'שולח קוד...' : 'שלח קוד אימות'}
-              </button>
-            </div>
-          )}
-
-          {step === 'OTP' && (
-            <div className="space-y-3">
-              <label className="text-sm text-gray-600 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4" /> הזן קוד אימות
-              </label>
-              <input
-                value={otp}
-                onChange={e => setOtp(e.target.value)}
-                placeholder="קוד מהוואטסאפ"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
-              />
-              <button
-                onClick={handleVerifyOtp}
-                disabled={isLoading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-3 font-medium"
-              >
-                {isLoading ? 'בודק...' : 'אמת קוד'}
+                המשך
               </button>
             </div>
           )}
