@@ -25,8 +25,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
       {/* Header */}
       <div className="p-6 border-b border-gray-100 flex justify-between items-center gap-4 shrink-0 bg-gradient-to-r from-blue-50 via-white to-emerald-50">
         <div>
-            <h2 className="text-2xl font-bold text-gray-800">לקוחות</h2>
-            <p className="text-sm text-gray-500">ניהול כרטיסי לקוחות, תדירות וסטטוס תורים</p>
+            <h2 className="text-2xl font-bold text-gray-800">������</h2>
+            <p className="text-sm text-gray-500">����� ������ ������, ������ ������ �����</p>
         </div>
         
         <button 
@@ -34,7 +34,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
             className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 shadow-lg shadow-blue-100 transition-all active:scale-95"
         >
             <Plus className="w-5 h-5" />
-            לקוח חדש
+            ���� ���
         </button>
       </div>
 
@@ -44,7 +44,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
             <Search className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
             <input 
                 type="text" 
-                placeholder="חיפוש לפי שם, טלפון או שם הכלב..." 
+                placeholder="����� ��� ��, ����� �� �� ����..." 
                 className="w-full pr-10 pl-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -57,17 +57,17 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
         {filteredCustomers.length === 0 ? (
             <div className="text-center py-20 text-gray-400">
                 <Dog className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                <p>לא נמצאו לקוחות מתאימים</p>
+                <p>�� ����� ������ �������</p>
             </div>
         ) : (
             <table className="w-full text-right border-collapse">
                 <thead className="bg-gray-50 sticky top-0 z-10 text-xs text-gray-500 font-medium border-b border-gray-100 shadow-sm">
                     <tr>
-                        <th className="px-6 py-4 font-semibold">לקוח</th>
-                        <th className="px-6 py-4 font-semibold hidden md:table-cell">פרטי קשר</th>
-                        <th className="px-6 py-4 font-semibold">סטטוס</th>
-                        <th className="px-6 py-4 font-semibold hidden sm:table-cell">תאריך יעד / תור</th>
-                        <th className="px-6 py-4 font-semibold hidden lg:table-cell">תדירות</th>
+                        <th className="px-6 py-4 font-semibold">����</th>
+                        <th className="px-6 py-4 font-semibold hidden md:table-cell">���� ���</th>
+                        <th className="px-6 py-4 font-semibold">�����</th>
+                        <th className="px-6 py-4 font-semibold hidden sm:table-cell">����� ��� / ���</th>
+                        <th className="px-6 py-4 font-semibold hidden lg:table-cell">������</th>
                         <th className="px-6 py-4 font-semibold"></th>
                     </tr>
                 </thead>
@@ -85,8 +85,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
 
                         // Determine Visual Style
                         let style = {
-                            label: 'בתוקף',
-                            subLabel: 'יש זמן',
+                            label: '�����',
+                            subLabel: '�� ���',
                             color: 'bg-gray-100 text-gray-600 border-gray-200',
                             icon: Calendar,
                             displayDate: analysis.dueDate,
@@ -95,8 +95,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
 
                         if (analysis.status === 'SCHEDULED') {
                             style = {
-                                label: 'נקבע תור',
-                                subLabel: 'תור עתידי',
+                                label: '���� ���',
+                                subLabel: '��� �����',
                                 color: 'bg-emerald-100 text-emerald-700 border-emerald-200',
                                 icon: CheckCircle2,
                                 displayDate: analysis.nextAppointment,
@@ -104,8 +104,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
                             };
                         } else if (analysis.status === 'LATE') {
                             style = {
-                                label: 'באיחור',
-                                subLabel: 'דורש טיפול',
+                                label: '������',
+                                subLabel: '���� �����',
                                 color: 'bg-red-100 text-red-700 border-red-200',
                                 icon: AlertCircle,
                                 displayDate: analysis.dueDate,
@@ -113,8 +113,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
                             };
                         } else if (analysis.status === 'SOON') {
                             style = {
-                                label: 'בקרוב',
-                                subLabel: 'לשריין תור',
+                                label: '�����',
+                                subLabel: '������ ���',
                                 color: 'bg-orange-100 text-orange-700 border-orange-200',
                                 icon: Clock,
                                 displayDate: analysis.dueDate,
@@ -123,8 +123,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
                         } else {
                             // Status is OK
                              style = {
-                                label: 'בתוקף',
-                                subLabel: 'יש זמן',
+                                label: '�����',
+                                subLabel: '�� ���',
                                 color: 'bg-blue-50 text-blue-700 border-blue-100',
                                 icon: Calendar,
                                 displayDate: analysis.dueDate,
@@ -144,10 +144,10 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
                         }
 
                         const getRelativeTimeText = (diff: number, late: boolean) => {
-                            if (diff === 0) return 'היום';
-                            if (diff === 1) return 'מחר';
-                            if (late || diff < 0) return `באיחור של ${Math.abs(diff)} ימים`;
-                            return `בעוד ${diff} ימים`;
+                            if (diff === 0) return '����';
+                            if (diff === 1) return '���';
+                            if (late || diff < 0) return `������ �� ${Math.abs(diff)} ����`;
+                            return `���� ${diff} ����`;
                         };
                         
                         const relativeTimeText = getRelativeTimeText(displayDaysDiff, isOverdue);
@@ -155,10 +155,10 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
                         // Helper for "Days Passed" text in frequency column
                         const getDaysPassedText = (days: number) => {
                             if (isNaN(days)) return '';
-                            if (days === 0) return 'היום';
-                            if (days === 1) return 'אתמול';
-                            if (days === 2) return 'לפני יומיים';
-                            return `לפני ${days} ימים`;
+                            if (days === 0) return '����';
+                            if (days === 1) return '�����';
+                            if (days === 2) return '���� ������';
+                            return `���� ${days} ����`;
                         };
 
                         return (
@@ -217,9 +217,9 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, appoint
                                 </td>
                                 <td className="px-6 py-4 hidden lg:table-cell">
                                     <div className="text-gray-500 flex flex-col text-xs">
-                                        <span className="mb-1 block font-medium">כל {customer.visitFrequencyWeeks} שבועות</span>
+                                        <span className="mb-1 block font-medium">�� {customer.visitFrequencyWeeks} ������</span>
                                         <span className="text-gray-400 flex items-center gap-1">
-                                            ביקור אחרון: {analysis.lastEffectiveVisit.toLocaleDateString('he-IL')}
+                                            ����� �����: {analysis.lastEffectiveVisit.toLocaleDateString('he-IL')}
                                         </span>
                                         <span className="text-blue-500/80 text-[10px] font-bold mt-0.5">
                                             {getDaysPassedText(daysSinceLastVisit)}

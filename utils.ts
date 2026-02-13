@@ -12,7 +12,7 @@ export interface CustomerAnalysis {
 }
 
 export const analyzeCustomerStatus = (customer: Customer, appointments: Appointment[]): CustomerAnalysis => {
-    // 1. נרמול תאריך "היום" לשעה 00:00 למניעת טעויות חישוב
+    // 1. ����� ����� "����" ���� 00:00 ������ ������ �����
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -26,7 +26,7 @@ export const analyzeCustomerStatus = (customer: Customer, appointments: Appointm
         };
     }
 
-    // 2. מציאת הביקור האחרון שבוצע בפועל (כולל היסטוריית תורים)
+    // 2. ����� ������ ������ ����� ����� (���� ��������� �����)
     let effectiveLastVisit = safeLastVisit;
     effectiveLastVisit.setHours(0,0,0,0);
 
@@ -45,7 +45,7 @@ export const analyzeCustomerStatus = (customer: Customer, appointments: Appointm
         }
     }
 
-    // 3. בדיקה אם כבר יש תור עתידי
+    // 3. ����� �� ��� �� ��� �����
     const futureAppt = appointments
         .filter(a => a.customerId === customer.id && a.status !== AppointmentStatus.CANCELLED)
         .map(a => new Date(a.date))
@@ -56,30 +56,30 @@ export const analyzeCustomerStatus = (customer: Customer, appointments: Appointm
             return d.getTime() >= today.getTime();
         });
 
-    // 4. חישוב תאריך היעד (Due Date)
-    // אם לקוח בא כל שבועיים (2) -> נוסיף 14 יום לתאריך הביקור האחרון
+    // 4. ����� ����� ���� (Due Date)
+    // �� ���� �� �� ������� (2) -> ����� 14 ��� ������ ������ ������
     const frequencyDays = (customer.visitFrequencyWeeks || 4) * 7;
     const dueDate = new Date(effectiveLastVisit);
     dueDate.setDate(dueDate.getDate() + frequencyDays);
     dueDate.setHours(0,0,0,0);
     
-    // 5. חישוב ההפרש בימים
+    // 5. ����� ����� �����
     const timeDiff = dueDate.getTime() - today.getTime();
     const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
-    // 6. קביעת סטטוס
+    // 6. ����� �����
     let status: CalculatedStatus = 'OK';
 
     if (futureAppt) {
-        status = 'SCHEDULED'; // כבר קבע תור - הכל טוב
+        status = 'SCHEDULED'; // ��� ��� ��� - ��� ���
     } else {
         if (daysDiff < 0) {
-            status = 'LATE'; // עבר התאריך
+            status = 'LATE'; // ��� ������
         } else if (daysDiff <= 7) {
-            // החוק שלך: שבוע לפני המועד (או פחות) -> נכנס ל"בקרוב"
+            // ���� ���: ���� ���� ����� (�� ����) -> ���� �"�����"
             status = 'SOON'; 
         } else {
-            status = 'OK'; // יש עוד זמן
+            status = 'OK'; // �� ��� ���
         }
     }
 

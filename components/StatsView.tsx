@@ -72,10 +72,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
 
   // Chart Segments
   const chartSegments = [
-    { label: 'נקבע תור עתידי', count: scheduledCustomers.length, color: '#10b981', textColor: 'text-emerald-600', bgColor: 'bg-emerald-500' },
-    { label: 'בתוקף (ביקרו לאחרונה)', count: okCustomers.length, color: '#e5e7eb', textColor: 'text-gray-500', bgColor: 'bg-gray-200' },
-    { label: 'צריכים לקבוע בקרוב', count: soonCustomers.length, color: '#f97316', textColor: 'text-orange-500', bgColor: 'bg-orange-500' },
-    { label: 'באיחור (סיכון)', count: lateCustomers.length, color: '#ef4444', textColor: 'text-red-500', bgColor: 'bg-red-500' },
+    { label: '���� ��� �����', count: scheduledCustomers.length, color: '#10b981', textColor: 'text-emerald-600', bgColor: 'bg-emerald-500' },
+    { label: '����� (����� �������)', count: okCustomers.length, color: '#e5e7eb', textColor: 'text-gray-500', bgColor: 'bg-gray-200' },
+    { label: '������ ����� �����', count: soonCustomers.length, color: '#f97316', textColor: 'text-orange-500', bgColor: 'bg-orange-500' },
+    { label: '������ (�����)', count: lateCustomers.length, color: '#ef4444', textColor: 'text-red-500', bgColor: 'bg-red-500' },
   ];
 
   let currentPos = 0;
@@ -95,8 +95,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-y-auto border border-gray-100 custom-scrollbar backdrop-blur-sm">
       <div className="p-8 pb-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50">
-         <h2 className="text-3xl font-bold text-gray-800 tracking-tight">סטטיסטיקה ודוחות</h2>
-         <p className="text-gray-500 mt-1">מבט על הכנסות העסק, ביטולים ושימור לקוחות</p>
+         <h2 className="text-3xl font-bold text-gray-800 tracking-tight">��������� ������</h2>
+         <p className="text-gray-500 mt-1">��� �� ������ ����, ������� ������ ������</p>
       </div>
 
       <div className="p-8 space-y-8">
@@ -108,10 +108,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     <div className="bg-white/20 p-2 rounded-lg">
                         <Wallet className="w-6 h-6 text-white" />
                     </div>
-                    <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">החודש</span>
+                    <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">�����</span>
                 </div>
-                <div className="text-3xl font-bold mb-1">₪{monthlyRevenue.toLocaleString()}</div>
-                <div className="text-blue-100 text-sm">הכנסות בפועל</div>
+                <div className="text-3xl font-bold mb-1">�{monthlyRevenue.toLocaleString()}</div>
+                <div className="text-blue-100 text-sm">������ �����</div>
             </div>
 
             <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
@@ -119,10 +119,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     <div className="bg-emerald-50 p-2 rounded-lg">
                         <TrendingUp className="w-6 h-6 text-emerald-600" />
                     </div>
-                    <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-full">שנתי</span>
+                    <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-full">����</span>
                 </div>
-                <div className="text-3xl font-bold text-gray-800 mb-1">₪{yearlyRevenue.toLocaleString()}</div>
-                <div className="text-gray-500 text-sm">הכנסות השנה</div>
+                <div className="text-3xl font-bold text-gray-800 mb-1">�{yearlyRevenue.toLocaleString()}</div>
+                <div className="text-gray-500 text-sm">������ ����</div>
             </div>
 
              <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">
@@ -130,10 +130,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     <div className="bg-red-50 p-2 rounded-lg">
                         <CalendarOff className="w-6 h-6 text-red-600" />
                     </div>
-                    <span className="text-xs font-bold bg-red-100 text-red-600 px-2 py-1 rounded-full">פוטנציאל</span>
+                    <span className="text-xs font-bold bg-red-100 text-red-600 px-2 py-1 rounded-full">��������</span>
                 </div>
-                <div className="text-3xl font-bold text-red-600 mb-1">₪{potentialLoss.toLocaleString()}</div>
-                <div className="text-gray-500 text-sm">הפסד מלקוחות שלא קבעו</div>
+                <div className="text-3xl font-bold text-red-600 mb-1">�{potentialLoss.toLocaleString()}</div>
+                <div className="text-gray-500 text-sm">���� ������� ��� ����</div>
             </div>
         </div>
 
@@ -144,17 +144,17 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     <div className="p-2 bg-blue-50 rounded-full text-blue-600">
                         <Users className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-gray-600">סה״כ לקוחות</span>
+                    <span className="font-bold text-gray-600">���� ������</span>
                 </div>
                 <div className="text-3xl font-bold text-gray-800">{totalCustomers}</div>
-                <div className="text-xs text-gray-400 mt-1">במאגר הלקוחות</div>
+                <div className="text-xs text-gray-400 mt-1">����� �������</div>
             </div>
             <div className="bg-white border border-gray-100 p-5 rounded-2xl flex flex-col justify-between">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-green-50 rounded-full text-green-600">
                         <CheckCircle2 className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-gray-600">הגיעו החודש</span>
+                    <span className="font-bold text-gray-600">����� �����</span>
                 </div>
                 <div className="text-3xl font-bold text-gray-800">{arrivedCount}</div>
                 <div className="w-full bg-gray-100 h-1.5 rounded-full mt-3">
@@ -167,7 +167,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     <div className="p-2 bg-red-50 rounded-full text-red-600">
                         <XCircle className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-gray-600">ביטלו החודש</span>
+                    <span className="font-bold text-gray-600">����� �����</span>
                 </div>
                 <div className="text-3xl font-bold text-gray-800">{cancelledCount}</div>
                 <div className="w-full bg-gray-100 h-1.5 rounded-full mt-3">
@@ -180,10 +180,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     <div className="p-2 bg-orange-50 rounded-full text-orange-600">
                         <PieChart className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-gray-600">אחוז ביטולים</span>
+                    <span className="font-bold text-gray-600">���� �������</span>
                 </div>
                 <div className="text-3xl font-bold text-gray-800">{cancellationRate}%</div>
-                <div className="text-xs text-gray-400 mt-1">מסך כל התורים שנקבעו</div>
+                <div className="text-xs text-gray-400 mt-1">��� �� ������ ������</div>
             </div>
 
             <div className="bg-white border border-red-100 bg-red-50/10 p-5 rounded-2xl flex flex-col justify-between">
@@ -191,10 +191,10 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     <div className="p-2 bg-red-100 rounded-full text-red-600">
                         <Wallet className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-red-800">הפסד מביטולים</span>
+                    <span className="font-bold text-red-800">���� ��������</span>
                 </div>
-                <div className="text-3xl font-bold text-red-600">₪{cancellationLoss.toLocaleString()}</div>
-                <div className="text-xs text-red-400 mt-1">הכנסה שאבדה החודש</div>
+                <div className="text-3xl font-bold text-red-600">�{cancellationLoss.toLocaleString()}</div>
+                <div className="text-xs text-red-400 mt-1">����� ����� �����</div>
             </div>
         </div>
 
@@ -206,8 +206,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                         <Activity className="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-gray-800">שימור ומעקב לקוחות</h3>
-                        <p className="text-xs text-gray-400">התפלגות {totalCustomers} הלקוחות במאגר</p>
+                        <h3 className="text-lg font-bold text-gray-800">����� ����� ������</h3>
+                        <p className="text-xs text-gray-400">������� {totalCustomers} ������� �����</p>
                     </div>
                 </div>
             </div>
@@ -216,7 +216,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                 <div className="relative w-48 h-48 rounded-full shadow-inner shrink-0" style={conicStyle}>
                      <div className="absolute inset-0 m-8 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
                          <span className="text-3xl font-bold text-gray-800">{Math.round((scheduledCustomers.length / (totalCustomers || 1)) * 100)}%</span>
-                         <span className="text-xs text-gray-500 font-medium">לקוחות משוריינים</span>
+                         <span className="text-xs text-gray-500 font-medium">������ ���������</span>
                      </div>
                 </div>
 
@@ -242,20 +242,20 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                 <div className="p-5 border-b border-red-50 bg-red-50/30 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                         <AlertTriangle className="w-5 h-5 text-red-500" />
-                        <h3 className="font-bold text-gray-800">חייבים לקבוע תור ({lateCustomers.length})</h3>
+                        <h3 className="font-bold text-gray-800">������ ����� ��� ({lateCustomers.length})</h3>
                     </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto max-h-[300px]">
                     {lateCustomers.length === 0 ? (
-                        <div className="p-10 text-center text-gray-400">כל הלקוחות מסודרים!</div>
+                        <div className="p-10 text-center text-gray-400">�� ������� �������!</div>
                     ) : (
                         <table className="w-full text-sm text-right">
                             <thead className="text-xs text-gray-400 font-medium bg-gray-50 sticky top-0">
                                 <tr>
-                                    <th className="px-5 py-3">לקוח</th>
-                                    <th className="px-5 py-3">ביקור אחרון</th>
-                                    <th className="px-5 py-3">איחור ב</th>
+                                    <th className="px-5 py-3">����</th>
+                                    <th className="px-5 py-3">����� �����</th>
+                                    <th className="px-5 py-3">����� �</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -270,7 +270,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                                                 {c.lastEffectiveVisit.toLocaleDateString('he-IL')}
                                             </td>
                                             <td className="px-5 py-3 font-bold text-red-500">
-                                                {Math.abs(c.daysDiff)} ימים
+                                                {Math.abs(c.daysDiff)} ����
                                             </td>
                                         </tr>
                                     );
@@ -286,21 +286,21 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                 <div className="p-5 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                         <Users className="w-5 h-5 text-blue-500" />
-                        <h3 className="font-bold text-gray-800">צריכים לקבוע בקרוב ({soonCustomers.length})</h3>
+                        <h3 className="font-bold text-gray-800">������ ����� ����� ({soonCustomers.length})</h3>
                     </div>
-                    <span className="text-xs text-gray-400">טווח של שבוע</span>
+                    <span className="text-xs text-gray-400">���� �� ����</span>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto max-h-[300px]">
                     {soonCustomers.length === 0 ? (
-                        <div className="p-10 text-center text-gray-400">אין לקוחות שצריכים לקבוע בשבוע הקרוב</div>
+                        <div className="p-10 text-center text-gray-400">��� ������ ������� ����� ����� �����</div>
                     ) : (
                         <table className="w-full text-sm text-right">
                             <thead className="text-xs text-gray-400 font-medium bg-gray-50 sticky top-0">
                                 <tr>
-                                    <th className="px-5 py-3">לקוח</th>
-                                    <th className="px-5 py-3">מועד רצוי</th>
-                                    <th className="px-5 py-3">סטטוס</th>
+                                    <th className="px-5 py-3">����</th>
+                                    <th className="px-5 py-3">���� ����</th>
+                                    <th className="px-5 py-3">�����</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -316,7 +316,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                                             </td>
                                             <td className="px-5 py-3">
                                                 <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
-                                                    {c.daysDiff === 0 ? 'היום' : `בעוד ${c.daysDiff} ימים`}
+                                                    {c.daysDiff === 0 ? '����' : `���� ${c.daysDiff} ����`}
                                                 </span>
                                             </td>
                                         </tr>
@@ -333,8 +333,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
         {/* Row 5: Tasks */}
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-800">משימות</h3>
-                <span className="text-xs text-gray-400">סה"כ: {tasks.length}</span>
+                <h3 className="text-lg font-bold text-gray-800">������</h3>
+                <span className="text-xs text-gray-400">��"�: {tasks.length}</span>
             </div>
 
             <div className="flex gap-2 mb-4">
@@ -342,7 +342,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     type="text"
                     value={taskTitle}
                     onChange={(e) => setTaskTitle(e.target.value)}
-                    placeholder="הוסף משימה..."
+                    placeholder="���� �����..."
                     className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 />
                 <input
@@ -360,13 +360,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                     }}
                     className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
-                    הוסף משימה
+                    ���� �����
                 </button>
             </div>
 
             {tasks.length === 0 ? (
                 <div className="text-sm text-gray-400 text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                    אין משימות כרגע
+                    ��� ������ ����
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -387,17 +387,17 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
                                   {task.title}
                               </span>
                               <div className="text-[11px] text-gray-400 mt-1">
-                                  התחלה: {task.startDate.toLocaleDateString('he-IL')}
+                                  �����: {task.startDate.toLocaleDateString('he-IL')}
                               </div>
                             </button>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold">
-                                  {task.status === 'DONE' ? 'בוצע' : 'פתוח'}
+                                  {task.status === 'DONE' ? '����' : '����'}
                               </span>
                               <button
                                 onClick={() => onDeleteTask(task.id)}
                                 className="p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                aria-label="מחק משימה"
+                                aria-label="��� �����"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>

@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Calendar, Phone, User, Dog, CheckCircle2 } from 'lucide-react';
 import { Appointment, AppointmentStatus, Customer } from '../types';
 

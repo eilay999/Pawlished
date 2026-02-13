@@ -58,9 +58,9 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
     
     let message = '';
     if (isLate) {
-        message = `היי ${customer.name}, עברה תקופת התדירות מאז הביקור האחרון של ${customer.petName}. נשמח לקבוע תור חדש!`;
+        message = `��� ${customer.name}, ���� ����� ������� ��� ������ ������ �� ${customer.petName}. ���� ����� ��� ���!`;
     } else {
-        message = `היי ${customer.name}, מתקרבים למועד הטיפול של ${customer.petName} (בעוד ${days} ימים). זה הזמן לשריין מקום!`;
+        message = `��� ${customer.name}, ������� ����� ������ �� ${customer.petName} (���� ${days} ����). �� ���� ������ ����!`;
     }
     
     let phone = customer.phone.replace(/\D/g, '');
@@ -96,9 +96,9 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                 <BellRing className="w-5 h-5" />
             </div>
             <div className="flex flex-col">
-                <span className="text-base">התראות וניהול</span>
-                <span className="text-xs text-gray-400 font-normal">תמונת מצב יומית</span>
-                <span className="text-[10px] text-gray-400 font-normal">יעד לקוחות: 12 תקין | 13–15 וואו | 15+ מטורף</span>
+                <span className="text-base">������ ������</span>
+                <span className="text-xs text-gray-400 font-normal">����� ��� �����</span>
+                <span className="text-[10px] text-gray-400 font-normal">��� ������: 12 ���� | 13�15 ���� | 15+ �����</span>
             </div>
         </div>
       </div>
@@ -114,19 +114,19 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                   {sendingBatch ? (
                       <>
                         <Sparkles className="w-4 h-4 animate-spin" />
-                        שולח תזכורות...
+                        ���� �������...
                       </>
                   ) : (
                       <>
                         <Sparkles className="w-4 h-4" />
-                        הפעל תזכורות אוטומטי
+                        ���� ������� �������
                       </>
                   )}
               </button>
           ) : (
              <div className="w-full flex items-center justify-center gap-2 bg-green-50 text-green-700 text-sm py-2.5 rounded-xl border border-green-100 font-medium">
                 <CheckCircle2 className="w-4 h-4" />
-                כולם מסודרים! אין התראות
+                ���� �������! ��� ������
              </div>
           )}
       </div>
@@ -138,7 +138,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
           <div className="flex items-center justify-between mb-3">
              <div className="flex items-center gap-2">
                 <ListChecks className="w-5 h-5 text-green-600" />
-                <h3 className="text-sm font-extrabold text-green-700">היום במספרה</h3>
+                <h3 className="text-sm font-extrabold text-green-700">���� ������</h3>
              </div>
              <span className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-bold">{todaysAppointments.length}</span>
           </div>
@@ -146,7 +146,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
           <div className="space-y-2">
                {todaysAppointments.length === 0 && (
                    <div className="text-center py-6 bg-white rounded-xl border border-dashed border-gray-200">
-                       <p className="text-xs text-gray-400">היומן ריק להיום</p>
+                       <p className="text-xs text-gray-400">����� ��� �����</p>
                    </div>
                )}
                {todaysAppointments.map(app => {
@@ -177,7 +177,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                              <button 
                                 onClick={(e) => markAsCompleted(e, app)}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity bg-green-50 hover:bg-green-500 hover:text-white text-green-600 p-1 rounded-full"
-                                title="סמן כבוצע"
+                                title="��� �����"
                              >
                                  <Check className="w-3 h-3" />
                              </button>
@@ -194,14 +194,14 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
             <div className="flex items-center justify-between mb-1 pt-4 border-t border-gray-200">
                <div className="flex items-center gap-2">
                   <Hourglass className="w-4 h-4 text-orange-500" />
-                  <h3 className="text-sm font-bold text-gray-800">מתקרב למועד (שבוע אחרון)</h3>
+                  <h3 className="text-sm font-bold text-gray-800">����� ����� (���� �����)</h3>
                </div>
                {soonCustomers.length > 0 && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold">{soonCustomers.length}</span>}
             </div>
-            <p className="text-[10px] text-gray-400 mb-3 pr-6">לקוחות שמועד הטיפול שלהם חל ב-7 הימים הקרובים</p>
+            <p className="text-[10px] text-gray-400 mb-3 pr-6">������ ����� ������ ���� �� �-7 ����� �������</p>
 
             <div className="space-y-3">
-              {soonCustomers.length === 0 && <p className="text-xs text-gray-400 text-center py-2 bg-white rounded-xl border border-dashed border-gray-200">אין לקוחות לשיבוץ השבוע</p>}
+              {soonCustomers.length === 0 && <p className="text-xs text-gray-400 text-center py-2 bg-white rounded-xl border border-dashed border-gray-200">��� ������ ������ �����</p>}
               {soonCustomers.map(c => {
                  // Calculate days since last visit for context
                  const todayTime = new Date().setHours(0,0,0,0);
@@ -217,17 +217,17 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                     <div className="flex justify-between items-start mb-2">
                         <div className="flex flex-col">
                             <span className="text-sm font-bold text-gray-800 group-hover:text-orange-600 transition-colors">{c.name}</span>
-                            <span className="text-xs text-gray-400">היה לפני {daysSince} ימים ({c.visitFrequencyWeeks} שבועות)</span>
+                            <span className="text-xs text-gray-400">��� ���� {daysSince} ���� ({c.visitFrequencyWeeks} ������)</span>
                         </div>
                         <div className="text-right">
                              <span className="text-[10px] text-orange-700 bg-orange-100/50 px-2 py-1 rounded-lg font-bold whitespace-nowrap block">
-                                {c.daysDiff === 0 ? 'היום!' : `בעוד ${c.daysDiff} ימים`}
+                                {c.daysDiff === 0 ? '����!' : `���� ${c.daysDiff} ����`}
                             </span>
                         </div>
                     </div>
                     <div className="text-[10px] text-gray-500 mb-2 flex items-center gap-1">
                         <CalendarDays className="w-3 h-3" />
-                        יעד משוער: {c.dueDate.toLocaleDateString('he-IL')}
+                        ��� �����: {c.dueDate.toLocaleDateString('he-IL')}
                     </div>
                     <div className="flex gap-2">
                         <button 
@@ -237,7 +237,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                             }}
                             className="flex-1 text-xs text-orange-600 bg-white hover:bg-orange-100 py-2 rounded-lg font-medium transition-colors border border-orange-100"
                         >
-                            קבע תור
+                            ��� ���
                         </button>
                         <button 
                              onClick={(e) => {
@@ -245,7 +245,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                                  sendReminder(c);
                              }}
                              className="w-8 flex items-center justify-center bg-white text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-orange-100"
-                             title="שלח הודעת וואטסאפ"
+                             title="��� ����� �������"
                         >
                             <Send className="w-3.5 h-3.5" />
                         </button>
@@ -260,14 +260,14 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
           <div className="flex items-center justify-between mb-1 pt-4 border-t border-gray-200">
             <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-red-500" />
-                <h3 className="text-sm font-bold text-gray-800">באיחור (עבר המועד)</h3>
+                <h3 className="text-sm font-bold text-gray-800">������ (��� �����)</h3>
             </div>
             {lateCustomers.length > 0 && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">{lateCustomers.length}</span>}
           </div>
-           <p className="text-[10px] text-gray-400 mb-3 pr-6">לקוחות שאיחרו את מועד הטיפול</p>
+           <p className="text-[10px] text-gray-400 mb-3 pr-6">������ ������ �� ���� ������</p>
 
           <div className="space-y-3">
-              {lateCustomers.length === 0 && <p className="text-xs text-gray-400 text-center py-2 bg-white rounded-xl border border-dashed border-gray-200">כל הלקוחות מסודרים!</p>}
+              {lateCustomers.length === 0 && <p className="text-xs text-gray-400 text-center py-2 bg-white rounded-xl border border-dashed border-gray-200">�� ������� �������!</p>}
               {lateCustomers.map(c => (
                 <div 
                     key={c.id} 
@@ -281,7 +281,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                         <p className="text-xs text-gray-500">{c.petName}</p>
                     </div>
                     <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-lg whitespace-nowrap">
-                        איחור של {Math.abs(c.daysDiff)} ימים
+                        ����� �� {Math.abs(c.daysDiff)} ����
                     </span>
                   </div>
                   <div className="flex gap-2 mt-1">
@@ -292,7 +292,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                           }}
                           className="flex-1 text-xs bg-red-50 text-red-700 py-2 rounded-lg hover:bg-red-600 hover:text-white transition-all font-bold border border-red-100"
                       >
-                          קבע תור דחוף
+                          ��� ��� ����
                       </button>
                       <button 
                              onClick={(e) => {
@@ -300,7 +300,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
                                  sendReminder(c);
                              }}
                              className="w-8 flex items-center justify-center bg-gray-50 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-gray-100"
-                             title="שלח הודעת וואטסאפ"
+                             title="��� ����� �������"
                         >
                             <Send className="w-3.5 h-3.5" />
                         </button>

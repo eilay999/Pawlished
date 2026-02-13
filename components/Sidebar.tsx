@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Calendar, Users, TrendingUp, Scissors, Plus, Palette } from 'lucide-react';
 import { ViewType } from '../types';
 

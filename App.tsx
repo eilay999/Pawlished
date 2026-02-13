@@ -1,4 +1,4 @@
-﻿
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Palette } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
@@ -114,6 +114,7 @@ const isMissingTableError = (message?: string) => {
 };
 
 const TASKS_STORAGE_KEY = 'pawlished_tasks';
+const APPOINTMENTS_STORAGE_KEY = 'pawlished_appointments';
 const CUSTOMER_NOTES_KEY = 'pawlished_customer_notes';
 const CUSTOMERS_STORAGE_KEY = 'pawlished_customers';
 
@@ -182,6 +183,20 @@ const loadCustomersFromStorage = (): Customer[] => {
   }
 };
 
+const loadAppointmentsFromStorage = (): Appointment[] => {
+  try {
+    const raw = localStorage.getItem(APPOINTMENTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Array<Omit<Appointment, 'date'> & { date: string }>;
+    return parsed.map(a => ({
+      ...a,
+      date: new Date(a.date)
+    }));
+  } catch {
+    return [];
+  }
+};
+
 const saveCustomersToStorage = (list: Customer[]) => {
   try {
     const payload = list.map(c => ({
@@ -189,6 +204,18 @@ const saveCustomersToStorage = (list: Customer[]) => {
       lastVisit: c.lastVisit.toISOString()
     }));
     localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const saveAppointmentsToStorage = (list: Appointment[]) => {
+  try {
+    const payload = list.map(a => ({
+      ...a,
+      date: a.date.toISOString()
+    }));
+    localStorage.setItem(APPOINTMENTS_STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // ignore storage errors
   }
@@ -236,19 +263,23 @@ const App: React.FC = () => {
     }
   });
   const autosaveReadyRef = useRef(false);
+  const hasHydratedRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
-  const isPublicEntry = useMemo(() => {
+  const { isPublicEntry, isForcedPublic } = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    return (
-      path.includes('booking') ||
-      params.get('booking') === '1' ||
-      params.get('public') === '1' ||
-      hash.includes('booking')
-    );
+    const forced = path.includes('booking');
+    return {
+      isForcedPublic: forced,
+      isPublicEntry:
+        forced ||
+        params.get('booking') === '1' ||
+        params.get('public') === '1' ||
+        hash.includes('booking')
+    };
   }, []);
-  const isPublicBooking = isPublicEntry && !isAdminOverride;
+  const isPublicBooking = isPublicEntry && (!isAdminOverride || isForcedPublic);
 
   useEffect(() => {
     applyTheme(loadTheme());
@@ -262,6 +293,7 @@ const App: React.FC = () => {
   }, [askedAppointmentIds]);
 
   useEffect(() => {
+    if (!hasHydratedRef.current) return;
     const payload = tasks.map(task => ({
       ...task,
       createdAt: task.createdAt.toISOString(),
@@ -271,6 +303,11 @@ const App: React.FC = () => {
   }, [tasks]);
 
   useEffect(() => {
+    if (!hasHydratedRef.current) return;
+    saveAppointmentsToStorage(appointments);
+  }, [appointments]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const loadData = async () => {
@@ -278,7 +315,9 @@ const App: React.FC = () => {
         setLoadError('Supabase env vars are missing. Using local data only.');
         const localCustomers = loadCustomersFromStorage();
         setCustomers(mergeNotesIntoCustomers(localCustomers));
+        setAppointments(loadAppointmentsFromStorage());
         setTasks(loadTasksFromStorage());
+        hasHydratedRef.current = true;
         return;
       }
 
@@ -302,7 +341,9 @@ const App: React.FC = () => {
           if (localCustomers.length) {
             setCustomers(mergeNotesIntoCustomers(localCustomers));
           }
+          setAppointments(loadAppointmentsFromStorage());
           setTasks(loadTasksFromStorage());
+          hasHydratedRef.current = true;
         }
         return;
       }
@@ -310,7 +351,14 @@ const App: React.FC = () => {
       const mappedCustomers = mergeNotesIntoCustomers((customersData || []).map(mapCustomerFromDb));
       const mappedAppointments = (appointmentsData || []).map(mapAppointmentFromDb);
       const mappedTasks = (tasksData || []).map(mapTaskFromDb);
+      const localAppointments = loadAppointmentsFromStorage();
       const localTasks = loadTasksFromStorage();
+      const mergedAppointments = mappedAppointments.length === 0 && localAppointments.length > 0
+        ? localAppointments
+        : [
+            ...mappedAppointments,
+            ...localAppointments.filter(localAppt => !mappedAppointments.some(a => a.id === localAppt.id))
+          ];
       const mergedTasks = mappedTasks.length === 0 && localTasks.length > 0
         ? localTasks
         : [
@@ -321,13 +369,15 @@ const App: React.FC = () => {
       if (isMounted) {
         setCustomers(mappedCustomers);
         saveCustomersToStorage(mappedCustomers);
-        setAppointments(mappedAppointments);
+        setAppointments(mergedAppointments);
+        saveAppointmentsToStorage(mergedAppointments);
         if (tasksError && !isMissingTableError(tasksError.message)) {
           console.error('Supabase tasks load error', tasksError);
           setTasks(loadTasksFromStorage());
         } else {
           setTasks(mergedTasks);
         }
+        hasHydratedRef.current = true;
       }
 
       if (isMounted) {

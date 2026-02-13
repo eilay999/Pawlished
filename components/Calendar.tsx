@@ -1,4 +1,4 @@
-﻿
+
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, Sparkles, Plus, Clock } from 'lucide-react';
 import { WEEK_DAYS } from '../constants';
@@ -292,20 +292,8 @@ export const Calendar: React.FC<CalendarProps> = ({
                                      dragOverDate.getDate() === cell.date.getDate() &&
                                      dragOverDate.getMonth() === cell.date.getMonth() &&
                                      dragOverDate.getFullYear() === cell.date.getFullYear();
-                const eventCustomerIds = new Set(cell.events.map(e => e.customerId));
-                const lastVisitsForDay = customers.filter(c => {
-                  if (eventCustomerIds.has(c.id)) {
-                    return false;
-                  }
-                  const d = new Date(c.lastVisit);
-                  d.setHours(0, 0, 0, 0);
-                  const cd = new Date(cell.date);
-                  cd.setHours(0, 0, 0, 0);
-                  return d.getTime() === cd.getTime();
-                });
                 const activeEvents = cell.events.filter(e => e.status !== 'CANCELLED');
                 const uniqueCustomerCount = new Set(activeEvents.map(e => e.customerId)).size;
-                const displayLastVisits = lastVisitsForDay.slice(0, 1);
                 const maxVisibleEvents = 4;
                 const displayEvents = cell.events.slice(0, maxVisibleEvents);
 
@@ -361,33 +349,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                           <div className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
                             {uniqueCustomerCount} לקוחות
                           </div>
-                        </div>
-                      )}
-
-                      {/* Last Visit Markers */}
-                      {lastVisitsForDay.length > 0 && (
-                        <div className="hidden sm:block space-y-1 mb-1">
-                          {displayLastVisits.map(c => {
-                            const lastVisitTime = new Date(c.lastVisit).toLocaleTimeString('he-IL', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            });
-
-                            return (
-                              <div
-                                key={`last-${c.id}`}
-                                className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-md truncate border transition-colors cursor-pointer bg-green-100 border-green-200 text-green-800 shadow-sm hover:brightness-95"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onCustomerClick(c);
-                                }}
-                              >
-                                <div className="w-1 h-1 rounded-full flex-shrink-0 bg-green-600"></div>
-                                <span className="font-bold flex-shrink-0">{lastVisitTime}</span>
-                                <span className="truncate font-medium">{c.name}</span>
-                              </div>
-                            );
-                          })}
                         </div>
                       )}
 

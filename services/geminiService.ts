@@ -21,7 +21,7 @@ export const analyzeSchedule = async (
   customers: Customer[]
 ): Promise<string> => {
   const ai = getAiClient();
-  if (!ai) return "אין מפתח AI מוגדר.";
+  if (!ai) return "��� ���� AI �����.";
 
   const daysAppointments = appointments.filter(
     (app) =>
@@ -63,6 +63,6 @@ Provide 3 concise, practical insights.
     return response.text || "No response received.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "לא ניתן לנתח כרגע. נסה שוב מאוחר יותר.";
+    return "�� ���� ���� ����. ��� ��� ����� ����.";
   }
 };

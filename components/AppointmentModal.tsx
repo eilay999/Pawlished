@@ -17,10 +17,10 @@ interface AppointmentModalProps {
   appointment?: Appointment | null;
 }
 
-// Generate Time Slots from 08:00 to 20:00
+// Generate Time Slots from 07:00 to 20:00
 const generateTimeSlots = () => {
     const slots = [];
-    for (let i = 8; i <= 20; i++) {
+    for (let i = 7; i <= 20; i++) {
         slots.push(`${String(i).padStart(2, '0')}:00`);
         if (i !== 20) {
             slots.push(`${String(i).padStart(2, '0')}:30`);
@@ -45,7 +45,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [formData, setFormData] = useState({
       customerId: '',
     date: '',
-    time: '09:00',
+    time: '07:00',
     service: 'תספורת מלאה',
     price: 250,
     status: AppointmentStatus.SCHEDULED,
@@ -105,13 +105,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         // Create Mode
         setIsCustomService(false);
         
-        // Smart time logic: if selected date is today, pick next slot. Else 09:00
+        // Smart time logic: if selected date is today, pick next slot. Else 07:00
         const isToday = initialDate && toInputDate(initialDate) === toInputDate(new Date());
-        let defaultTime = isToday ? getSmartDefaultTime() : '09:00';
+        let defaultTime = isToday ? getSmartDefaultTime() : '07:00';
         
         // Validate if defaultTime exists in slots, if not find closest
         if (!TIME_SLOTS.includes(defaultTime)) {
-            defaultTime = '09:00';
+            defaultTime = '07:00';
         }
 
         setFormData({

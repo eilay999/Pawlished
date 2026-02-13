@@ -1,4 +1,4 @@
-﻿import { Appointment, AppointmentStatus, Customer } from './types';
+import { Appointment, AppointmentStatus, Customer } from './types';
 
 export const WEEK_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
