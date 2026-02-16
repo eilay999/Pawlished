@@ -31,7 +31,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     name: 'ישראל ישראלי',
     phone: '050-1234567',
     petName: 'רקס',
-    petType: 'Dog',
+    petType: 'כלב',
     lastVisit: twoMonthsAgo, // LATE
     visitFrequencyWeeks: 4,
     defaultPrice: 200 // Discounted price
@@ -41,7 +41,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     name: 'מיכל כהן',
     phone: '052-7654321',
     petName: 'לונה',
-    petType: 'Dog',
+    petType: 'כלב',
     lastVisit: oneMonthAgo, // Has appointment TODAY
     visitFrequencyWeeks: 4
   },
@@ -50,7 +50,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     name: 'דני לוי',
     phone: '054-1122334',
     petName: 'סימבה',
-    petType: 'Dog',
+    petType: 'כלב',
     lastVisit: twentyThreeDaysAgo, // SOON (Frequency 4 weeks)
     visitFrequencyWeeks: 4
   },
@@ -59,7 +59,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     name: 'נועה (כל שבועיים)',
     phone: '050-5555555',
     petName: 'טופי',
-    petType: 'Dog',
+    petType: 'כלב',
     lastVisit: eightDaysAgo, // SOON (Frequency 2 weeks -> Due in 6 days)
     visitFrequencyWeeks: 2,
     defaultPrice: 120

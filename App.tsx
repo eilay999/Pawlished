@@ -312,7 +312,7 @@ const App: React.FC = () => {
 
     const loadData = async () => {
       if (!supabase) {
-        setLoadError('Supabase env vars are missing. Using local data only.');
+        setLoadError('חסרים משתני סביבה של Supabase. משתמשים בנתונים מקומיים בלבד.');
         const localCustomers = loadCustomersFromStorage();
         setCustomers(mergeNotesIntoCustomers(localCustomers));
         setAppointments(loadAppointmentsFromStorage());
@@ -336,7 +336,7 @@ const App: React.FC = () => {
       if (customersError || appointmentsError) {
         console.error('Supabase load error', customersError || appointmentsError);
         if (isMounted) {
-          setLoadError('Failed to load data from Supabase. Using local data only.');
+          setLoadError('טעינת הנתונים מ‑Supabase נכשלה. משתמשים בנתונים מקומיים בלבד.');
           const localCustomers = loadCustomersFromStorage();
           if (localCustomers.length) {
             setCustomers(mergeNotesIntoCustomers(localCustomers));
@@ -902,7 +902,7 @@ const App: React.FC = () => {
               className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
               aria-label="סגור"
             >
-              ֳ—
+              ײ³ג€”
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -997,7 +997,7 @@ const App: React.FC = () => {
             <div className="p-5 border-b border-gray-100 bg-gray-50">
               <h3 className="text-lg font-bold text-gray-800">הלקוח הגיע?</h3>
               <p className="text-sm text-gray-500 mt-1">
-                {pendingCheck.customer.name} • {pendingCheck.customer.petName} •{' '}
+                {pendingCheck.customer.name} ג€¢ {pendingCheck.customer.petName} ג€¢{' '}
                 {new Date(pendingCheck.appointment.date).toLocaleTimeString('he-IL', {
                   hour: '2-digit',
                   minute: '2-digit'

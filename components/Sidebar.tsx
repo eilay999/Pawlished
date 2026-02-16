@@ -12,9 +12,9 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQuickAdd, onOpenTheme }) => {
   
   const navItems = [
-    { id: 'CALENDAR' as ViewType, label: 'Χ™Χ•ΧΧ', icon: Calendar },
-    { id: 'CUSTOMERS' as ViewType, label: 'ΧΧ§Χ•Χ—Χ•Χª', icon: Users },
-    { id: 'STATS' as ViewType, label: 'Χ“Χ•Χ—Χ•Χª', icon: TrendingUp },
+    { id: 'CALENDAR' as ViewType, label: 'ιεξο', icon: Calendar },
+    { id: 'CUSTOMERS' as ViewType, label: 'μχεηεϊ', icon: Users },
+    { id: 'STATS' as ViewType, label: 'γεηεϊ', icon: TrendingUp },
   ];
 
   return (
@@ -24,7 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQ
         {/* Logo Area */}
         <div className="h-24 flex items-center justify-center border-b border-gray-100 bg-white">
           <div className="flex items-center gap-2 text-2xl font-bold text-gray-800">
-            <span>Χ¤Χ•ΧΧ™Χ©</span>
+            <span>τεμιω</span>
             <Scissors className="w-6 h-6 text-blue-600 transform -scale-x-100" />
           </div>
         </div>
@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQ
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95 transform hover:-translate-y-0.5"
           >
             <Plus className="w-5 h-5" />
-            <span>ΧªΧ•Χ¨ ΧΧ”Χ™Χ¨</span>
+            <span>ϊεψ ξδιψ</span>
           </button>
           {onOpenTheme && (
             <button
@@ -65,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQ
               className="w-full mt-3 bg-white border border-gray-200 text-gray-700 font-medium py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
             >
               <Palette className="w-5 h-5 text-blue-600" />
-              <span>ΧΆΧ™Χ¦Χ•Χ‘</span>
+              <span>ςιφεα</span>
             </button>
           )}
         </div>
@@ -98,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onQ
       <button 
         onClick={onQuickAdd}
         className="md:hidden fixed bottom-20 left-4 z-50 bg-blue-600 text-white p-4 rounded-full shadow-xl shadow-blue-300 active:scale-90 transition-transform flex items-center justify-center"
-        aria-label="ΧªΧ•Χ¨ Χ—Χ“Χ©"
+        aria-label="ϊεψ ηγω"
       >
         <Plus className="w-7 h-7" />
       </button>
