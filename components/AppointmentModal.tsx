@@ -53,6 +53,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   });
   const [customerNotes, setCustomerNotes] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
+  const [isCustomerMenuOpen, setIsCustomerMenuOpen] = useState(false);
 
   const [isCustomService, setIsCustomService] = useState(false);
   const [showError, setShowError] = useState(false);
@@ -61,6 +62,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const timeSliderRef = useRef<HTMLDivElement>(null);
 
   const selectedCustomer = customers.find(c => c.id === formData.customerId);
+  const formatCustomerOption = (c: Customer) => `${c.name} (${c.petName})`;
   const normalizedCustomerSearch = customerSearch.trim().toLowerCase();
   const filteredCustomers = customers.filter(c => {
     if (!normalizedCustomerSearch) return true;
@@ -112,6 +114,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             status: appointment.status,
             notes: appointment.notes || ''
         });
+        const editCustomer = customers.find(c => c.id === appointment.customerId);
+        setCustomerSearch(editCustomer ? formatCustomerOption(editCustomer) : '');
       } else {
         // Create Mode
         setIsCustomService(false);
@@ -141,10 +145,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             if (cust && cust.defaultPrice) {
                  setFormData(prev => ({ ...prev, price: cust.defaultPrice! }));
             }
+            setCustomerSearch(cust ? formatCustomerOption(cust) : '');
+        } else {
+            setCustomerSearch('');
         }
       }
       setShowError(false);
-      setCustomerSearch('');
+      setIsCustomerMenuOpen(false);
       
       // Scroll to selected time in slider after render
       setTimeout(() => {
@@ -178,11 +185,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
           newPrice = SERVICE_PRICES[formData.service] || 0;
       }
 
-      setFormData({
-          ...formData,
+      setFormData(prev => ({
+          ...prev,
           customerId: newCustomerId,
           price: newPrice
-      });
+      }));
       setShowError(false);
   };
 
@@ -291,41 +298,71 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             <label className="block text-sm font-medium text-gray-700">
                 לקוח <span className="text-red-500">*</span>
             </label>
-            <div className="flex gap-2">
-                <div className="flex-1 space-y-2">
-                  <div className="relative">
+            <div className="flex gap-2 items-start">
+                <div className="relative flex-1">
                     <Search className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
                     <input
                       type="text"
                       value={customerSearch}
-                      onChange={e => setCustomerSearch(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') e.preventDefault();
+                      onFocus={() => setIsCustomerMenuOpen(true)}
+                      onBlur={() => {
+                        setTimeout(() => setIsCustomerMenuOpen(false), 120);
                       }}
-                      className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                      placeholder="חפש לקוח לפי שם / טלפון / חיה..."
+                      onChange={e => {
+                        const nextValue = e.target.value;
+                        setCustomerSearch(nextValue);
+                        setIsCustomerMenuOpen(true);
+                        if (formData.customerId) {
+                          const currentLabel = selectedCustomer ? formatCustomerOption(selectedCustomer) : '';
+                          if (nextValue !== currentLabel) {
+                            setFormData(prev => ({ ...prev, customerId: '' }));
+                          }
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (customerOptions.length === 1) {
+                            const only = customerOptions[0];
+                            handleCustomerChange(only.id);
+                            setCustomerSearch(formatCustomerOption(only));
+                            setIsCustomerMenuOpen(false);
+                          }
+                        }
+                      }}
+                      className={`w-full pr-10 pl-3 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${showError && !formData.customerId ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                      placeholder="חפש ובחר לקוח..."
                     />
-                  </div>
 
-                  <div className="relative">
-                    <User className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
-                    <select
-                      required
-                      className={`w-full pr-10 pl-3 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none ${showError && !formData.customerId ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                      value={formData.customerId}
-                      onChange={e => handleCustomerChange(e.target.value)}
-                    >
-                      <option value="">
-                        {customerOptions.length ? 'בחר לקוח מהרשימה...' : 'לא נמצאו לקוחות'}
-                      </option>
-                      {customerOptions.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.petName})
-                        </option>
-                      ))}
-                    </select>
+                    <User className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+
+                    {isCustomerMenuOpen && (
+                      <div className="absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                        {customerOptions.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-gray-500">לא נמצאו לקוחות</div>
+                        ) : (
+                          customerOptions.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                handleCustomerChange(c.id);
+                                setCustomerSearch(formatCustomerOption(c));
+                                setIsCustomerMenuOpen(false);
+                              }}
+                              className={`w-full text-right px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
+                                formData.customerId === c.id ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'
+                              }`}
+                            >
+                              <div>{c.name}</div>
+                              <div className="text-xs text-gray-500">{c.petName} • {c.phone}</div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
                 {!isEditMode && (
                     <button 
                         type="button"
