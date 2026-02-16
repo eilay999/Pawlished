@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Clock, Scissors, User, CircleDollarSign, Plus, Phone, Dog, History, AlertCircle, PenLine, List, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, Clock, Scissors, User, CircleDollarSign, Plus, Phone, Dog, History, AlertCircle, PenLine, List, Trash2, AlertTriangle, CheckCircle2, Search } from 'lucide-react';
 import { Customer, Appointment, AppointmentStatus } from '../types';
 import { SERVICE_PRICES } from '../constants';
 
@@ -52,6 +52,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     notes: ''
   });
   const [customerNotes, setCustomerNotes] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
 
   const [isCustomService, setIsCustomService] = useState(false);
   const [showError, setShowError] = useState(false);
@@ -60,6 +61,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const timeSliderRef = useRef<HTMLDivElement>(null);
 
   const selectedCustomer = customers.find(c => c.id === formData.customerId);
+  const normalizedCustomerSearch = customerSearch.trim().toLowerCase();
+  const filteredCustomers = customers.filter(c => {
+    if (!normalizedCustomerSearch) return true;
+    const haystack = `${c.name} ${c.petName} ${c.phone} ${c.petType}`.toLowerCase();
+    return haystack.includes(normalizedCustomerSearch);
+  });
+  const customerOptions =
+    selectedCustomer && !filteredCustomers.some(c => c.id === selectedCustomer.id)
+      ? [selectedCustomer, ...filteredCustomers]
+      : filteredCustomers;
 
   const toInputDate = (date: Date) => {
     const d = new Date(date);
@@ -133,6 +144,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         }
       }
       setShowError(false);
+      setCustomerSearch('');
       
       // Scroll to selected time in slider after render
       setTimeout(() => {
@@ -280,19 +292,39 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 לקוח <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <User className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
-                  <select
-                    required
-                    className={`w-full pr-10 pl-3 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none ${showError && !formData.customerId ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                    value={formData.customerId}
-                    onChange={e => handleCustomerChange(e.target.value)}
-                  >
-                    <option value="">בחר לקוח מהרשימה...</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.petName})</option>
-                    ))}
-                  </select>
+                <div className="flex-1 space-y-2">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={customerSearch}
+                      onChange={e => setCustomerSearch(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') e.preventDefault();
+                      }}
+                      className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      placeholder="חפש לקוח לפי שם / טלפון / חיה..."
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <User className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
+                    <select
+                      required
+                      className={`w-full pr-10 pl-3 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white appearance-none ${showError && !formData.customerId ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                      value={formData.customerId}
+                      onChange={e => handleCustomerChange(e.target.value)}
+                    >
+                      <option value="">
+                        {customerOptions.length ? 'בחר לקוח מהרשימה...' : 'לא נמצאו לקוחות'}
+                      </option>
+                      {customerOptions.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.petName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 {!isEditMode && (
                     <button 
