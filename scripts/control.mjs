@@ -7,7 +7,7 @@ const args = process.argv.slice(3);
 const isWin = process.platform === "win32";
 
 const NPX = isWin ? "npx.cmd" : "npx";
-const SUPABASE = isWin ? "supabase.exe" : "supabase";
+const SUPABASE_GLOBAL = isWin ? "supabase.exe" : "supabase";
 
 const LOCAL_ENV_KEYS = [
   "VITE_SUPABASE_URL",
@@ -45,10 +45,14 @@ const fileEnv = {
   ...readDotEnv(".env.local"),
 };
 
+function useShellFor(bin) {
+  return isWin && /\.(cmd|bat)$/i.test(bin);
+}
+
 function run(bin, runArgs, options = {}) {
   const result = spawnSync(bin, runArgs, {
     stdio: "inherit",
-    shell: false,
+    shell: useShellFor(bin),
     ...options,
   });
 
@@ -62,10 +66,39 @@ function run(bin, runArgs, options = {}) {
   }
 }
 
+function commandExists(bin, runArgs = ["--version"]) {
+  const result = spawnSync(bin, runArgs, {
+    stdio: "ignore",
+    shell: useShellFor(bin),
+  });
+
+  if (result.error) return false;
+  return result.status === 0;
+}
+
+function resolveSupabaseCommand() {
+  if (commandExists(SUPABASE_GLOBAL)) {
+    return { bin: SUPABASE_GLOBAL, prefix: [], source: "global" };
+  }
+
+  // Fallback: run Supabase CLI through npx without global install.
+  return { bin: NPX, prefix: ["supabase"], source: "npx" };
+}
+
+const SUPABASE_CMD = resolveSupabaseCommand();
+
+function runSupabase(runArgs) {
+  run(SUPABASE_CMD.bin, [...SUPABASE_CMD.prefix, ...runArgs]);
+}
+
+function getSupabaseOutput(runArgs) {
+  return getOutput(SUPABASE_CMD.bin, [...SUPABASE_CMD.prefix, ...runArgs]);
+}
+
 function getOutput(bin, runArgs) {
   const result = spawnSync(bin, runArgs, {
     stdio: ["ignore", "pipe", "pipe"],
-    shell: false,
+    shell: useShellFor(bin),
   });
 
   if (result.error) {
@@ -92,6 +125,8 @@ function envStatus(key) {
 
 function printStatus() {
   console.log("=== Control Status ===");
+  console.log("");
+  console.log(`Supabase CLI source: ${SUPABASE_CMD.source}`);
   console.log("");
 
   console.log("Local env (.env.local):");
@@ -156,16 +191,16 @@ switch (command) {
   }
   case "supabase:link": {
     const projectRef = ensureProjectRef();
-    run(SUPABASE, ["link", "--project-ref", projectRef]);
+    runSupabase(["link", "--project-ref", projectRef]);
     break;
   }
   case "supabase:push": {
-    run(SUPABASE, ["db", "push"]);
+    runSupabase(["db", "push"]);
     break;
   }
   case "supabase:types": {
     const outputPath = args[0] || "types/supabase.generated.ts";
-    const output = getOutput(SUPABASE, ["gen", "types", "typescript", "--linked"]);
+    const output = getSupabaseOutput(["gen", "types", "typescript", "--linked"]);
     ensureDirForFile(outputPath);
     fs.writeFileSync(outputPath, output, "utf8");
     console.log(`Wrote ${outputPath}`);
