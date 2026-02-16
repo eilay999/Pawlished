@@ -6,7 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ops:status": "node scripts/control.mjs status",
+    "vercel:pull": "node scripts/control.mjs vercel:pull production",
+    "vercel:deploy": "node scripts/control.mjs vercel:deploy",
+    "vercel:logs": "node scripts/control.mjs vercel:logs",
+    "vercel:env:ls": "node scripts/control.mjs vercel:env:ls",
+    "supabase:link": "node scripts/control.mjs supabase:link",
+    "supabase:push": "node scripts/control.mjs supabase:push",
+    "supabase:types": "node scripts/control.mjs supabase:types types/supabase.generated.ts"
   },
   "dependencies": {
     "react": "^19.2.3",
