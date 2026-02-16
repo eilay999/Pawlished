@@ -44,12 +44,12 @@ export const ThemePanel: React.FC<ThemePanelProps> = ({ isOpen, onClose }) => {
         <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
           <div className="flex items-center gap-2 text-gray-800 font-bold">
             <Palette className="w-5 h-5 text-blue-600" />
-            ςιφεα εφαςιν
+            ΧΆΧ™Χ¦Χ•Χ‘ Χ•Χ¦Χ‘ΧΆΧ™Χ
           </div>
           <button
             onClick={onClose}
             className="p-1 rounded-full hover:bg-gray-200 text-gray-500"
-            aria-label="ρβεψ"
+            aria-label="Χ΅Χ’Χ•Χ¨"
           >
             <X className="w-5 h-5" />
           </button>
@@ -58,7 +58,7 @@ export const ThemePanel: React.FC<ThemePanelProps> = ({ isOpen, onClose }) => {
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-1 gap-4">
             <label className="flex items-center justify-between gap-3 text-sm font-medium text-gray-700">
-              φας ψΰωι
+              Χ¦Χ‘ΧΆ Χ¨ΧΧ©Χ™
               <input
                 type="color"
                 value={theme.primary}
@@ -68,7 +68,7 @@ export const ThemePanel: React.FC<ThemePanelProps> = ({ isOpen, onClose }) => {
             </label>
 
             <label className="flex items-center justify-between gap-3 text-sm font-medium text-gray-700">
-              φας ξωπι (ιψεχ/γβω)
+              Χ¦Χ‘ΧΆ ΧΧ©Χ Χ™ (Χ™Χ¨Χ•Χ§/Χ“Χ’Χ©)
               <input
                 type="color"
                 value={theme.accent}
@@ -78,7 +78,7 @@ export const ThemePanel: React.FC<ThemePanelProps> = ({ isOpen, onClose }) => {
             </label>
 
             <label className="flex items-center justify-between gap-3 text-sm font-medium text-gray-700">
-              φας ψχς λμμι
+              Χ¦Χ‘ΧΆ Χ¨Χ§ΧΆ Χ›ΧΧΧ™
               <input
                 type="color"
                 value={theme.background}
@@ -89,7 +89,7 @@ export const ThemePanel: React.FC<ThemePanelProps> = ({ isOpen, onClose }) => {
           </div>
 
           <div className="rounded-xl border border-gray-200 p-3 text-xs text-gray-600 bg-gray-50">
-            θιτ: ΰηψι ωιπει φαςιν ΰτωψ μμηευ ςμ "ωξιψδ" λγι μωξεψ μξλωιψ.
+            ΧΧ™Χ¤: ΧΧ—Χ¨Χ™ Χ©Χ™Χ Χ•Χ™ Χ¦Χ‘ΧΆΧ™Χ ΧΧ¤Χ©Χ¨ ΧΧΧ—Χ•Χ¥ ΧΆΧ "Χ©ΧΧ™Χ¨Χ”" Χ›Χ“Χ™ ΧΧ©ΧΧ•Χ¨ ΧΧΧ›Χ©Χ™Χ¨.
           </div>
         </div>
 
@@ -100,14 +100,14 @@ export const ThemePanel: React.FC<ThemePanelProps> = ({ isOpen, onClose }) => {
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
           >
             <RotateCcw className="w-4 h-4" />
-            ΰιτερ
+            ΧΧ™Χ¤Χ•Χ΅
           </button>
           <button
             type="button"
             onClick={handleSave}
             className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
           >
-            ωξιψδ
+            Χ©ΧΧ™Χ¨Χ”
           </button>
         </div>
       </div>

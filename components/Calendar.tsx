@@ -53,7 +53,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     const customer = customers.find(c => c.id === appt.customerId);
     const petType = (customer?.petType || '').toLowerCase();
     if (!petType) return true;
-    if (petType.includes('ηϊεμ') || petType.includes('cat')) return false;
+    if (petType.includes('Χ—ΧªΧ•Χ') || petType.includes('cat')) return false;
     return true;
   }).length;
 
@@ -209,7 +209,7 @@ export const Calendar: React.FC<CalendarProps> = ({
              
              {/* Today's Date Indicator */}
              <div className="hidden md:flex flex-col border-r-2 border-gray-100 pr-4 mr-2">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">διεν</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Χ”Χ™Χ•Χ</span>
                 <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
                      <span>{todayGregorian}</span>
                 </div>
@@ -222,7 +222,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 disabled={loadingAi}
              >
                 <Sparkles className="w-4 h-4" />
-                {loadingAi ? 'ξπϊη...' : 'πιϊεη ιεξι'}
+                {loadingAi ? 'ΧΧ ΧªΧ—...' : 'Χ Χ™ΧªΧ•Χ— Χ™Χ•ΧΧ™'}
              </button>
         </div>
 
@@ -238,7 +238,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 onClick={handleToday}
                 className="px-3 py-1 hover:bg-white hover:shadow-sm text-gray-600 hover:text-gray-900 text-sm font-bold rounded-lg transition-all"
             >
-                διεν
+                Χ”Χ™Χ•Χ
             </button>
             <button 
                 onClick={handlePrevMonth}
@@ -251,9 +251,9 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* AI Analysis Result */}
       <div className="hidden md:flex mx-3 md:mx-4 mt-1.5 md:mt-2 mb-1.5 md:mb-2 bg-green-50 text-green-800 text-[11px] border border-green-100 px-3 py-1.5 rounded-xl items-center justify-between shrink-0">
-        <span className="font-bold">ριλεν ωαεςι: {weeklyDogCount}/{weeklyGoal} λμαιν</span>
+        <span className="font-bold">Χ΅Χ™Χ›Χ•Χ Χ©Χ‘Χ•ΧΆΧ™: {weeklyDogCount}/{weeklyGoal} Χ›ΧΧ‘Χ™Χ</span>
         {weeklyDogCount >= weeklyGoal && (
-          <span className="bg-green-600 text-white px-2 py-0.5 rounded-full text-[10px]">ξφειο</span>
+          <span className="bg-green-600 text-white px-2 py-0.5 rounded-full text-[10px]">ΧΧ¦Χ•Χ™Χ</span>
         )}
       </div>
       {aiAnalysis && (
@@ -321,7 +321,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                   onDayAddAppointment(cell.date);
                                 }}
                                 className="flex items-center justify-center"
-                                aria-label="δερσ ϊεψ"
+                                aria-label="Χ”Χ•Χ΅Χ£ ΧªΧ•Χ¨"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
@@ -347,7 +347,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                       {uniqueCustomerCount > 0 && (
                         <div className="hidden sm:flex justify-end mb-1">
                           <div className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
-                            {uniqueCustomerCount} μχεηεϊ
+                            {uniqueCustomerCount} ΧΧ§Χ•Χ—Χ•Χª
                           </div>
                         </div>
                       )}
@@ -367,7 +367,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                 : isCompleted
                                 ? 'bg-green-50 border-green-200 text-green-700'
                                 : 'bg-blue-50 border-blue-200 text-blue-700';
-                              const fullNameLabel = customer ? customer.name : 'μχεη μΰ ιγες';
+                              const fullNameLabel = customer ? customer.name : 'ΧΧ§Χ•Χ— ΧΧ Χ™Χ“Χ•ΧΆ';
                               const shortNameLabel = fullNameLabel.split(' ')[0] || fullNameLabel;
 
                               const chipClass = `calendar-event flex items-center gap-1 h-4 sm:h-5 text-[8px] sm:text-[8px] leading-tight px-0.5 sm:px-1 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none ${statusClasses}`;
@@ -390,10 +390,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                                     draggable
                                     onDragStart={(evt) => handleDragStart(evt, e.id)}
                                     onDragEnd={handleDragEnd}
-                                    title="βψεψ μδζζδ"
-                                    aria-label="βψεψ μδζζδ"
+                                    title="Χ’Χ¨Χ•Χ¨ ΧΧ”Χ–Χ–Χ”"
+                                    aria-label="Χ’Χ¨Χ•Χ¨ ΧΧ”Χ–Χ–Χ”"
                                   >
-                                    β‹®β‹®
+                                    ::
                                   </span>
                                   <span className="truncate font-medium sm:hidden">{shortNameLabel}</span>
                                   <span className="truncate font-medium hidden sm:inline">{fullNameLabel}</span>
@@ -421,7 +421,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                               </span>
                                               <div className="text-right truncate flex-1">
                                                   <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
-                                                       {customer ? customer.name : 'μχεη μΰ ιγες'}
+                                                       {customer ? customer.name : 'ΧΧ§Χ•Χ— ΧΧ Χ™Χ“Χ•ΧΆ'}
                                                       {customer?.petName && <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>}
                                                   </span>
                                                   <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>

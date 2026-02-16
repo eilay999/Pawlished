@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Palette } from 'lucide-react';
+import { Palette, X } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { NotificationsPanel } from './components/NotificationsPanel';
 import { Calendar } from './components/Calendar';
@@ -902,7 +902,7 @@ const App: React.FC = () => {
               className="p-2 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
               aria-label="סגור"
             >
-              ײ³ג€”
+              <X className="w-5 h-5" />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -997,7 +997,7 @@ const App: React.FC = () => {
             <div className="p-5 border-b border-gray-100 bg-gray-50">
               <h3 className="text-lg font-bold text-gray-800">הלקוח הגיע?</h3>
               <p className="text-sm text-gray-500 mt-1">
-                {pendingCheck.customer.name} ג€¢ {pendingCheck.customer.petName} ג€¢{' '}
+                {pendingCheck.customer.name} - {pendingCheck.customer.petName} -{' '}
                 {new Date(pendingCheck.appointment.date).toLocaleTimeString('he-IL', {
                   hour: '2-digit',
                   minute: '2-digit'
