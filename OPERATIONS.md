@@ -8,7 +8,7 @@ This project now includes repeatable control commands for deployment and databas
 2. Fill all required values.
 3. Login CLIs:
    - `npx vercel login`
-   - `supabase login`
+   - `npx supabase@latest login`
 4. Link Supabase project:
    - set `SUPABASE_PROJECT_REF` in your shell or `.env.local`
    - run `npm run supabase:link`
@@ -49,11 +49,20 @@ npm run supabase:types
 - `VITE_GEMINI_API_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `WHATSAPP_TOKEN`
-- `WHATSAPP_PHONE_NUMBER_ID`
-- `WHATSAPP_OTP_TEMPLATE`
-- `WHATSAPP_CONFIRM_TEMPLATE`
 - `OTP_SECRET`
+- `MESSAGING_CHANNEL` (`auto` | `sms` | `whatsapp`)
+
+Messaging provider requirements:
+
+- If channel resolves to WhatsApp:
+  - `WHATSAPP_TOKEN`
+  - `WHATSAPP_PHONE_NUMBER_ID`
+  - `WHATSAPP_OTP_TEMPLATE`
+  - `WHATSAPP_CONFIRM_TEMPLATE`
+- If channel resolves to SMS (Twilio):
+  - `TWILIO_ACCOUNT_SID`
+  - `TWILIO_AUTH_TOKEN`
+  - `TWILIO_FROM_NUMBER`
 
 Optional:
 

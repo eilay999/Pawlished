@@ -6,7 +6,7 @@ const command = process.argv[2];
 const args = process.argv.slice(3);
 const isWin = process.platform === "win32";
 
-const NPX = isWin ? "npx.cmd" : "npx";
+const NPX = "npx";
 const SUPABASE_GLOBAL = isWin ? "supabase.exe" : "supabase";
 
 const LOCAL_ENV_KEYS = [
@@ -18,6 +18,10 @@ const LOCAL_ENV_KEYS = [
 const SERVER_ENV_KEYS = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
+  "MESSAGING_CHANNEL",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_FROM_NUMBER",
   "WHATSAPP_TOKEN",
   "WHATSAPP_PHONE_NUMBER_ID",
   "WHATSAPP_OTP_TEMPLATE",
@@ -46,7 +50,7 @@ const fileEnv = {
 };
 
 function useShellFor(bin) {
-  return isWin && /\.(cmd|bat)$/i.test(bin);
+  return isWin && bin === NPX;
 }
 
 function run(bin, runArgs, options = {}) {
@@ -81,8 +85,8 @@ function resolveSupabaseCommand() {
     return { bin: SUPABASE_GLOBAL, prefix: [], source: "global" };
   }
 
-  // Fallback: run Supabase CLI through npx without global install.
-  return { bin: NPX, prefix: ["supabase"], source: "npx" };
+  // Fallback: run latest Supabase CLI through npx without global install.
+  return { bin: NPX, prefix: ["supabase@latest"], source: "npx" };
 }
 
 const SUPABASE_CMD = resolveSupabaseCommand();

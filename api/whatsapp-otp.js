@@ -4,10 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+const messagingChannel = (process.env.MESSAGING_CHANNEL || 'auto').toLowerCase();
+
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const otpTemplate = process.env.WHATSAPP_OTP_TEMPLATE;
 const otpLang = process.env.WHATSAPP_OTP_LANG || 'he';
+
+const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
+
 const otpSecret = process.env.OTP_SECRET || 'change_me';
 const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
@@ -22,6 +30,15 @@ const toWhatsAppNumber = (value = '') => {
   return digits;
 };
 
+const toE164 = (value = '') => {
+  const digits = normalizeDigits(value);
+  if (!digits) return '';
+  if (digits.startsWith('972')) return `+${digits}`;
+  if (digits.startsWith('0')) return `+972${digits.slice(1)}`;
+  if (value.startsWith('+')) return value;
+  return `+${digits}`;
+};
+
 const getSupabaseClient = () => {
   if (!supabaseUrl || !supabaseServiceKey) return null;
   return createClient(supabaseUrl, supabaseServiceKey, {
@@ -32,11 +49,18 @@ const getSupabaseClient = () => {
 const hashCode = (code) =>
   crypto.createHash('sha256').update(`${code}:${otpSecret}`).digest('hex');
 
-const sendTemplate = async (to, templateName, lang, params) => {
-  if (!whatsappToken || !whatsappPhoneId) {
-    throw new Error('Missing WhatsApp credentials.');
-  }
+const canUseWhatsApp = () => Boolean(whatsappToken && whatsappPhoneId && otpTemplate);
+const canUseSms = () => Boolean(twilioAccountSid && twilioAuthToken && twilioFromNumber);
 
+const resolveChannel = () => {
+  if (messagingChannel === 'sms') return 'sms';
+  if (messagingChannel === 'whatsapp') return 'whatsapp';
+  if (canUseWhatsApp()) return 'whatsapp';
+  if (canUseSms()) return 'sms';
+  return 'none';
+};
+
+const sendWhatsAppTemplate = async (to, templateName, lang, params) => {
   const body = {
     messaging_product: 'whatsapp',
     to,
@@ -68,6 +92,32 @@ const sendTemplate = async (to, templateName, lang, params) => {
   }
 };
 
+const sendSmsMessage = async (to, bodyText) => {
+  const auth = Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64');
+  const payload = new URLSearchParams({
+    To: to,
+    From: twilioFromNumber,
+    Body: bodyText
+  });
+
+  const resp = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: payload.toString()
+    }
+  );
+
+  if (!resp.ok) {
+    const errorBody = await resp.text();
+    throw new Error(`Twilio SMS API error: ${errorBody}`);
+  }
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -86,7 +136,8 @@ export default async function handler(req, res) {
     }
 
     const waPhone = toWhatsAppNumber(phone);
-    if (!waPhone) {
+    const smsPhone = toE164(phone);
+    if (!waPhone || !smsPhone) {
       res.status(400).json({ error: 'Invalid phone' });
       return;
     }
@@ -98,8 +149,22 @@ export default async function handler(req, res) {
     }
 
     if (action === 'send') {
-      if (!otpTemplate) {
-        res.status(500).json({ error: 'Missing WHATSAPP_OTP_TEMPLATE' });
+      const channel = resolveChannel();
+      if (channel === 'none') {
+        res.status(500).json({
+          error:
+            'No messaging provider configured. Configure WhatsApp template vars or Twilio SMS vars.'
+        });
+        return;
+      }
+
+      if (channel === 'whatsapp' && !canUseWhatsApp()) {
+        res.status(500).json({ error: 'Missing WHATSAPP_OTP_TEMPLATE or WhatsApp credentials' });
+        return;
+      }
+
+      if (channel === 'sms' && !canUseSms()) {
+        res.status(500).json({ error: 'Missing Twilio SMS credentials.' });
         return;
       }
 
@@ -145,8 +210,14 @@ export default async function handler(req, res) {
         return;
       }
 
-      await sendTemplate(waPhone, otpTemplate, otpLang, [otpCode]);
-      res.status(200).json({ ok: true });
+      if (channel === 'sms') {
+        await sendSmsMessage(smsPhone, `קוד האימות שלך: ${otpCode}. תקף ל-${otpTtlMin} דקות.`);
+        res.status(200).json({ ok: true, channel: 'sms' });
+        return;
+      }
+
+      await sendWhatsAppTemplate(waPhone, otpTemplate, otpLang, [otpCode]);
+      res.status(200).json({ ok: true, channel: 'whatsapp' });
       return;
     }
 
