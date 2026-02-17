@@ -222,8 +222,7 @@ const App: React.FC = () => {
       return false;
     }
   });
-  const autosaveReadyRef = useRef(false);
-  const autosaveTimerRef = useRef<number | null>(null);
+  const localMutationSuppressUntilRef = useRef(0);
   const realtimeRefreshTimerRef = useRef<number | null>(null);
   const customersRef = useRef<Customer[]>([]);
   const appointmentsRef = useRef<Appointment[]>([]);
@@ -267,9 +266,13 @@ const App: React.FC = () => {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  const loadDataFromCloud = useCallback(async () => {
+  const loadDataFromCloud = useCallback(
+    async (source: 'initial' | 'manual' | 'realtime' = 'manual') => {
+    if (source === 'realtime' && Date.now() < localMutationSuppressUntilRef.current) {
+      return true;
+    }
+
     if (!supabase) {
-      autosaveReadyRef.current = false;
       setCloudStatus('offline');
       setLoadError('אין חיבור Supabase בפרויקט. היומן עובד בענן בלבד עד שתוגדר גישה תקינה.');
       return false;
@@ -287,7 +290,6 @@ const App: React.FC = () => {
 
     if (customersError || appointmentsError) {
       console.error('Supabase load error', customersError || appointmentsError);
-      autosaveReadyRef.current = false;
       setCloudStatus('error');
       setLoadError(
         formatSupabaseError(
@@ -321,7 +323,6 @@ const App: React.FC = () => {
       console.error('Supabase tasks load error', tasksError);
     }
 
-    autosaveReadyRef.current = true;
     setCloudStatus('online');
     setLastCloudSyncAt(new Date());
     setLoadError(null);
@@ -330,7 +331,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     setCloudStatus(supabase ? 'connecting' : 'offline');
-    void loadDataFromCloud();
+    void loadDataFromCloud('initial');
   }, [loadDataFromCloud]);
 
   useEffect(() => {
@@ -340,9 +341,15 @@ const App: React.FC = () => {
       if (realtimeRefreshTimerRef.current) {
         window.clearTimeout(realtimeRefreshTimerRef.current);
       }
+      const delay = Math.max(
+        250,
+        localMutationSuppressUntilRef.current > Date.now()
+          ? localMutationSuppressUntilRef.current - Date.now() + 120
+          : 250
+      );
       realtimeRefreshTimerRef.current = window.setTimeout(() => {
-        void loadDataFromCloud();
-      }, 500);
+        void loadDataFromCloud('realtime');
+      }, delay);
     };
 
     const channel = supabase
@@ -377,62 +384,6 @@ const App: React.FC = () => {
     };
   }, [loadDataFromCloud]);
 
-  // Cloud autosave (debounced) for customers and appointments
-  useEffect(() => {
-    if (!supabase) return;
-    if (!autosaveReadyRef.current) return;
-
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current);
-    }
-
-    autosaveTimerRef.current = window.setTimeout(() => {
-      setCloudStatus('syncing');
-
-      const runAutosave = async () => {
-        if (customers.length) {
-          const customersResult = await supabase
-            .from('customers')
-            .upsert(customers.map(mapCustomerToDb));
-          if (customersResult.error) {
-            console.error('Supabase autosave customers error', customersResult.error);
-            setCloudStatus('error');
-            setLoadError(
-              formatSupabaseError('שמירה לענן נכשלה', customersResult.error)
-            );
-            return;
-          }
-        }
-
-        if (appointments.length) {
-          const appointmentsResult = await supabase
-            .from('appointments')
-            .upsert(appointments.map(mapAppointmentToDb));
-          if (appointmentsResult.error) {
-            console.error('Supabase autosave appointments error', appointmentsResult.error);
-            setCloudStatus('error');
-            setLoadError(
-              formatSupabaseError('שמירה לענן נכשלה', appointmentsResult.error)
-            );
-            return;
-          }
-        }
-
-        setCloudStatus('online');
-        setLastCloudSyncAt(new Date());
-        setLoadError(null);
-      };
-
-      void runAutosave();
-    }, 1500);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-      }
-    };
-  }, [customers, appointments]);
-
   useEffect(() => {
     if (pendingCheck) return;
 
@@ -456,13 +407,40 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [appointments, customers, askedAppointmentIds, pendingCheck]);
 
+  const persistCloudMutation = (
+    fallbackMessage: string,
+    writer: () => Promise<{ error: { message?: string | null; code?: string | null } | null }>
+  ) => {
+    if (!supabase) return;
+    void writer()
+      .then(({ error }) => {
+        if (error) {
+          console.error('Supabase mutation error', error);
+          setCloudStatus('error');
+          setLoadError(formatSupabaseError(fallbackMessage, error));
+          return;
+        }
+
+        setCloudStatus('online');
+        setLastCloudSyncAt(new Date());
+        setLoadError(null);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Supabase mutation exception', error);
+        setCloudStatus('error');
+        setLoadError(`${fallbackMessage}: ${message}`);
+      });
+  };
+
   const ensureCloudWritable = () => {
     if (!supabase || cloudStatus === 'offline') {
       setCloudStatus('offline');
       setLoadError('אין חיבור לענן כרגע. שינויים נחסמו עד שחיבור Supabase יחזור.');
-      void loadDataFromCloud();
       return false;
     }
+    localMutationSuppressUntilRef.current = Date.now() + 1500;
+    setCloudStatus('syncing');
     return true;
   };
 
@@ -528,26 +506,16 @@ const App: React.FC = () => {
         }));
       }
 
-      if (updatedAppointment && supabase) {
-        void supabase
-          .from('appointments')
-          .upsert(mapAppointmentToDb(updatedAppointment))
-          .then(({ error }) => {
-            if (error) {
-              console.error('Supabase appointment move error', error);
-            }
-          });
+      if (updatedAppointment) {
+        persistCloudMutation('עדכון תור בענן נכשל', () =>
+          supabase!.from('appointments').upsert(mapAppointmentToDb(updatedAppointment))
+        );
       }
 
-      if (updatedCustomer && supabase) {
-        void supabase
-          .from('customers')
-          .upsert(mapCustomerToDb(updatedCustomer))
-          .then(({ error }) => {
-            if (error) {
-              console.error('Supabase customer update error', error);
-            }
-          });
+      if (updatedCustomer) {
+        persistCloudMutation('עדכון לקוח בענן נכשל', () =>
+          supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+        );
       }
   };
 
@@ -570,15 +538,10 @@ const App: React.FC = () => {
       return updatedCustomer;
     }));
 
-    if (updatedCustomer && supabase) {
-      void supabase
-        .from('customers')
-        .upsert(mapCustomerToDb(updatedCustomer))
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase customer notes update error', error);
-          }
-        });
+    if (updatedCustomer) {
+      persistCloudMutation('עדכון הערות לקוח בענן נכשל', () =>
+        supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+      );
     }
   };
 
@@ -593,13 +556,9 @@ const App: React.FC = () => {
     });
     setIsCustomerModalOpen(false);
 
-    if (supabase) {
-      void supabase.from('customers').upsert(mapCustomerToDb(updatedCustomer)).then(({ error }) => {
-        if (error) {
-          console.error('Supabase customer upsert error', error);
-        }
-      });
-    }
+    persistCloudMutation('שמירת לקוח בענן נכשלה', () =>
+      supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+    );
   };
 
   const handleDeleteCustomer = (customerId: string) => {
@@ -616,27 +575,13 @@ const App: React.FC = () => {
       return next;
     });
 
-    if (supabase) {
-      void supabase
-        .from('appointments')
-        .delete()
-        .eq('customer_id', customerId)
-        .then(({ error: appointmentsError }) => {
-          if (appointmentsError) {
-            console.error('Supabase appointment delete error', appointmentsError);
-          }
-        });
+    persistCloudMutation('מחיקת תורים בענן נכשלה', () =>
+      supabase!.from('appointments').delete().eq('customer_id', customerId)
+    );
 
-      void supabase
-        .from('customers')
-        .delete()
-        .eq('id', customerId)
-        .then(({ error: customersError }) => {
-          if (customersError) {
-            console.error('Supabase customer delete error', customersError);
-          }
-        });
-    }
+    persistCloudMutation('מחיקת לקוח בענן נכשלה', () =>
+      supabase!.from('customers').delete().eq('id', customerId)
+    );
   };
 
   const handleSaveAppointment = (savedAppointment: Appointment) => {
@@ -692,26 +637,14 @@ const App: React.FC = () => {
     setIsAppointmentModalOpen(false);
     setEditingAppointment(null);
 
-    if (supabase) {
-      void supabase
-        .from('appointments')
-        .upsert(mapAppointmentToDb(normalizedAppointment))
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase appointment upsert error', error);
-          }
-        });
-    }
+    persistCloudMutation('שמירת תור בענן נכשלה', () =>
+      supabase!.from('appointments').upsert(mapAppointmentToDb(normalizedAppointment))
+    );
 
-    if (updatedCustomer && supabase) {
-      void supabase
-        .from('customers')
-        .upsert(mapCustomerToDb(updatedCustomer))
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase customer update error', error);
-          }
-        });
+    if (updatedCustomer) {
+      persistCloudMutation('עדכון לקוח בענן נכשל', () =>
+        supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+      );
     }
   };
 
@@ -729,17 +662,9 @@ const App: React.FC = () => {
       setPendingCheck(null);
     }
 
-    if (supabase) {
-      void supabase
-        .from('appointments')
-        .delete()
-        .eq('id', appointmentId)
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase appointment delete error', error);
-          }
-        });
-    }
+    persistCloudMutation('מחיקת תור בענן נכשלה', () =>
+      supabase!.from('appointments').delete().eq('id', appointmentId)
+    );
   };
 
   const handleAddTask = (title: string, startDate: Date) => {
@@ -753,13 +678,9 @@ const App: React.FC = () => {
     };
     setTasks(prev => [newTask, ...prev]);
 
-    if (supabase) {
-      void supabase.from('tasks').insert(mapTaskToDb(newTask)).then(({ error }) => {
-        if (error) {
-          console.error('Supabase task insert error', error);
-        }
-      });
-    }
+    persistCloudMutation('יצירת משימה בענן נכשלה', () =>
+      supabase!.from('tasks').insert(mapTaskToDb(newTask))
+    );
   };
 
   const handleToggleTask = (taskId: string) => {
@@ -773,25 +694,19 @@ const App: React.FC = () => {
       return t;
     }));
 
-    if (updatedTask && supabase) {
-      void supabase.from('tasks').upsert(mapTaskToDb(updatedTask)).then(({ error }) => {
-        if (error) {
-          console.error('Supabase task update error', error);
-        }
-      });
+    if (updatedTask) {
+      persistCloudMutation('עדכון משימה בענן נכשל', () =>
+        supabase!.from('tasks').upsert(mapTaskToDb(updatedTask))
+      );
     }
   };
 
   const handleDeleteTask = (taskId: string) => {
     if (!ensureCloudWritable()) return;
     setTasks(prev => prev.filter(t => t.id !== taskId));
-    if (supabase) {
-      void supabase.from('tasks').delete().eq('id', taskId).then(({ error }) => {
-        if (error) {
-          console.error('Supabase task delete error', error);
-        }
-      });
-    }
+    persistCloudMutation('מחיקת משימה בענן נכשלה', () =>
+      supabase!.from('tasks').delete().eq('id', taskId)
+    );
   };
 
   const handleAdminAccess = (phone: string) => {
