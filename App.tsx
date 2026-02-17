@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Palette, X } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { NotificationsPanel } from './components/NotificationsPanel';
@@ -113,111 +112,60 @@ const isMissingTableError = (message?: string) => {
   return message.includes('relation "tasks" does not exist');
 };
 
-const TASKS_STORAGE_KEY = 'pawlished_tasks';
-const APPOINTMENTS_STORAGE_KEY = 'pawlished_appointments';
-const CUSTOMER_NOTES_KEY = 'pawlished_customer_notes';
-const CUSTOMERS_STORAGE_KEY = 'pawlished_customers';
+const sortById = <T extends { id: string }>(list: T[]): T[] =>
+  [...list].sort((a, b) => a.id.localeCompare(b.id));
 
-const loadCustomerNotesMap = (): Record<string, string> => {
-  try {
-    const raw = localStorage.getItem(CUSTOMER_NOTES_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    return parsed || {};
-  } catch {
-    return {};
-  }
-};
-
-const saveCustomerNotesMap = (notes: Record<string, string>) => {
-  try {
-    localStorage.setItem(CUSTOMER_NOTES_KEY, JSON.stringify(notes));
-  } catch {
-    // ignore storage errors
-  }
-};
-
-const mergeNotesIntoCustomers = (list: Customer[]) => {
-  const notesMap = loadCustomerNotesMap();
-  return list.map(c => {
-    const localNote = notesMap[c.id];
-    if (localNote && !c.notes) {
-      return { ...c, notes: localNote };
-    }
-    return c;
-  });
-};
-
-const loadTasksFromStorage = (): Task[] => {
-  try {
-    const raw = localStorage.getItem(TASKS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Array<{
-      id: string;
-      title: string;
-      status: TaskStatus;
-      createdAt: string;
-      startDate: string;
-    }>;
-    return parsed.map(task => ({
-      ...task,
-      createdAt: new Date(task.createdAt),
-      startDate: new Date(task.startDate)
-    }));
-  } catch {
-    return [];
-  }
-};
-
-const loadCustomersFromStorage = (): Customer[] => {
-  try {
-    const raw = localStorage.getItem(CUSTOMERS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Array<Omit<Customer, 'lastVisit'> & { lastVisit: string }>;
-    return parsed.map(c => ({
+const customersSignature = (list: Customer[]) =>
+  JSON.stringify(
+    sortById(list).map(c => ({
       ...c,
-      lastVisit: new Date(c.lastVisit)
-    }));
-  } catch {
-    return [];
-  }
-};
+      lastVisit: c.lastVisit.toISOString(),
+      defaultPrice: c.defaultPrice ?? null,
+      notes: c.notes ?? null
+    }))
+  );
 
-const loadAppointmentsFromStorage = (): Appointment[] => {
-  try {
-    const raw = localStorage.getItem(APPOINTMENTS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Array<Omit<Appointment, 'date'> & { date: string }>;
-    return parsed.map(a => ({
+const appointmentsSignature = (list: Appointment[]) =>
+  JSON.stringify(
+    sortById(list).map(a => ({
       ...a,
-      date: new Date(a.date)
-    }));
-  } catch {
-    return [];
-  }
-};
+      date: a.date.toISOString(),
+      notes: a.notes ?? null,
+      cancellationFee: a.cancellationFee ?? null
+    }))
+  );
 
-const saveCustomersToStorage = (list: Customer[]) => {
-  try {
-    const payload = list.map(c => ({
-      ...c,
-      lastVisit: c.lastVisit.toISOString()
-    }));
-    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore storage errors
-  }
-};
+const tasksSignature = (list: Task[]) =>
+  JSON.stringify(
+    sortById(list).map(t => ({
+      ...t,
+      createdAt: t.createdAt.toISOString(),
+      startDate: t.startDate.toISOString()
+    }))
+  );
 
-const saveAppointmentsToStorage = (list: Appointment[]) => {
-  try {
-    const payload = list.map(a => ({
-      ...a,
-      date: a.date.toISOString()
-    }));
-    localStorage.setItem(APPOINTMENTS_STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore storage errors
+type CloudSyncStatus = 'connecting' | 'online' | 'syncing' | 'offline' | 'error';
+
+const CLOUD_STATUS_UI: Record<CloudSyncStatus, { label: string; className: string }> = {
+  connecting: {
+    label: 'מתחבר לענן...',
+    className: 'bg-blue-50 text-blue-700 border-blue-200'
+  },
+  online: {
+    label: 'מחובר לענן',
+    className: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  },
+  syncing: {
+    label: 'מסנכרן לענן...',
+    className: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+  },
+  offline: {
+    label: 'מנותק מענן',
+    className: 'bg-amber-50 text-amber-800 border-amber-200'
+  },
+  error: {
+    label: 'שגיאת סנכרון',
+    className: 'bg-rose-50 text-rose-700 border-rose-200'
   }
 };
 
@@ -230,6 +178,10 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>(
+    supabase ? 'connecting' : 'offline'
+  );
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<Date | null>(null);
   const [askedAppointmentIds, setAskedAppointmentIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('pawlished_asked_appt_ids');
@@ -263,8 +215,11 @@ const App: React.FC = () => {
     }
   });
   const autosaveReadyRef = useRef(false);
-  const hasHydratedRef = useRef(false);
   const autosaveTimerRef = useRef<number | null>(null);
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const customersRef = useRef<Customer[]>([]);
+  const appointmentsRef = useRef<Appointment[]>([]);
+  const tasksRef = useRef<Task[]>([]);
   const { isPublicEntry, isForcedPublic } = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const path = window.location.pathname.toLowerCase();
@@ -293,104 +248,121 @@ const App: React.FC = () => {
   }, [askedAppointmentIds]);
 
   useEffect(() => {
-    if (!hasHydratedRef.current) return;
-    const payload = tasks.map(task => ({
-      ...task,
-      createdAt: task.createdAt.toISOString(),
-      startDate: task.startDate.toISOString()
-    }));
-    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(payload));
-  }, [tasks]);
+    customersRef.current = customers;
+  }, [customers]);
 
   useEffect(() => {
-    if (!hasHydratedRef.current) return;
-    saveAppointmentsToStorage(appointments);
+    appointmentsRef.current = appointments;
   }, [appointments]);
 
   useEffect(() => {
-    let isMounted = true;
+    tasksRef.current = tasks;
+  }, [tasks]);
 
-    const loadData = async () => {
-      if (!supabase) {
-        setLoadError('חסרים משתני סביבה של Supabase. משתמשים בנתונים מקומיים בלבד.');
-        const localCustomers = loadCustomersFromStorage();
-        setCustomers(mergeNotesIntoCustomers(localCustomers));
-        setAppointments(loadAppointmentsFromStorage());
-        setTasks(loadTasksFromStorage());
-        hasHydratedRef.current = true;
-        return;
+  const loadDataFromCloud = useCallback(async () => {
+    if (!supabase) {
+      autosaveReadyRef.current = false;
+      setCloudStatus('offline');
+      setLoadError('אין חיבור Supabase בפרויקט. היומן עובד בענן בלבד עד שתוגדר גישה תקינה.');
+      return false;
+    }
+
+    const [customersRes, appointmentsRes, tasksRes] = await Promise.all([
+      supabase.from('customers').select('*').order('id', { ascending: true }),
+      supabase.from('appointments').select('*').order('date', { ascending: true }),
+      supabase.from('tasks').select('*').order('created_at', { ascending: false })
+    ]);
+
+    const customersError = customersRes.error;
+    const appointmentsError = appointmentsRes.error;
+    const tasksError = tasksRes.error;
+
+    if (customersError || appointmentsError) {
+      console.error('Supabase load error', customersError || appointmentsError);
+      autosaveReadyRef.current = false;
+      setCloudStatus('error');
+      setLoadError('טעינת היומן מהענן נכשלה. בדוק הרשאות/חיבור Supabase.');
+      return false;
+    }
+
+    const mappedCustomers = (customersRes.data || []).map(mapCustomerFromDb);
+    const mappedAppointments = (appointmentsRes.data || []).map(mapAppointmentFromDb);
+    const mappedTasks =
+      tasksError && isMissingTableError(tasksError.message)
+        ? []
+        : (tasksRes.data || []).map(mapTaskFromDb);
+
+    if (customersSignature(customersRef.current) !== customersSignature(mappedCustomers)) {
+      setCustomers(mappedCustomers);
+    }
+
+    if (appointmentsSignature(appointmentsRef.current) !== appointmentsSignature(mappedAppointments)) {
+      setAppointments(mappedAppointments);
+    }
+
+    if (tasksSignature(tasksRef.current) !== tasksSignature(mappedTasks)) {
+      setTasks(mappedTasks);
+    }
+
+    if (tasksError && !isMissingTableError(tasksError.message)) {
+      console.error('Supabase tasks load error', tasksError);
+    }
+
+    autosaveReadyRef.current = true;
+    setCloudStatus('online');
+    setLastCloudSyncAt(new Date());
+    setLoadError(null);
+    return true;
+  }, []);
+
+  useEffect(() => {
+    setCloudStatus(supabase ? 'connecting' : 'offline');
+    void loadDataFromCloud();
+  }, [loadDataFromCloud]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const scheduleRefresh = () => {
+      if (realtimeRefreshTimerRef.current) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
       }
-
-      const { data: customersData, error: customersError } = await supabase
-        .from('customers')
-        .select('*');
-
-      const { data: appointmentsData, error: appointmentsError } = await supabase
-        .from('appointments')
-        .select('*');
-
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select('*');
-
-      if (customersError || appointmentsError) {
-        console.error('Supabase load error', customersError || appointmentsError);
-        if (isMounted) {
-          setLoadError('טעינת הנתונים מ‑Supabase נכשלה. משתמשים בנתונים מקומיים בלבד.');
-          const localCustomers = loadCustomersFromStorage();
-          if (localCustomers.length) {
-            setCustomers(mergeNotesIntoCustomers(localCustomers));
-          }
-          setAppointments(loadAppointmentsFromStorage());
-          setTasks(loadTasksFromStorage());
-          hasHydratedRef.current = true;
-        }
-        return;
-      }
-
-      const mappedCustomers = mergeNotesIntoCustomers((customersData || []).map(mapCustomerFromDb));
-      const mappedAppointments = (appointmentsData || []).map(mapAppointmentFromDb);
-      const mappedTasks = (tasksData || []).map(mapTaskFromDb);
-      const localAppointments = loadAppointmentsFromStorage();
-      const localTasks = loadTasksFromStorage();
-      const mergedAppointments = mappedAppointments.length === 0 && localAppointments.length > 0
-        ? localAppointments
-        : [
-            ...mappedAppointments,
-            ...localAppointments.filter(localAppt => !mappedAppointments.some(a => a.id === localAppt.id))
-          ];
-      const mergedTasks = mappedTasks.length === 0 && localTasks.length > 0
-        ? localTasks
-        : [
-            ...mappedTasks,
-            ...localTasks.filter(localTask => !mappedTasks.some(t => t.id === localTask.id))
-          ];
-
-      if (isMounted) {
-        setCustomers(mappedCustomers);
-        saveCustomersToStorage(mappedCustomers);
-        setAppointments(mergedAppointments);
-        saveAppointmentsToStorage(mergedAppointments);
-        if (tasksError && !isMissingTableError(tasksError.message)) {
-          console.error('Supabase tasks load error', tasksError);
-          setTasks(loadTasksFromStorage());
-        } else {
-          setTasks(mergedTasks);
-        }
-        hasHydratedRef.current = true;
-      }
-
-      if (isMounted) {
-        autosaveReadyRef.current = true;
-      }
+      realtimeRefreshTimerRef.current = window.setTimeout(() => {
+        void loadDataFromCloud();
+      }, 500);
     };
 
-    void loadData();
+    const channel = supabase
+      .channel('pawlished-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customers' },
+        scheduleRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'appointments' },
+        scheduleRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        scheduleRefresh
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setCloudStatus('error');
+          setLoadError('Realtime בענן נותק. רענן דף אם הסנכרון נעצר.');
+        }
+      });
 
     return () => {
-      isMounted = false;
+      if (realtimeRefreshTimerRef.current) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
+      }
+      void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadDataFromCloud]);
 
   // Cloud autosave (debounced) for customers and appointments
   useEffect(() => {
@@ -402,23 +374,31 @@ const App: React.FC = () => {
     }
 
     autosaveTimerRef.current = window.setTimeout(() => {
-      void supabase
-        .from('customers')
-        .upsert(customers.map(mapCustomerToDb))
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase autosave customers error', error);
-          }
-        });
+      setCloudStatus('syncing');
 
-      void supabase
-        .from('appointments')
-        .upsert(appointments.map(mapAppointmentToDb))
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase autosave appointments error', error);
-          }
-        });
+      const customersWrite = customers.length
+        ? supabase.from('customers').upsert(customers.map(mapCustomerToDb))
+        : Promise.resolve({ error: null });
+
+      const appointmentsWrite = appointments.length
+        ? supabase.from('appointments').upsert(appointments.map(mapAppointmentToDb))
+        : Promise.resolve({ error: null });
+
+      void Promise.all([customersWrite, appointmentsWrite]).then(([customersResult, appointmentsResult]) => {
+        if (customersResult.error || appointmentsResult.error) {
+          console.error(
+            'Supabase autosave error',
+            customersResult.error || appointmentsResult.error
+          );
+          setCloudStatus('error');
+          setLoadError('שמירה לענן נכשלה. בדוק חיבור/הרשאות Supabase.');
+          return;
+        }
+
+        setCloudStatus('online');
+        setLastCloudSyncAt(new Date());
+        setLoadError(null);
+      });
     }, 1500);
 
     return () => {
@@ -451,6 +431,19 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [appointments, customers, askedAppointmentIds, pendingCheck]);
 
+  const ensureCloudWritable = () => {
+    if (!supabase || cloudStatus === 'offline') {
+      setCloudStatus('offline');
+      setLoadError('אין חיבור לענן כרגע. שינויים נחסמו עד שחיבור Supabase יחזור.');
+      return false;
+    }
+    if (cloudStatus === 'error') {
+      setLoadError('יש שגיאת סנכרון. רענן את הדף לפני עדכון נוסף.');
+      return false;
+    }
+    return true;
+  };
+
   const handleDayClick = (date: Date) => {
     setSelectedDateForAppointment(date);
     setPreSelectedCustomerId(undefined); 
@@ -468,6 +461,7 @@ const App: React.FC = () => {
   };
 
   const handleMoveAppointment = (appointmentId: string, newDate: Date) => {
+      if (!ensureCloudWritable()) return;
       let updatedAppointment: Appointment | null = null;
       let updatedCustomer: Customer | null = null;
       setAppointments(prev => prev.map(appt => {
@@ -546,20 +540,13 @@ const App: React.FC = () => {
   };
 
   const handleUpdateCustomerNotes = (customerId: string, notes: string) => {
+    if (!ensureCloudWritable()) return;
     let updatedCustomer: Customer | null = null;
     setCustomers(prev => prev.map(c => {
       if (c.id !== customerId) return c;
       updatedCustomer = { ...c, notes: notes || undefined };
       return updatedCustomer;
     }));
-
-    const notesMap = loadCustomerNotesMap();
-    if (notes && notes.trim()) {
-      notesMap[customerId] = notes.trim();
-    } else if (notesMap[customerId]) {
-      delete notesMap[customerId];
-    }
-    saveCustomerNotesMap(notesMap);
 
     if (updatedCustomer && supabase) {
       void supabase
@@ -574,24 +561,13 @@ const App: React.FC = () => {
   };
 
   const handleSaveCustomer = (updatedCustomer: Customer) => {
-    const notesMap = loadCustomerNotesMap();
-    if (updatedCustomer.notes && updatedCustomer.notes.trim()) {
-      notesMap[updatedCustomer.id] = updatedCustomer.notes.trim();
-    } else if (notesMap[updatedCustomer.id]) {
-      delete notesMap[updatedCustomer.id];
-    }
-    saveCustomerNotesMap(notesMap);
-
+    if (!ensureCloudWritable()) return;
     setCustomers(prev => {
       const exists = prev.find(c => c.id === updatedCustomer.id);
-      let next: Customer[];
       if (exists) {
-        next = prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c);
-      } else {
-        next = [...prev, updatedCustomer];
+        return prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c);
       }
-      saveCustomersToStorage(next);
-      return next;
+      return [...prev, updatedCustomer];
     });
     setIsCustomerModalOpen(false);
 
@@ -605,16 +581,8 @@ const App: React.FC = () => {
   };
 
   const handleDeleteCustomer = (customerId: string) => {
-    const notesMap = loadCustomerNotesMap();
-    if (notesMap[customerId]) {
-      delete notesMap[customerId];
-      saveCustomerNotesMap(notesMap);
-    }
-    setCustomers(prev => {
-      const next = prev.filter(c => c.id !== customerId);
-      saveCustomersToStorage(next);
-      return next;
-    });
+    if (!ensureCloudWritable()) return;
+    setCustomers(prev => prev.filter(c => c.id !== customerId));
     setAppointments(prev => prev.filter(a => a.customerId !== customerId));
     setIsCustomerModalOpen(false);
     setEditingCustomer(null);
@@ -650,6 +618,7 @@ const App: React.FC = () => {
   };
 
   const handleSaveAppointment = (savedAppointment: Appointment) => {
+    if (!ensureCloudWritable()) return;
     const existingAppointment = appointments.find(a => a.id === savedAppointment.id);
     let normalizedAppointment: Appointment = { ...savedAppointment };
 
@@ -725,6 +694,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteAppointment = (appointmentId: string) => {
+    if (!ensureCloudWritable()) return;
     setAppointments(prev => prev.filter(a => a.id !== appointmentId));
     setIsAppointmentModalOpen(false);
     setEditingAppointment(null);
@@ -751,6 +721,7 @@ const App: React.FC = () => {
   };
 
   const handleAddTask = (title: string, startDate: Date) => {
+    if (!ensureCloudWritable()) return;
     const newTask: Task = {
       id: Math.random().toString(36).substr(2, 9),
       title,
@@ -770,6 +741,7 @@ const App: React.FC = () => {
   };
 
   const handleToggleTask = (taskId: string) => {
+    if (!ensureCloudWritable()) return;
     let updatedTask: Task | null = null;
     setTasks(prev => prev.map(t => {
       if (t.id === taskId) {
@@ -789,6 +761,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteTask = (taskId: string) => {
+    if (!ensureCloudWritable()) return;
     setTasks(prev => prev.filter(t => t.id !== taskId));
     if (supabase) {
       void supabase.from('tasks').delete().eq('id', taskId).then(({ error }) => {
@@ -810,20 +783,34 @@ const App: React.FC = () => {
     setCurrentView('CALENDAR');
   };
 
+  const cloudStatusBadge = (
+    <div
+      className={`fixed top-3 right-3 z-[210] border text-xs px-3 py-1.5 rounded-full shadow-sm backdrop-blur ${CLOUD_STATUS_UI[cloudStatus].className}`}
+      title={lastCloudSyncAt ? `עודכן לאחרונה: ${lastCloudSyncAt.toLocaleTimeString('he-IL')}` : undefined}
+    >
+      {CLOUD_STATUS_UI[cloudStatus].label}
+      {lastCloudSyncAt && cloudStatus === 'online' ? ` • ${lastCloudSyncAt.toLocaleTimeString('he-IL')}` : ''}
+    </div>
+  );
+
   if (isPublicBooking) {
     return (
-      <PublicBooking
-        appointments={appointments}
-        customers={customers}
-        onSaveCustomer={handleSaveCustomer}
-        onSaveAppointment={handleSaveAppointment}
-        onAdminAccess={handleAdminAccess}
-      />
+      <>
+        {cloudStatusBadge}
+        <PublicBooking
+          appointments={appointments}
+          customers={customers}
+          onSaveCustomer={handleSaveCustomer}
+          onSaveAppointment={handleSaveAppointment}
+          onAdminAccess={handleAdminAccess}
+        />
+      </>
     );
   }
 
   return (
     <div className="flex h-screen w-full bg-gradient-to-br from-blue-50 via-white to-emerald-100/60 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
+      {cloudStatusBadge}
       {loadError && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[200] bg-amber-50 text-amber-900 border border-amber-200 text-xs px-3 py-1.5 rounded-full shadow-sm">
           {loadError}
