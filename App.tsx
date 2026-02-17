@@ -144,6 +144,14 @@ const tasksSignature = (list: Task[]) =>
     }))
   );
 
+const formatSupabaseError = (
+  fallback: string,
+  error?: { message?: string | null; code?: string | null } | null
+) => {
+  const details = error?.message ? error.message : '';
+  return details ? `${fallback}: ${details}` : fallback;
+};
+
 type CloudSyncStatus = 'connecting' | 'online' | 'syncing' | 'offline' | 'error';
 
 const CLOUD_STATUS_UI: Record<CloudSyncStatus, { label: string; className: string }> = {
@@ -281,7 +289,12 @@ const App: React.FC = () => {
       console.error('Supabase load error', customersError || appointmentsError);
       autosaveReadyRef.current = false;
       setCloudStatus('error');
-      setLoadError('טעינת היומן מהענן נכשלה. בדוק הרשאות/חיבור Supabase.');
+      setLoadError(
+        formatSupabaseError(
+          'טעינת היומן מהענן נכשלה. בדוק הרשאות/חיבור Supabase',
+          customersError || appointmentsError
+        )
+      );
       return false;
     }
 
@@ -376,29 +389,41 @@ const App: React.FC = () => {
     autosaveTimerRef.current = window.setTimeout(() => {
       setCloudStatus('syncing');
 
-      const customersWrite = customers.length
-        ? supabase.from('customers').upsert(customers.map(mapCustomerToDb))
-        : Promise.resolve({ error: null });
+      const runAutosave = async () => {
+        if (customers.length) {
+          const customersResult = await supabase
+            .from('customers')
+            .upsert(customers.map(mapCustomerToDb));
+          if (customersResult.error) {
+            console.error('Supabase autosave customers error', customersResult.error);
+            setCloudStatus('error');
+            setLoadError(
+              formatSupabaseError('שמירה לענן נכשלה', customersResult.error)
+            );
+            return;
+          }
+        }
 
-      const appointmentsWrite = appointments.length
-        ? supabase.from('appointments').upsert(appointments.map(mapAppointmentToDb))
-        : Promise.resolve({ error: null });
-
-      void Promise.all([customersWrite, appointmentsWrite]).then(([customersResult, appointmentsResult]) => {
-        if (customersResult.error || appointmentsResult.error) {
-          console.error(
-            'Supabase autosave error',
-            customersResult.error || appointmentsResult.error
-          );
-          setCloudStatus('error');
-          setLoadError('שמירה לענן נכשלה. בדוק חיבור/הרשאות Supabase.');
-          return;
+        if (appointments.length) {
+          const appointmentsResult = await supabase
+            .from('appointments')
+            .upsert(appointments.map(mapAppointmentToDb));
+          if (appointmentsResult.error) {
+            console.error('Supabase autosave appointments error', appointmentsResult.error);
+            setCloudStatus('error');
+            setLoadError(
+              formatSupabaseError('שמירה לענן נכשלה', appointmentsResult.error)
+            );
+            return;
+          }
         }
 
         setCloudStatus('online');
         setLastCloudSyncAt(new Date());
         setLoadError(null);
-      });
+      };
+
+      void runAutosave();
     }, 1500);
 
     return () => {
@@ -435,10 +460,7 @@ const App: React.FC = () => {
     if (!supabase || cloudStatus === 'offline') {
       setCloudStatus('offline');
       setLoadError('אין חיבור לענן כרגע. שינויים נחסמו עד שחיבור Supabase יחזור.');
-      return false;
-    }
-    if (cloudStatus === 'error') {
-      setLoadError('יש שגיאת סנכרון. רענן את הדף לפני עדכון נוסף.');
+      void loadDataFromCloud();
       return false;
     }
     return true;
@@ -784,13 +806,25 @@ const App: React.FC = () => {
   };
 
   const cloudStatusBadge = (
-    <div
+    <button
+      type="button"
+      onClick={() => {
+        if (cloudStatus === 'error' || cloudStatus === 'offline') {
+          void loadDataFromCloud();
+        }
+      }}
       className={`fixed top-3 right-3 z-[210] border text-xs px-3 py-1.5 rounded-full shadow-sm backdrop-blur ${CLOUD_STATUS_UI[cloudStatus].className}`}
-      title={lastCloudSyncAt ? `עודכן לאחרונה: ${lastCloudSyncAt.toLocaleTimeString('he-IL')}` : undefined}
+      title={
+        cloudStatus === 'error' || cloudStatus === 'offline'
+          ? 'לחץ לניסיון חיבור מחדש'
+          : lastCloudSyncAt
+            ? `עודכן לאחרונה: ${lastCloudSyncAt.toLocaleTimeString('he-IL')}`
+            : undefined
+      }
     >
       {CLOUD_STATUS_UI[cloudStatus].label}
       {lastCloudSyncAt && cloudStatus === 'online' ? ` • ${lastCloudSyncAt.toLocaleTimeString('he-IL')}` : ''}
-    </div>
+    </button>
   );
 
   if (isPublicBooking) {
