@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, ChevronLeft, Sparkles, Plus, Clock } from 'lucide-react';
 import { WEEK_DAYS } from '../constants';
 import { Appointment, AppointmentStatus, Customer, DayCell } from '../types';
@@ -33,6 +33,10 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [loadingAi, setLoadingAi] = useState(false);
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchEndXRef = useRef<number | null>(null);
+  const touchEndYRef = useRef<number | null>(null);
 
   // Today's Date info for Header
   const today = new Date();
@@ -141,6 +145,54 @@ export const Calendar: React.FC<CalendarProps> = ({
     onDateChange(new Date());
   };
 
+  const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth < 768;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isMobileViewport()) return;
+    const touch = e.changedTouches[0];
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
+    touchEndXRef.current = touch.clientX;
+    touchEndYRef.current = touch.clientY;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isMobileViewport()) return;
+    const touch = e.changedTouches[0];
+    touchEndXRef.current = touch.clientX;
+    touchEndYRef.current = touch.clientY;
+  };
+
+  const handleTouchEnd = () => {
+    if (!isMobileViewport()) return;
+    if (
+      touchStartXRef.current === null ||
+      touchEndXRef.current === null ||
+      touchStartYRef.current === null ||
+      touchEndYRef.current === null
+    ) {
+      return;
+    }
+
+    const deltaX = touchEndXRef.current - touchStartXRef.current;
+    const deltaY = touchEndYRef.current - touchStartYRef.current;
+    const minHorizontalSwipe = 56;
+    const horizontalDominance = Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
+
+    if (Math.abs(deltaX) >= minHorizontalSwipe && horizontalDominance) {
+      if (deltaX < 0) {
+        handleNextMonth();
+      } else {
+        handlePrevMonth();
+      }
+    }
+
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    touchEndXRef.current = null;
+    touchEndYRef.current = null;
+  };
+
   const handleAiAnalyze = async () => {
     setLoadingAi(true);
     const result = await analyzeSchedule(currentDate, appointments, customers);
@@ -200,7 +252,12 @@ export const Calendar: React.FC<CalendarProps> = ({
   const visibleWeeks = weeks.filter(week => week.some(cell => cell.isCurrentMonth));
 
   return (
-    <div className="flex-1 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
+    <div
+      className="flex-1 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm touch-pan-y"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Calendar Header */}
       <div className="px-3 md:px-5 py-2 md:py-3 flex items-center justify-between bg-gradient-to-r from-blue-50 via-white to-emerald-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         
