@@ -37,6 +37,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   const touchStartYRef = useRef<number | null>(null);
   const touchEndXRef = useRef<number | null>(null);
   const touchEndYRef = useRef<number | null>(null);
+  const suppressClickRef = useRef(false);
 
   // Today's Date info for Header
   const today = new Date();
@@ -147,9 +148,17 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth < 768;
 
+  const resetSwipeTracking = () => {
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    touchEndXRef.current = null;
+    touchEndYRef.current = null;
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!isMobileViewport()) return;
-    const touch = e.changedTouches[0];
+    const touch = e.touches[0];
+    suppressClickRef.current = false;
     touchStartXRef.current = touch.clientX;
     touchStartYRef.current = touch.clientY;
     touchEndXRef.current = touch.clientX;
@@ -158,28 +167,38 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isMobileViewport()) return;
-    const touch = e.changedTouches[0];
+    const touch = e.touches[0];
     touchEndXRef.current = touch.clientX;
     touchEndYRef.current = touch.clientY;
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
     if (!isMobileViewport()) return;
     if (
       touchStartXRef.current === null ||
-      touchEndXRef.current === null ||
       touchStartYRef.current === null ||
-      touchEndYRef.current === null
+      e.changedTouches.length === 0
     ) {
+      resetSwipeTracking();
+      return;
+    }
+
+    const touch = e.changedTouches[0];
+    touchEndXRef.current = touch.clientX;
+    touchEndYRef.current = touch.clientY;
+
+    if (touchEndXRef.current === null || touchEndYRef.current === null) {
+      resetSwipeTracking();
       return;
     }
 
     const deltaX = touchEndXRef.current - touchStartXRef.current;
     const deltaY = touchEndYRef.current - touchStartYRef.current;
-    const minHorizontalSwipe = 56;
-    const horizontalDominance = Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
+    const minHorizontalSwipe = 40;
+    const horizontalDominance = Math.abs(deltaX) > Math.abs(deltaY) + 12;
 
     if (Math.abs(deltaX) >= minHorizontalSwipe && horizontalDominance) {
+      suppressClickRef.current = true;
       if (deltaX < 0) {
         handleNextMonth();
       } else {
@@ -187,10 +206,18 @@ export const Calendar: React.FC<CalendarProps> = ({
       }
     }
 
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-    touchEndXRef.current = null;
-    touchEndYRef.current = null;
+    resetSwipeTracking();
+  };
+
+  const handleTouchCancel = () => {
+    resetSwipeTracking();
+  };
+
+  const handleClickCapture = (e: React.MouseEvent) => {
+    if (!suppressClickRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    suppressClickRef.current = false;
   };
 
   const handleAiAnalyze = async () => {
@@ -253,10 +280,12 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div
-      className="flex-1 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm touch-pan-y"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      className="calendar-swipe-surface flex-1 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm"
+      onClickCapture={handleClickCapture}
+      onTouchStartCapture={handleTouchStart}
+      onTouchMoveCapture={handleTouchMove}
+      onTouchEndCapture={handleTouchEnd}
+      onTouchCancelCapture={handleTouchCancel}
     >
       {/* Calendar Header */}
       <div className="px-3 md:px-5 py-2 md:py-3 flex items-center justify-between bg-gradient-to-r from-blue-50 via-white to-emerald-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">

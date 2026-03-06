@@ -46,6 +46,11 @@ body {
   user-select: none;
 }
 
+.calendar-swipe-surface {
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+}
+
 /* Custom scrollbar for cleaner look */
 ::-webkit-scrollbar {
   width: 6px;
