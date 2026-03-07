@@ -132,12 +132,29 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     }
   };
 
-  const handleSendConfirmation = async (dateLabel: string, timeLabel: string) => {
+  const handleSendConfirmation = async (
+    dateLabel: string,
+    timeLabel: string,
+    managerApproval?: {
+      requested: boolean;
+      customerName?: string;
+      petName?: string;
+      customerPhone?: string;
+    }
+  ) => {
     try {
       await fetch('/api/whatsapp-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: verifiedPhone, date: dateLabel, time: timeLabel })
+        body: JSON.stringify({
+          phone: verifiedPhone,
+          date: dateLabel,
+          time: timeLabel,
+          requestManagerApproval: managerApproval?.requested ?? false,
+          customerName: managerApproval?.customerName,
+          petName: managerApproval?.petName,
+          customerPhone: managerApproval?.customerPhone
+        })
       });
     } catch {
       // ignore confirmation errors
@@ -165,6 +182,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       return;
     }
 
+    const isNewCustomer = !existingCustomer;
     let customer = existingCustomer;
     if (!customer) {
       customer = {
@@ -175,6 +193,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
         petType: newCustomer.petType.trim(),
         lastVisit: new Date(),
         visitFrequencyWeeks: 4,
+        lifecycleStatus: 'ACTIVE',
         defaultPrice: undefined
       };
       onSaveCustomer(customer);
@@ -190,10 +209,20 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       price: customer.defaultPrice ?? 0
     };
 
+    const managerApproval = isNewCustomer
+      ? {
+          requested: true,
+          customerName: customer.name,
+          petName: customer.petName,
+          customerPhone: customer.phone
+        }
+      : undefined;
+
     onSaveAppointment(appointment);
     handleSendConfirmation(
       slotDate.toLocaleDateString('he-IL'),
-      selectedSlot.time
+      selectedSlot.time,
+      managerApproval
     );
     setStep('DONE');
   };

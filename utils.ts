@@ -1,6 +1,6 @@
 import { Customer, Appointment, AppointmentStatus } from './types';
 
-export type CalculatedStatus = 'LATE' | 'SOON' | 'SCHEDULED' | 'OK';
+export type CalculatedStatus = 'LATE' | 'SOON' | 'SCHEDULED' | 'OK' | 'ON_HOLD';
 
 export interface CustomerAnalysis {
   status: CalculatedStatus;
@@ -18,7 +18,7 @@ export const analyzeCustomerStatus = (customer: Customer, appointments: Appointm
   const safeLastVisit = new Date(customer.lastVisit);
   if (isNaN(safeLastVisit.getTime())) {
     return {
-      status: 'OK',
+      status: customer.lifecycleStatus === 'ON_HOLD' ? 'ON_HOLD' : 'OK',
       dueDate: today,
       daysDiff: 0,
       lastEffectiveVisit: today,
@@ -68,7 +68,9 @@ export const analyzeCustomerStatus = (customer: Customer, appointments: Appointm
   // 6. Resolve customer status
   let status: CalculatedStatus = 'OK';
 
-  if (futureAppt) {
+  if (customer.lifecycleStatus === 'ON_HOLD') {
+    status = 'ON_HOLD';
+  } else if (futureAppt) {
     status = 'SCHEDULED';
   } else {
     if (daysDiff < 0) {

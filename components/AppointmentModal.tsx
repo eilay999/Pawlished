@@ -62,7 +62,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const timeSliderRef = useRef<HTMLDivElement>(null);
 
   const selectedCustomer = customers.find(c => c.id === formData.customerId);
-  const formatCustomerOption = (c: Customer) => `${c.name} (${c.petName})`;
+  const formatCustomerOption = (c: Customer) =>
+    `${c.name} (${c.petName})${c.lifecycleStatus === 'ON_HOLD' ? ' • בהמתנה' : ''}`;
   const normalizedCustomerSearch = customerSearch.trim().toLowerCase();
   const filteredCustomers = customers.filter(c => {
     if (!normalizedCustomerSearch) return true;

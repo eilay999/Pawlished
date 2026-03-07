@@ -6,6 +6,8 @@ export enum AppointmentStatus {
   LATE = 'LATE'
 }
 
+export type CustomerLifecycleStatus = 'ACTIVE' | 'ON_HOLD';
+
 export interface Customer {
   id: string;
   name: string;
@@ -14,6 +16,7 @@ export interface Customer {
   petType: string; // e.g., 'Dog', 'Cat'
   lastVisit: Date; // The date of their last grooming
   visitFrequencyWeeks: number; // How often they should come (e.g., 4 weeks)
+  lifecycleStatus: CustomerLifecycleStatus;
   defaultPrice?: number; // Optional fixed price for this specific customer
   notes?: string; // Optional notes per customer
 }

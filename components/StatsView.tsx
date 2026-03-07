@@ -64,9 +64,14 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
   const lateCustomers = analyzedCustomers.filter(c => c.status === 'LATE');
   const soonCustomers = analyzedCustomers.filter(c => c.status === 'SOON');
   const okCustomers = analyzedCustomers.filter(c => c.status === 'OK');
+  const onHoldCustomers = analyzedCustomers.filter(c => c.status === 'ON_HOLD');
 
   const potentialLoss = lateCustomers.length * 200; // Estimated average price
   const totalCustomers = customers.length;
+  const trackedCustomersTotal = Math.max(
+    1,
+    scheduledCustomers.length + lateCustomers.length + soonCustomers.length + okCustomers.length
+  );
 
   // Chart Segments
   const chartSegments = [
@@ -79,13 +84,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
   let currentPos = 0;
   const gradientParts = chartSegments.map(seg => {
     const start = currentPos;
-    const percentage = totalCustomers > 0 ? (seg.count / totalCustomers) * 100 : 0;
+    const percentage = (seg.count / trackedCustomersTotal) * 100;
     currentPos += percentage;
     return `${seg.color} ${start}% ${currentPos}%`;
   }).join(', ');
 
   const conicStyle = {
-    background: totalCustomers > 0 ? `conic-gradient(${gradientParts})` : '#f3f4f6',
+    background: trackedCustomersTotal > 0 ? `conic-gradient(${gradientParts})` : '#f3f4f6',
   };
 
   return (
@@ -211,7 +216,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
           <div className="flex flex-col md:flex-row items-center justify-around gap-8">
             <div className="relative w-48 h-48 rounded-full shadow-inner shrink-0" style={conicStyle}>
               <div className="absolute inset-0 m-8 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
-                <span className="text-3xl font-bold text-gray-800">{Math.round((scheduledCustomers.length / (totalCustomers || 1)) * 100)}%</span>
+                <span className="text-3xl font-bold text-gray-800">{Math.round((scheduledCustomers.length / trackedCustomersTotal) * 100)}%</span>
                 <span className="text-xs text-gray-500 font-medium">עם תור עתידי</span>
               </div>
             </div>

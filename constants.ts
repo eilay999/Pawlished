@@ -34,6 +34,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     petType: 'כלב',
     lastVisit: twoMonthsAgo, // LATE
     visitFrequencyWeeks: 4,
+    lifecycleStatus: 'ACTIVE',
     defaultPrice: 200 // Discounted price
   },
   {
@@ -43,7 +44,8 @@ export const MOCK_CUSTOMERS: Customer[] = [
     petName: 'לונה',
     petType: 'כלב',
     lastVisit: oneMonthAgo, // Has appointment TODAY
-    visitFrequencyWeeks: 4
+    visitFrequencyWeeks: 4,
+    lifecycleStatus: 'ACTIVE'
   },
   {
     id: 'c3',
@@ -52,7 +54,8 @@ export const MOCK_CUSTOMERS: Customer[] = [
     petName: 'סימבה',
     petType: 'כלב',
     lastVisit: twentyThreeDaysAgo, // SOON (Frequency 4 weeks)
-    visitFrequencyWeeks: 4
+    visitFrequencyWeeks: 4,
+    lifecycleStatus: 'ACTIVE'
   },
   {
     id: 'c_test',
@@ -62,6 +65,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
     petType: 'כלב',
     lastVisit: eightDaysAgo, // SOON (Frequency 2 weeks -> Due in 6 days)
     visitFrequencyWeeks: 2,
+    lifecycleStatus: 'ACTIVE',
     defaultPrice: 120
   }
 ];

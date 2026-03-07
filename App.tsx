@@ -22,6 +22,7 @@ type DbCustomer = {
   pet_type: string;
   last_visit: string;
   visit_frequency_weeks: number;
+  lifecycle_status: 'ACTIVE' | 'ON_HOLD' | null;
   default_price: number | null;
   notes?: string | null;
 };
@@ -53,6 +54,7 @@ const mapCustomerFromDb = (row: DbCustomer): Customer => ({
   petType: row.pet_type,
   lastVisit: new Date(row.last_visit),
   visitFrequencyWeeks: row.visit_frequency_weeks,
+  lifecycleStatus: row.lifecycle_status ?? 'ACTIVE',
   defaultPrice: row.default_price ?? undefined,
   notes: row.notes ?? undefined,
 });
@@ -76,6 +78,7 @@ const mapCustomerToDb = (customer: Customer): DbCustomer => ({
   pet_type: customer.petType,
   last_visit: customer.lastVisit.toISOString(),
   visit_frequency_weeks: customer.visitFrequencyWeeks,
+  lifecycle_status: customer.lifecycleStatus,
   default_price: customer.defaultPrice ?? null,
   notes: customer.notes ?? null,
 });
@@ -120,6 +123,7 @@ const customersSignature = (list: Customer[]) =>
     sortById(list).map(c => ({
       ...c,
       lastVisit: c.lastVisit.toISOString(),
+      lifecycleStatus: c.lifecycleStatus,
       defaultPrice: c.defaultPrice ?? null,
       notes: c.notes ?? null
     }))
@@ -176,6 +180,8 @@ const CLOUD_STATUS_UI: Record<CloudSyncStatus, { label: string; className: strin
     className: 'bg-rose-50 text-rose-700 border-rose-200'
   }
 };
+
+const AUTO_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('CALENDAR');
@@ -267,8 +273,8 @@ const App: React.FC = () => {
   }, [tasks]);
 
   const loadDataFromCloud = useCallback(
-    async (source: 'initial' | 'manual' | 'realtime' = 'manual') => {
-    if (source === 'realtime' && Date.now() < localMutationSuppressUntilRef.current) {
+    async (source: 'initial' | 'manual' | 'realtime' | 'auto' = 'manual') => {
+    if ((source === 'realtime' || source === 'auto') && Date.now() < localMutationSuppressUntilRef.current) {
       return true;
     }
 
@@ -381,6 +387,29 @@ const App: React.FC = () => {
         window.clearTimeout(realtimeRefreshTimerRef.current);
       }
       void supabase.removeChannel(channel);
+    };
+  }, [loadDataFromCloud]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const runAutoRefresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      void loadDataFromCloud('auto');
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        runAutoRefresh();
+      }
+    };
+
+    const timer = window.setInterval(runAutoRefresh, AUTO_REFRESH_INTERVAL_MS);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [loadDataFromCloud]);
 
@@ -617,21 +646,32 @@ const App: React.FC = () => {
     });
 
     let updatedCustomer: Customer | null = null;
-    if (normalizedAppointment.status === AppointmentStatus.COMPLETED) {
-      const existingCustomer = customers.find(c => c.id === normalizedAppointment.customerId);
-      if (existingCustomer) {
+    const existingCustomer = customers.find(c => c.id === normalizedAppointment.customerId);
+    if (existingCustomer) {
+      let nextCustomer = existingCustomer;
+      let customerChanged = false;
+
+      if (
+        existingCustomer.lifecycleStatus === 'ON_HOLD' &&
+        normalizedAppointment.status !== AppointmentStatus.CANCELLED
+      ) {
+        nextCustomer = { ...nextCustomer, lifecycleStatus: 'ACTIVE' };
+        customerChanged = true;
+      }
+
+      if (normalizedAppointment.status === AppointmentStatus.COMPLETED) {
         const newDate = new Date(normalizedAppointment.date);
         const currentLastVisit = new Date(existingCustomer.lastVisit);
         if (newDate > currentLastVisit) {
-          updatedCustomer = { ...existingCustomer, lastVisit: newDate };
+          nextCustomer = { ...nextCustomer, lastVisit: newDate };
+          customerChanged = true;
         }
       }
-      setCustomers(prev => prev.map(c => {
-        if (updatedCustomer && c.id === updatedCustomer.id) {
-          return updatedCustomer;
-        }
-        return c;
-      }));
+
+      updatedCustomer = customerChanged ? nextCustomer : null;
+      if (updatedCustomer) {
+        setCustomers(prev => prev.map(c => (c.id === updatedCustomer!.id ? updatedCustomer! : c)));
+      }
     }
 
     setIsAppointmentModalOpen(false);
@@ -728,7 +768,7 @@ const App: React.FC = () => {
           void loadDataFromCloud();
         }
       }}
-      className={`fixed top-3 right-3 z-[210] border text-xs px-3 py-1.5 rounded-full shadow-sm backdrop-blur ${CLOUD_STATUS_UI[cloudStatus].className}`}
+      className={`fixed right-3 bottom-20 md:top-3 md:bottom-auto z-[210] border text-xs px-3 py-1.5 rounded-full shadow-sm backdrop-blur ${CLOUD_STATUS_UI[cloudStatus].className}`}
       title={
         cloudStatus === 'error' || cloudStatus === 'offline'
           ? 'לחץ לניסיון חיבור מחדש'
@@ -758,7 +798,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-blue-50 via-white to-emerald-100/60 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
+    <div className="flex h-screen w-full bg-gradient-to-br from-slate-50 via-white to-gray-100 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
       {cloudStatusBadge}
       {loadError && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[200] bg-amber-50 text-amber-900 border border-amber-200 text-xs px-3 py-1.5 rounded-full shadow-sm">

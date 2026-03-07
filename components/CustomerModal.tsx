@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Save, Dog, Calendar, User, Phone, Clock, CircleDollarSign, Trash2 } from 'lucide-react';
-import { Customer } from '../types';
+import { Customer, CustomerLifecycleStatus } from '../types';
 
 interface CustomerModalProps {
   customer?: Customer | null;
@@ -31,6 +31,23 @@ const PET_TYPES = [
   'מלטז'
 ];
 
+const LIFECYCLE_OPTIONS: Array<{
+  value: CustomerLifecycleStatus;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'ACTIVE',
+    label: 'פעיל',
+    description: 'ממשיך להופיע בהתראות, באיחורים ובמעקב השוטף.'
+  },
+  {
+    value: 'ON_HOLD',
+    label: 'בהמתנה',
+    description: 'לא יופיע בלקוחות מאחרים, מתקרבים או בתזכורות.'
+  }
+];
+
 export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Partial<Customer>>({
     name: '',
@@ -38,6 +55,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
     petName: '',
     petType: '',
     visitFrequencyWeeks: 4,
+    lifecycleStatus: 'ACTIVE',
     lastVisit: new Date(),
     defaultPrice: undefined,
     notes: ''
@@ -57,6 +75,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
         petName: '',
         petType: '',
         visitFrequencyWeeks: 4,
+        lifecycleStatus: 'ACTIVE',
         lastVisit: new Date(),
         defaultPrice: undefined,
         notes: ''
@@ -78,6 +97,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
       petName: formData.petName || '',
       petType: formData.petType?.trim() || '',
       visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
+      lifecycleStatus: formData.lifecycleStatus || 'ACTIVE',
       lastVisit: formData.lastVisit || new Date(),
       defaultPrice: formData.defaultPrice,
       notes: formData.notes?.trim() || undefined
@@ -225,6 +245,31 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
               value={formData.notes || ''}
               onChange={e => setFormData({ ...formData, notes: e.target.value })}
             />
+          </div>
+
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">סטטוס מעקב</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {LIFECYCLE_OPTIONS.map(option => {
+                const isSelected = (formData.lifecycleStatus || 'ACTIVE') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, lifecycleStatus: option.value })}
+                    className={`
+                      rounded-2xl border p-4 text-right transition-all
+                      ${isSelected
+                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-blue-200 hover:bg-gray-50'}
+                    `}
+                  >
+                    <div className="font-bold text-gray-800 mb-1">{option.label}</div>
+                    <div className="text-xs leading-5 text-gray-500">{option.description}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="border-t border-gray-100 pt-4 space-y-4 bg-blue-50 -mx-6 px-6 py-6 mt-2">

@@ -22,6 +22,10 @@ const whatsappToken = process.env.WHATSAPP_TOKEN;
 const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const confirmTemplate = process.env.WHATSAPP_CONFIRM_TEMPLATE;
 const confirmLang = process.env.WHATSAPP_CONFIRM_LANG || 'he';
+const managerApprovalPhones = (process.env.MANAGER_APPROVAL_PHONES || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
 
 const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
@@ -29,6 +33,14 @@ const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
 
 const canUseWhatsApp = () => Boolean(whatsappToken && whatsappPhoneId && confirmTemplate);
 const canUseSms = () => Boolean(twilioAccountSid && twilioAuthToken && twilioFromNumber);
+
+const resolveChannel = () => {
+  if (messagingChannel === 'sms') return 'sms';
+  if (messagingChannel === 'whatsapp') return 'whatsapp';
+  if (canUseWhatsApp()) return 'whatsapp';
+  if (canUseSms()) return 'sms';
+  return 'none';
+};
 
 const sendWhatsAppTemplate = async (to, templateName, lang, params) => {
   const body = {
@@ -88,6 +100,43 @@ const sendSmsMessage = async (to, bodyText) => {
   }
 };
 
+const sendManagerApprovalRequest = async ({ date, time, customerName, petName, customerPhone }) => {
+  if (managerApprovalPhones.length === 0) {
+    return {
+      requested: true,
+      sent: false,
+      reason: 'No MANAGER_APPROVAL_PHONES configured.'
+    };
+  }
+
+  const safeCustomerName = (customerName || '').trim() || 'לקוח חדש';
+  const safePetName = (petName || '').trim() || '-';
+  const safeCustomerPhone = (customerPhone || '').trim() || '-';
+  const smsBody =
+    `בקשת אישור לתור חדש: ${date} בשעה ${time}. ` +
+    `לקוח: ${safeCustomerName}. חיית מחמד: ${safePetName}. טלפון: ${safeCustomerPhone}.`;
+
+  if (!canUseSms()) {
+    return {
+      requested: true,
+      sent: false,
+      reason: 'Missing Twilio SMS credentials for manager approval.'
+    };
+  }
+
+  const phones = managerApprovalPhones.map((value) => toE164(value)).filter(Boolean);
+  if (phones.length === 0) {
+    return {
+      requested: true,
+      sent: false,
+      reason: 'Manager approval phones are invalid.'
+    };
+  }
+
+  await Promise.all(phones.map((value) => sendSmsMessage(value, smsBody)));
+  return { requested: true, sent: true, channel: 'sms' };
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -95,22 +144,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { phone, date, time } = req.body || {};
+    const {
+      phone,
+      date,
+      time,
+      requestManagerApproval,
+      customerName,
+      petName,
+      customerPhone
+    } = req.body || {};
     if (!phone || !date || !time) {
       res.status(400).json({ error: 'Missing phone/date/time' });
       return;
     }
 
-    const channel =
-      messagingChannel === 'sms'
-        ? 'sms'
-        : messagingChannel === 'whatsapp'
-          ? 'whatsapp'
-          : canUseWhatsApp()
-            ? 'whatsapp'
-            : canUseSms()
-              ? 'sms'
-              : 'none';
+    const channel = resolveChannel();
 
     if (channel === 'none') {
       res.status(500).json({
@@ -131,14 +179,47 @@ export default async function handler(req, res) {
         return;
       }
       await sendSmsMessage(smsPhone, `אישור תור: ${date} בשעה ${time}. תודה שקבעת אצלנו.`);
-      res.status(200).json({ ok: true, channel: 'sms' });
-      return;
+    } else {
+      if (!canUseWhatsApp()) {
+        res.status(500).json({
+          error: 'Missing WHATSAPP_CONFIRM_TEMPLATE or WhatsApp credentials.'
+        });
+        return;
+      }
+      const waPhone = toWhatsAppNumber(phone);
+      if (!waPhone) {
+        res.status(400).json({ error: 'Invalid phone' });
+        return;
+      }
+      await sendWhatsAppTemplate(waPhone, confirmTemplate, confirmLang, [date, time]);
     }
 
-    const waPhone = toWhatsAppNumber(phone);
-    await sendWhatsAppTemplate(waPhone, confirmTemplate, confirmLang, [date, time]);
-    res.status(200).json({ ok: true, channel: 'whatsapp' });
+    const shouldRequestManagerApproval = Boolean(requestManagerApproval);
+    let managerApproval = null;
+    if (shouldRequestManagerApproval) {
+      try {
+        managerApproval = await sendManagerApprovalRequest({
+          date,
+          time,
+          customerName,
+          petName,
+          customerPhone
+        });
+      } catch (managerErr) {
+        managerApproval = {
+          requested: true,
+          sent: false,
+          reason: managerErr?.message || 'Failed to send manager approval request.'
+        };
+      }
+    }
+
+    res.status(200).json({
+      ok: true,
+      channel,
+      ...(shouldRequestManagerApproval ? { managerApproval } : {})
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(500).json({ error: err?.message || 'Server error' });
   }
 }

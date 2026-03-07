@@ -34,11 +34,13 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
     return { ...c, ...analysis };
   });
 
-  const soonCustomers = analyzedCustomers
+  const trackedCustomers = analyzedCustomers.filter(c => c.status !== 'ON_HOLD');
+
+  const soonCustomers = trackedCustomers
     .filter(c => c.status === 'SOON')
     .sort((a, b) => a.daysDiff - b.daysDiff);
 
-  const lateCustomers = analyzedCustomers
+  const lateCustomers = trackedCustomers
     .filter(c => c.status === 'LATE')
     .sort((a, b) => a.daysDiff - b.daysDiff);
 
