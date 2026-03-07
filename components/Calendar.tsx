@@ -467,13 +467,23 @@ export const Calendar: React.FC<CalendarProps> = ({
   const trackTranslatePercent = isSlideAnimating
     ? centerTrackPosition + slideDirection * paneTravelPercent
     : centerTrackPosition + swipeProgress * paneTravelPercent;
-  const monthTrackStyle = {
+  const trackTransition = isSlideAnimating
+    ? 'transform 300ms cubic-bezier(0.22, 1, 0.36, 1)'
+    : isSwipeDragging
+    ? 'none'
+    : 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)';
+  const monthHeaderTrackStyle = {
     transform: `translate3d(${trackTranslatePercent}%, 0, 0)`,
-    transition: isSlideAnimating
-      ? 'transform 300ms cubic-bezier(0.22, 1, 0.36, 1)'
-      : isSwipeDragging
-      ? 'none'
-      : 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+    transition: trackTransition,
+    willChange: isSwipeDragging || isSlideAnimating ? 'transform' : undefined
+  } as const;
+  const bodyBaseTranslateX = -monthViewportWidth;
+  const bodyTranslateX = isSlideAnimating
+    ? bodyBaseTranslateX + slideDirection * monthViewportWidth
+    : bodyBaseTranslateX + swipeProgress * monthViewportWidth;
+  const monthBodyTrackStyle = {
+    transform: `translate3d(${bodyTranslateX}px, 0, 0)`,
+    transition: trackTransition,
     willChange: isSwipeDragging || isSlideAnimating ? 'transform' : undefined
   } as const;
 
@@ -486,7 +496,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         className={`min-w-0 flex h-full flex-col ${isInteractivePane ? '' : 'pointer-events-none'}`}
         aria-hidden={paneKey !== 'current'}
       >
-        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-sky-100 px-3 md:px-5 bg-gradient-to-r from-slate-50 via-white to-gray-50 shrink-0">
+        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-slate-200 px-3 md:px-5 bg-gradient-to-r from-slate-100 via-white to-slate-50 shrink-0">
           {WEEK_DAYS.map(day => (
             <div key={`${pane.key}-${day}`} className="py-1.5 text-center text-[11px] md:text-xs font-bold tracking-[0.02em] text-gray-500">
               {day}
@@ -494,7 +504,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           ))}
         </div>
 
-        <div className="px-1.5 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-white to-slate-50 flex-1">
+        <div className="px-1.5 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/60 flex-1">
           <div className="h-full flex flex-col gap-1.5 sm:gap-2.5">
             {pane.weeks.map((week, weekIndex) => (
               <div
@@ -506,7 +516,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                     return (
                       <div
                         key={cell.date.toISOString()}
-                        className="rounded-2xl min-h-[96px] sm:min-h-[115px] md:min-h-[130px] border border-transparent bg-transparent pointer-events-none"
+                        className="rounded-2xl min-h-[96px] sm:min-h-[115px] md:min-h-[130px] border border-transparent bg-slate-100/50 pointer-events-none"
                       />
                     );
                   }
@@ -529,7 +539,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                       onDrop={isInteractivePane ? (e) => handleDrop(e, cell.date) : undefined}
                       className={`
                         relative rounded-2xl p-2 md:p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[96px] sm:min-h-[115px] md:min-h-[130px] overflow-hidden
-                        ${cell.isToday ? 'bg-blue-50/80 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : 'bg-white border-gray-200 hover:border-blue-200 hover:shadow-md'}
+                        ${cell.isToday ? 'bg-blue-50/90 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : 'bg-white/95 border-slate-300 hover:border-blue-300 hover:shadow-md'}
                         ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
                       `}
                     >
@@ -685,7 +695,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       <div className="px-3 md:px-5 py-2 md:py-3 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-gray-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-4 min-w-0">
           <div className="min-w-0 overflow-hidden max-w-[11rem] md:max-w-[16rem]">
-            <div className="grid w-[300%] grid-cols-3" style={monthTrackStyle}>
+            <div className="grid w-[300%] grid-cols-3" style={monthHeaderTrackStyle}>
               <div className="min-w-0">
                 <h2 className="truncate text-[1.35rem] md:text-2xl font-extrabold text-gray-800 capitalize tracking-[-0.03em]">
                   {prevMonthData.monthName}
@@ -759,8 +769,8 @@ export const Calendar: React.FC<CalendarProps> = ({
       <div className="flex-1 overflow-hidden">
         <div ref={monthViewportRef} className="h-full overflow-hidden">
           <div
-            className="grid h-full w-[300%] grid-cols-3"
-            style={monthTrackStyle}
+            className="grid h-full min-h-[520px] w-[300%] grid-cols-3 bg-slate-50/40"
+            style={monthBodyTrackStyle}
             onTransitionEnd={handleMonthTrackTransitionEnd}
           >
             {renderMonthPane(prevMonthData, 'prev')}
