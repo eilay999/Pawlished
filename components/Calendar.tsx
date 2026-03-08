@@ -18,14 +18,7 @@ interface CalendarProps {
 }
 
 type SwipeAxisLock = 'horizontal' | 'vertical' | null;
-type MonthPaneKey = 'prev' | 'current' | 'next';
 type MonthDelta = -1 | 0 | 1;
-
-interface MonthPaneData {
-  key: string;
-  monthName: string;
-  weeks: DayCell[][];
-}
 
 const getMonthStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
@@ -97,22 +90,6 @@ const buildCalendarGrid = (date: Date, appointments: Appointment[]) => {
   return grid;
 };
 
-const buildMonthPaneData = (date: Date, appointments: Appointment[]): MonthPaneData => {
-  const monthDate = getMonthStart(date);
-  const grid = buildCalendarGrid(monthDate, appointments);
-  const weeks: DayCell[][] = [];
-
-  for (let i = 0; i < grid.length; i += 7) {
-    weeks.push(grid.slice(i, i + 7));
-  }
-
-  return {
-    key: `${monthDate.getFullYear()}-${monthDate.getMonth()}`,
-    monthName: monthDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' }),
-    weeks: weeks.filter(week => week.some(cell => cell.isCurrentMonth))
-  };
-};
-
 export const Calendar: React.FC<CalendarProps> = ({
   currentDate,
   onDateChange,
@@ -130,11 +107,10 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null);
   const [swipeOffsetX, setSwipeOffsetX] = useState(0);
   const [isSwipeDragging, setIsSwipeDragging] = useState(false);
-  const [isTrackAnimating, setIsTrackAnimating] = useState(false);
+  const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
   const [pendingMonthDelta, setPendingMonthDelta] = useState<MonthDelta>(0);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
-  const pendingSyncMonthRef = useRef<number | null>(null);
   const swipeSessionRef = useRef<{
     active: boolean;
     startX: number;
@@ -174,6 +150,11 @@ export const Calendar: React.FC<CalendarProps> = ({
     return true;
   }).length;
 
+  const calendarGrid = useMemo(
+    () => buildCalendarGrid(displayDate, appointments),
+    [displayDate, appointments]
+  );
+
   useEffect(() => {
     const nextWidth = viewportRef.current?.clientWidth ?? 1;
     setViewportWidth(Math.max(nextWidth, 1));
@@ -198,19 +179,11 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   useEffect(() => {
     const nextCurrentMonth = getMonthStart(currentDate);
-    const pendingSyncMonth = pendingSyncMonthRef.current;
-
-    if (pendingSyncMonth !== null) {
-      if (pendingSyncMonth === nextCurrentMonth.getTime()) {
-        pendingSyncMonthRef.current = null;
-      }
-      return;
-    }
-
-    if (!isTrackAnimating && !isSwipeDragging && !isSameMonthValue(displayDate, nextCurrentMonth)) {
+    if (isSwipeDragging || isSwipeAnimating) return;
+    if (!isSameMonthValue(displayDate, nextCurrentMonth)) {
       setDisplayDate(nextCurrentMonth);
     }
-  }, [currentDate, displayDate, isTrackAnimating, isSwipeDragging]);
+  }, [currentDate, displayDate, isSwipeAnimating, isSwipeDragging]);
 
   const isMobileViewport = () => typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -235,44 +208,35 @@ export const Calendar: React.FC<CalendarProps> = ({
   };
 
   const applySwipeResistance = (deltaX: number) => {
-    const maxOffset = viewportWidth * 0.92;
+    const maxOffset = viewportWidth * 0.9;
     const clamped = Math.max(-maxOffset, Math.min(maxOffset, deltaX));
-    const overflow = Math.max(0, Math.abs(clamped) - viewportWidth * 0.78);
-    return Math.sign(clamped) * (Math.abs(clamped) - overflow * 0.45);
+    const overflow = Math.max(0, Math.abs(clamped) - viewportWidth * 0.72);
+    return Math.sign(clamped) * (Math.abs(clamped) - overflow * 0.5);
   };
 
-  const clearSwipeVisualState = () => {
-    setSwipeOffsetX(0);
-    setIsSwipeDragging(false);
-  };
-
-  const commitDisplayDate = (nextDate: Date) => {
+  const navigateToMonth = (nextDate: Date) => {
     const nextMonth = getMonthStart(nextDate);
-    pendingSyncMonthRef.current = nextMonth.getTime();
-    setPendingMonthDelta(0);
-    setIsTrackAnimating(false);
-    clearSwipeVisualState();
     setDisplayDate(nextMonth);
     onDateChange(nextMonth);
   };
 
   const handlePrevMonth = () => {
-    if (isTrackAnimating) return;
-    commitDisplayDate(shiftMonth(displayDate, -1));
+    if (isSwipeAnimating) return;
+    navigateToMonth(shiftMonth(displayDate, -1));
   };
 
   const handleNextMonth = () => {
-    if (isTrackAnimating) return;
-    commitDisplayDate(shiftMonth(displayDate, 1));
+    if (isSwipeAnimating) return;
+    navigateToMonth(shiftMonth(displayDate, 1));
   };
 
   const handleToday = () => {
-    if (isTrackAnimating) return;
-    commitDisplayDate(new Date());
+    if (isSwipeAnimating) return;
+    navigateToMonth(new Date());
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (!isMobileViewport() || isTrackAnimating) return;
+    if (!isMobileViewport() || isSwipeAnimating) return;
     if (shouldIgnoreSwipeTarget(e.target)) return;
     if (e.touches.length === 0) return;
 
@@ -286,11 +250,10 @@ export const Calendar: React.FC<CalendarProps> = ({
       lastY: touch.clientY,
       axisLock: null
     };
-    setIsTrackAnimating(false);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isMobileViewport() || isTrackAnimating) return;
+    if (!isMobileViewport() || isSwipeAnimating) return;
     if (!swipeSessionRef.current.active || e.touches.length === 0) return;
 
     const touch = e.touches[0];
@@ -320,8 +283,23 @@ export const Calendar: React.FC<CalendarProps> = ({
     e.preventDefault();
   };
 
+  const animateMonthBack = () => {
+    if (Math.abs(swipeOffsetX) < 1) {
+      setPendingMonthDelta(0);
+      setIsSwipeDragging(false);
+      setIsSwipeAnimating(false);
+      setSwipeOffsetX(0);
+      return;
+    }
+
+    setPendingMonthDelta(0);
+    setIsSwipeDragging(false);
+    setIsSwipeAnimating(true);
+    setSwipeOffsetX(0);
+  };
+
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!isMobileViewport() || isTrackAnimating) return;
+    if (!isMobileViewport() || isSwipeAnimating) return;
     if (!swipeSessionRef.current.active) return;
 
     const touch = e.changedTouches[0];
@@ -345,44 +323,35 @@ export const Calendar: React.FC<CalendarProps> = ({
       const monthDelta: MonthDelta = deltaX < 0 ? 1 : -1;
       setPendingMonthDelta(monthDelta);
       setIsSwipeDragging(false);
-      setIsTrackAnimating(true);
+      setIsSwipeAnimating(true);
       setSwipeOffsetX(monthDelta === 1 ? -viewportWidth : viewportWidth);
       resetSwipeTracking();
       return;
     }
 
-    setPendingMonthDelta(0);
-    setIsSwipeDragging(false);
-    setIsTrackAnimating(true);
-    setSwipeOffsetX(0);
+    animateMonthBack();
     resetSwipeTracking();
   };
 
   const handleTouchCancel = () => {
+    if (!swipeSessionRef.current.active && swipeOffsetX === 0) return;
     resetSwipeTracking();
-    setPendingMonthDelta(0);
-    setIsSwipeDragging(false);
-    setIsTrackAnimating(true);
-    setSwipeOffsetX(0);
+    animateMonthBack();
   };
 
-  const handleTrackTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+  const handleSwipeTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget || e.propertyName !== 'transform') return;
 
     if (pendingMonthDelta === 0) {
-      setIsTrackAnimating(false);
+      setIsSwipeAnimating(false);
       return;
     }
 
     const nextDate = shiftMonth(displayDate, pendingMonthDelta);
-    const nextMonth = getMonthStart(nextDate);
-    pendingSyncMonthRef.current = nextMonth.getTime();
-
-    setIsTrackAnimating(false);
     setPendingMonthDelta(0);
+    setIsSwipeAnimating(false);
     setSwipeOffsetX(0);
-    setDisplayDate(nextMonth);
-    onDateChange(nextMonth);
+    navigateToMonth(nextDate);
   };
 
   const handleClickCapture = (e: React.MouseEvent) => {
@@ -441,221 +410,17 @@ export const Calendar: React.FC<CalendarProps> = ({
     setDragOverDate(null);
   };
 
-  const prevMonthData = useMemo(
-    () => buildMonthPaneData(shiftMonth(displayDate, -1), appointments),
-    [displayDate, appointments]
-  );
-  const currentMonthData = useMemo(
-    () => buildMonthPaneData(displayDate, appointments),
-    [displayDate, appointments]
-  );
-  const nextMonthData = useMemo(
-    () => buildMonthPaneData(shiftMonth(displayDate, 1), appointments),
-    [displayDate, appointments]
-  );
-
-  const bodyTrackTranslate = -viewportWidth + swipeOffsetX;
-  const bodyTrackStyle = {
-    transform: `translate3d(${bodyTrackTranslate}px, 0, 0)`,
-    transition: isTrackAnimating ? 'transform 300ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
-    willChange: isSwipeDragging || isTrackAnimating ? 'transform' : undefined
+  const monthName = displayDate.toLocaleString('he-IL', { month: 'long', year: 'numeric' });
+  const weeks: DayCell[][] = [];
+  for (let i = 0; i < calendarGrid.length; i += 7) {
+    weeks.push(calendarGrid.slice(i, i + 7));
+  }
+  const visibleWeeks = weeks.filter(week => week.some(cell => cell.isCurrentMonth));
+  const monthSwipeStyle = {
+    transform: `translate3d(${swipeOffsetX}px, 0, 0)`,
+    transition: isSwipeAnimating ? 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
+    willChange: isSwipeDragging || isSwipeAnimating ? 'transform' : undefined
   } as const;
-
-  const renderMonthPane = (pane: MonthPaneData, paneKey: MonthPaneKey) => {
-    const isInteractivePane = paneKey === 'current' && !isTrackAnimating;
-
-    return (
-      <div
-        key={pane.key}
-        className={`w-full shrink-0 min-w-0 h-full flex flex-col ${isInteractivePane ? '' : 'pointer-events-none'}`}
-        aria-hidden={paneKey !== 'current'}
-      >
-        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-slate-200 px-3 md:px-5 bg-gradient-to-r from-slate-100 via-white to-slate-50 shrink-0">
-          {WEEK_DAYS.map(day => (
-            <div key={`${pane.key}-${day}`} className="py-1.5 text-center text-[11px] md:text-xs font-bold tracking-[0.02em] text-gray-500">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        <div className="px-1.5 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/60 flex-1">
-          <div className="h-full flex flex-col gap-1.5 sm:gap-2.5">
-            {pane.weeks.map((week, weekIndex) => (
-              <div
-                key={`${pane.key}-week-${weekIndex}`}
-                className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 gap-1.5 sm:gap-2.5 flex-1"
-              >
-                {week.map(cell => {
-                  if (!cell.isCurrentMonth) {
-                    return (
-                      <div
-                        key={cell.date.toISOString()}
-                        className="rounded-2xl min-h-[96px] sm:min-h-[115px] md:min-h-[130px] border border-transparent bg-slate-100/50 pointer-events-none"
-                      />
-                    );
-                  }
-
-                  const isDragTarget =
-                    isInteractivePane &&
-                    dragOverDate &&
-                    dragOverDate.getDate() === cell.date.getDate() &&
-                    dragOverDate.getMonth() === cell.date.getMonth() &&
-                    dragOverDate.getFullYear() === cell.date.getFullYear();
-                  const activeEvents = cell.events.filter(e => e.status !== 'CANCELLED');
-                  const uniqueCustomerCount = new Set(activeEvents.map(e => e.customerId)).size;
-                  const displayEvents = cell.events.slice(0, 4);
-
-                  return (
-                    <div
-                      key={cell.date.toISOString()}
-                      onClick={isInteractivePane ? () => onDayClick(cell.date) : undefined}
-                      onDragOver={isInteractivePane ? (e) => handleDragOver(e, cell.date) : undefined}
-                      onDragEnter={isInteractivePane ? (e) => handleDragEnter(e, cell.date) : undefined}
-                      onDragLeave={isInteractivePane ? (e) => handleDragLeave(e, cell.date) : undefined}
-                      onDrop={isInteractivePane ? (e) => handleDrop(e, cell.date) : undefined}
-                      className={`
-                        relative rounded-2xl p-2 md:p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[96px] sm:min-h-[115px] md:min-h-[130px] overflow-hidden
-                        ${cell.isToday ? 'bg-blue-50/90 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : 'bg-white/95 border-slate-300 hover:border-blue-300 hover:shadow-md'}
-                        ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
-                      `}
-                    >
-                      <div className="flex justify-between items-start pointer-events-none mb-1">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-blue-100 rounded-full text-blue-600 pointer-events-auto">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDayAddAppointment(cell.date);
-                            }}
-                            className="flex items-center justify-center"
-                            aria-label="הוסף תור"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          {cell.holiday && (
-                            <span
-                              className="text-[9px] md:text-[10px] font-bold text-pink-600 bg-pink-50 px-1 py-0.5 rounded-md truncate max-w-[60px]"
-                              title={cell.holiday}
-                            >
-                              {cell.holiday}
-                            </span>
-                          )}
-
-                          <div
-                            className={`
-                              w-7 h-7 flex items-center justify-center rounded-full text-[13px] md:text-sm font-extrabold tracking-[-0.02em] transition-all
-                              ${cell.isToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 group-hover:bg-gray-100'}
-                            `}
-                          >
-                            {cell.date.getDate()}
-                          </div>
-                        </div>
-                      </div>
-
-                      {uniqueCustomerCount > 0 && (
-                        <div className="hidden sm:flex justify-end mb-1">
-                          <div className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full tracking-[0.01em]">
-                            {uniqueCustomerCount} לקוחות
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-0.5 overflow-hidden flex-1 max-h-[62px] sm:max-h-[85px] md:max-h-[90px]">
-                        {displayEvents.map(appointment => {
-                          const customer = customers.find(c => c.id === appointment.customerId);
-                          const isCancelled = appointment.status === 'CANCELLED';
-                          const isCompleted = appointment.status === 'COMPLETED';
-                          const timeLabel = appointment.date.toLocaleTimeString('he-IL', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          });
-                          const statusClasses = isCancelled
-                            ? 'bg-gray-100 border-gray-200 text-gray-400 line-through'
-                            : isCompleted
-                            ? 'bg-green-50 border-green-200 text-green-700'
-                            : 'bg-blue-50 border-blue-200 text-blue-700';
-                          const fullNameLabel = customer ? customer.name : 'לקוח לא ידוע';
-                          const shortNameLabel = fullNameLabel.split(' ')[0] || fullNameLabel;
-
-                          return (
-                            <div
-                              key={appointment.id}
-                              onMouseDown={(evt) => {
-                                evt.stopPropagation();
-                              }}
-                              onClick={(evt) => {
-                                evt.stopPropagation();
-                                onAppointmentClick(appointment);
-                              }}
-                              className={`calendar-event flex items-center gap-1 h-[18px] sm:h-5 text-[10px] sm:text-[11px] leading-[1.2] px-1 sm:px-1.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none font-semibold tracking-[-0.01em] ${statusClasses}`}
-                              title={`${timeLabel} - ${fullNameLabel}`}
-                            >
-                              <span
-                                className="hidden sm:flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
-                                draggable={isInteractivePane}
-                                onDragStart={isInteractivePane ? (evt) => handleDragStart(evt, appointment.id) : undefined}
-                                onDragEnd={isInteractivePane ? handleDragEnd : undefined}
-                                title="גרור להזזה"
-                                aria-label="גרור להזזה"
-                              >
-                                ::
-                              </span>
-                              <span className="truncate font-medium sm:hidden">{shortNameLabel}</span>
-                              <span className="truncate font-medium hidden sm:inline">{fullNameLabel}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {cell.events.length > 0 && (
-                        <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-xl p-3 shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-                          <div className="font-bold border-b border-gray-700 pb-2 mb-2 flex items-center gap-2">
-                            <Clock className="w-3 h-3 text-gray-400" />
-                            {cell.date.toLocaleDateString('he-IL')}
-                          </div>
-                          <div className="space-y-2">
-                            {cell.events.map(appointment => {
-                              const customer = customers.find(c => c.id === appointment.customerId);
-                              const isCancelled = appointment.status === 'CANCELLED';
-                              const isCompleted = appointment.status === 'COMPLETED';
-                              return (
-                                <div
-                                  key={appointment.id}
-                                  className={`flex justify-between items-center gap-2 ${isCancelled ? 'opacity-50 line-through' : ''}`}
-                                >
-                                  <span className="text-gray-400 font-mono">
-                                    {appointment.date.toLocaleTimeString('he-IL', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </span>
-                                  <div className="text-right truncate flex-1">
-                                    <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
-                                      {customer ? customer.name : 'לקוח לא ידוע'}
-                                      {customer?.petName && (
-                                        <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>
-                                      )}
-                                    </span>
-                                    <span className="text-gray-500 text-[10px] block truncate">{appointment.service}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div
@@ -669,7 +434,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       <div className="px-3 md:px-5 py-2 md:py-3 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-gray-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-[1.35rem] md:text-2xl font-extrabold text-gray-800 capitalize tracking-[-0.03em]">
-            {currentMonthData.monthName}
+            {monthName}
           </h2>
 
           <div className="hidden md:flex flex-col border-r-2 border-gray-100 pr-4 mr-2">
@@ -724,15 +489,195 @@ export const Calendar: React.FC<CalendarProps> = ({
         </div>
       )}
 
-      <div ref={viewportRef} className="flex-1 overflow-hidden bg-slate-50/40">
+      <div ref={viewportRef} className="flex-1 overflow-hidden">
         <div
-          className="flex h-full"
-          style={bodyTrackStyle}
-          onTransitionEnd={handleTrackTransitionEnd}
+          className="h-full min-w-0"
+          style={monthSwipeStyle}
+          onTransitionEnd={handleSwipeTransitionEnd}
         >
-          {renderMonthPane(prevMonthData, 'prev')}
-          {renderMonthPane(currentMonthData, 'current')}
-          {renderMonthPane(nextMonthData, 'next')}
+          <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-slate-200 px-3 md:px-5 bg-gradient-to-r from-slate-100 via-white to-slate-50 shrink-0">
+            {WEEK_DAYS.map(day => (
+              <div key={day} className="py-1.5 text-center text-[11px] md:text-xs font-bold tracking-[0.02em] text-gray-500">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="px-1.5 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/60 h-full">
+            <div className="h-full flex flex-col gap-1.5 sm:gap-2.5">
+              {visibleWeeks.map((week, weekIndex) => (
+                <div
+                  key={`week-${weekIndex}`}
+                  className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 gap-1.5 sm:gap-2.5 flex-1"
+                >
+                  {week.map(cell => {
+                    if (!cell.isCurrentMonth) {
+                      return (
+                        <div
+                          key={cell.date.toISOString()}
+                          className="rounded-2xl min-h-[96px] sm:min-h-[115px] md:min-h-[130px] border border-transparent bg-slate-100/50 pointer-events-none"
+                        />
+                      );
+                    }
+
+                    const isDragTarget =
+                      dragOverDate &&
+                      dragOverDate.getDate() === cell.date.getDate() &&
+                      dragOverDate.getMonth() === cell.date.getMonth() &&
+                      dragOverDate.getFullYear() === cell.date.getFullYear();
+                    const activeEvents = cell.events.filter(e => e.status !== 'CANCELLED');
+                    const uniqueCustomerCount = new Set(activeEvents.map(e => e.customerId)).size;
+                    const maxVisibleEvents = 4;
+                    const displayEvents = cell.events.slice(0, maxVisibleEvents);
+
+                    return (
+                      <div
+                        key={cell.date.toISOString()}
+                        onClick={() => onDayClick(cell.date)}
+                        onDragOver={(e) => handleDragOver(e, cell.date)}
+                        onDragEnter={(e) => handleDragEnter(e, cell.date)}
+                        onDragLeave={(e) => handleDragLeave(e, cell.date)}
+                        onDrop={(e) => handleDrop(e, cell.date)}
+                        className={`
+                          relative rounded-2xl p-2 md:p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[96px] sm:min-h-[115px] md:min-h-[130px] overflow-hidden
+                          ${cell.isToday ? 'bg-blue-50/90 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : 'bg-white/95 border-slate-300 hover:border-blue-300 hover:shadow-md'}
+                          ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
+                        `}
+                      >
+                        <div className="flex justify-between items-start pointer-events-none mb-1">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-blue-100 rounded-full text-blue-600 pointer-events-auto">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDayAddAppointment(cell.date);
+                              }}
+                              className="flex items-center justify-center"
+                              aria-label="הוסף תור"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {cell.holiday && (
+                              <span
+                                className="text-[9px] md:text-[10px] font-bold text-pink-600 bg-pink-50 px-1 py-0.5 rounded-md truncate max-w-[60px]"
+                                title={cell.holiday}
+                              >
+                                {cell.holiday}
+                              </span>
+                            )}
+
+                            <div
+                              className={`
+                                w-7 h-7 flex items-center justify-center rounded-full text-[13px] md:text-sm font-extrabold tracking-[-0.02em] transition-all
+                                ${cell.isToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 group-hover:bg-gray-100'}
+                              `}
+                            >
+                              {cell.date.getDate()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {uniqueCustomerCount > 0 && (
+                          <div className="hidden sm:flex justify-end mb-1">
+                            <div className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full tracking-[0.01em]">
+                              {uniqueCustomerCount} לקוחות
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-0.5 overflow-hidden flex-1 max-h-[62px] sm:max-h-[85px] md:max-h-[90px]">
+                          {displayEvents.map(e => {
+                            const customer = customers.find(c => c.id === e.customerId);
+                            const isCancelled = e.status === 'CANCELLED';
+                            const isCompleted = e.status === 'COMPLETED';
+                            const timeLabel = e.date.toLocaleTimeString('he-IL', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                            const statusClasses = isCancelled
+                              ? 'bg-gray-100 border-gray-200 text-gray-400 line-through'
+                              : isCompleted
+                              ? 'bg-green-50 border-green-200 text-green-700'
+                              : 'bg-blue-50 border-blue-200 text-blue-700';
+                            const fullNameLabel = customer ? customer.name : 'לקוח לא ידוע';
+                            const shortNameLabel = fullNameLabel.split(' ')[0] || fullNameLabel;
+
+                            return (
+                              <div
+                                key={e.id}
+                                onMouseDown={(evt) => {
+                                  evt.stopPropagation();
+                                }}
+                                onClick={(evt) => {
+                                  evt.stopPropagation();
+                                  onAppointmentClick(e);
+                                }}
+                                className={`calendar-event flex items-center gap-1 h-[18px] sm:h-5 text-[10px] sm:text-[11px] leading-[1.2] px-1 sm:px-1.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none font-semibold tracking-[-0.01em] ${statusClasses}`}
+                                title={`${timeLabel} - ${fullNameLabel}`}
+                              >
+                                <span
+                                  className="hidden sm:flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
+                                  draggable
+                                  onDragStart={(evt) => handleDragStart(evt, e.id)}
+                                  onDragEnd={handleDragEnd}
+                                  title="גרור להזזה"
+                                  aria-label="גרור להזזה"
+                                >
+                                  ::
+                                </span>
+                                <span className="truncate font-medium sm:hidden">{shortNameLabel}</span>
+                                <span className="truncate font-medium hidden sm:inline">{fullNameLabel}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {cell.events.length > 0 && (
+                          <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-xl p-3 shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+                            <div className="font-bold border-b border-gray-700 pb-2 mb-2 flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-gray-400" />
+                              {cell.date.toLocaleDateString('he-IL')}
+                            </div>
+                            <div className="space-y-2">
+                              {cell.events.map(e => {
+                                const customer = customers.find(c => c.id === e.customerId);
+                                const isCancelled = e.status === 'CANCELLED';
+                                const isCompleted = e.status === 'COMPLETED';
+                                return (
+                                  <div
+                                    key={e.id}
+                                    className={`flex justify-between items-center gap-2 ${isCancelled ? 'opacity-50 line-through' : ''}`}
+                                  >
+                                    <span className="text-gray-400 font-mono">
+                                      {e.date.toLocaleTimeString('he-IL', {
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                    <div className="text-right truncate flex-1">
+                                      <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
+                                        {customer ? customer.name : 'לקוח לא ידוע'}
+                                        {customer?.petName && (
+                                          <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>
+                                        )}
+                                      </span>
+                                      <span className="text-gray-500 text-[10px] block truncate">{e.service}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
