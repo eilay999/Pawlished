@@ -462,7 +462,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   } as const;
 
   const renderMonthPane = (pane: MonthPaneData, paneKey: MonthPaneKey) => {
-    const isInteractivePane = paneKey === 'current' && !isTrackAnimating && !isSwipeDragging;
+    const isInteractivePane = paneKey === 'current' && !isTrackAnimating;
 
     return (
       <div
