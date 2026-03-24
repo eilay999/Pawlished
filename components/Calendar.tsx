@@ -424,14 +424,14 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div
-      className="calendar-swipe-surface flex-1 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm antialiased [text-rendering:optimizeLegibility]"
+      className="calendar-swipe-surface flex-1 min-h-0 min-w-0 bg-white/90 m-0 md:m-3 rounded-none md:rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm antialiased [text-rendering:optimizeLegibility]"
       onClickCapture={handleClickCapture}
       onTouchStartCapture={handleTouchStart}
       onTouchMoveCapture={handleTouchMove}
       onTouchEndCapture={handleTouchEnd}
       onTouchCancelCapture={handleTouchCancel}
     >
-      <div className="px-3 md:px-5 py-2 md:py-3 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-gray-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
+      <div className="px-3 md:px-5 py-2 md:py-2.5 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-gray-50 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-4">
           <h2 className="text-[1.35rem] md:text-2xl font-extrabold text-gray-800 capitalize tracking-[-0.03em]">
             {monthName}
@@ -476,46 +476,46 @@ export const Calendar: React.FC<CalendarProps> = ({
         </div>
       </div>
 
-      <div className="hidden md:flex mx-3 md:mx-4 mt-1.5 md:mt-2 mb-1.5 md:mb-2 bg-green-50 text-green-800 text-[11px] border border-green-100 px-3 py-1.5 rounded-xl items-center justify-between shrink-0">
+      <div className="hidden md:flex mx-3 md:mx-4 mt-1 md:mt-1.5 mb-1 md:mb-1.5 bg-green-50 text-green-800 text-[11px] border border-green-100 px-3 py-1 rounded-xl items-center justify-between shrink-0">
         <span className="font-bold">סיכום שבועי: {weeklyDogCount}/{weeklyGoal} כלבים</span>
         {weeklyDogCount >= weeklyGoal && (
           <span className="bg-green-600 text-white px-2 py-0.5 rounded-full text-[10px]">מצוין</span>
         )}
       </div>
       {aiAnalysis && (
-        <div className="hidden md:flex mx-3 md:mx-4 mb-1.5 md:mb-2 bg-gradient-to-r from-purple-50 to-white px-3 py-1.5 rounded-xl text-purple-900 text-[11px] border border-purple-100 items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
+          <div className="hidden md:flex mx-3 md:mx-4 mb-1 md:mb-1.5 bg-gradient-to-r from-purple-50 to-white px-3 py-1 rounded-xl text-purple-900 text-[11px] border border-purple-100 items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
           <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
           <p className="leading-relaxed font-medium">{aiAnalysis}</p>
         </div>
       )}
 
-      <div ref={viewportRef} className="flex-1 overflow-hidden">
+      <div ref={viewportRef} className="flex-1 min-h-0 overflow-hidden">
         <div
-          className="h-full min-w-0"
+          className="flex h-full min-h-0 min-w-0 flex-col"
           style={monthSwipeStyle}
           onTransitionEnd={handleSwipeTransitionEnd}
         >
           <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-slate-200 px-3 md:px-5 bg-gradient-to-r from-slate-100 via-white to-slate-50 shrink-0">
             {WEEK_DAYS.map(day => (
-              <div key={day} className="py-1.5 text-center text-[11px] md:text-xs font-bold tracking-[0.02em] text-gray-500">
+              <div key={day} className="py-1 md:py-1.5 text-center text-[11px] md:text-xs font-bold tracking-[0.02em] text-gray-500">
                 {day}
               </div>
             ))}
           </div>
 
-          <div className="px-1.5 sm:px-3 md:px-5 pb-3 md:pb-4 pt-1 md:pt-2 overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/60 h-full">
-            <div className="h-full flex flex-col gap-1.5 sm:gap-2.5">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-1.5 sm:px-3 md:px-4 pb-2.5 md:pb-3 pt-1 md:pt-1.5 bg-gradient-to-b from-slate-50 via-white to-slate-100/60">
+            <div className="min-h-full flex flex-col gap-1 sm:gap-2">
               {visibleWeeks.map((week, weekIndex) => (
                 <div
                   key={`week-${weekIndex}`}
-                  className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 gap-1.5 sm:gap-2.5 flex-1"
+                  className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 gap-1 sm:gap-2 flex-1 min-h-0"
                 >
                   {week.map(cell => {
                     if (!cell.isCurrentMonth) {
                       return (
                         <div
                           key={cell.date.toISOString()}
-                          className="rounded-2xl min-h-[96px] sm:min-h-[115px] md:min-h-[130px] border border-transparent bg-slate-100/50 pointer-events-none"
+                          className="rounded-2xl min-h-[78px] sm:min-h-[90px] md:min-h-[104px] border border-transparent bg-slate-100/50 pointer-events-none"
                         />
                       );
                     }
@@ -539,12 +539,12 @@ export const Calendar: React.FC<CalendarProps> = ({
                         onDragLeave={(e) => handleDragLeave(e, cell.date)}
                         onDrop={(e) => handleDrop(e, cell.date)}
                         className={`
-                          relative rounded-2xl p-2 md:p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[96px] sm:min-h-[115px] md:min-h-[130px] overflow-hidden
+                          relative rounded-2xl p-1.5 md:p-2 transition-all cursor-pointer group flex flex-col justify-between border min-h-[78px] sm:min-h-[90px] md:min-h-[104px] overflow-hidden
                           ${cell.isToday ? 'bg-blue-50/90 border-blue-300 ring-2 ring-blue-100 shadow-md transform scale-[1.01] z-10' : 'bg-white/95 border-slate-300 hover:border-blue-300 hover:shadow-md'}
                           ${isDragTarget ? 'bg-blue-50 border-blue-300 border-dashed ring-1 ring-blue-200' : ''}
                         `}
                       >
-                        <div className="flex justify-between items-start pointer-events-none mb-1">
+                        <div className="flex justify-between items-start pointer-events-none mb-0.5 md:mb-1">
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 bg-blue-100 rounded-full text-blue-600 pointer-events-auto">
                             <button
                               onClick={(e) => {
@@ -561,7 +561,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                           <div className="flex items-center gap-1">
                             {cell.holiday && (
                               <span
-                                className="text-[9px] md:text-[10px] font-bold text-pink-600 bg-pink-50 px-1 py-0.5 rounded-md truncate max-w-[60px]"
+                                className="text-[8px] md:text-[9px] font-bold text-pink-600 bg-pink-50 px-1 py-0.5 rounded-md truncate max-w-[54px] md:max-w-[60px]"
                                 title={cell.holiday}
                               >
                                 {cell.holiday}
@@ -570,7 +570,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
                             <div
                               className={`
-                                w-7 h-7 flex items-center justify-center rounded-full text-[13px] md:text-sm font-extrabold tracking-[-0.02em] transition-all
+                                w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-full text-[12px] md:text-sm font-extrabold tracking-[-0.02em] transition-all
                                 ${cell.isToday ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 group-hover:bg-gray-100'}
                               `}
                             >
@@ -580,14 +580,14 @@ export const Calendar: React.FC<CalendarProps> = ({
                         </div>
 
                         {uniqueCustomerCount > 0 && (
-                          <div className="hidden sm:flex justify-end mb-1">
-                            <div className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full tracking-[0.01em]">
+                          <div className="hidden sm:flex justify-end mb-0.5 md:mb-1">
+                            <div className="text-[9px] md:text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full tracking-[0.01em]">
                               {uniqueCustomerCount} לקוחות
                             </div>
                           </div>
                         )}
 
-                        <div className="space-y-0.5 overflow-hidden flex-1 max-h-[62px] sm:max-h-[85px] md:max-h-[90px]">
+                        <div className="space-y-0.5 overflow-hidden flex-1 max-h-[52px] sm:max-h-[64px] md:max-h-[72px]">
                           {displayEvents.map(e => {
                             const customer = customers.find(c => c.id === e.customerId);
                             const isCancelled = e.status === 'CANCELLED';
@@ -614,7 +614,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                                   evt.stopPropagation();
                                   onAppointmentClick(e);
                                 }}
-                                className={`calendar-event flex items-center gap-1 h-[18px] sm:h-5 text-[10px] sm:text-[11px] leading-[1.2] px-1 sm:px-1.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none font-semibold tracking-[-0.01em] ${statusClasses}`}
+                                className={`calendar-event flex items-center gap-1 h-4 sm:h-[18px] text-[9px] sm:text-[10px] leading-[1.15] px-1 sm:px-1.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none font-semibold tracking-[-0.01em] ${statusClasses}`}
                                 title={`${timeLabel} - ${fullNameLabel}`}
                               >
                                 <span

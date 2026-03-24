@@ -820,7 +820,7 @@ const App: React.FC = () => {
       />
 
       {/* Center Content */}
-      <main className="flex-1 flex flex-col relative h-full overflow-hidden pb-16 md:pb-0">
+      <main className="flex-1 min-w-0 min-h-0 flex flex-col relative h-full overflow-hidden pb-16 md:pb-0">
         {currentView === 'CALENDAR' ? (
           <Calendar 
             currentDate={currentDate} 
