@@ -44,25 +44,23 @@ const toE164 = (value: string) => {
 const ADMIN_PHONES = ['0543131544', '0527075624'].map(normalizePhoneForCompare);
 
 const makeSlotDate = (date: Date, time: string) => {
-  const [h, m] = time.split(':').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
   const slot = new Date(date);
-  slot.setHours(h, m, 0, 0);
+  slot.setHours(hours, minutes, 0, 0);
   return slot;
 };
 
 interface PublicBookingProps {
   appointments: Appointment[];
   customers: Customer[];
-  onSaveCustomer: (customer: Customer) => void;
-  onSaveAppointment: (appointment: Appointment) => void;
+  onBookingCreated: (payload: { customer: Customer; appointment: Appointment }) => void;
   onAdminAccess?: (phone: string) => void;
 }
 
 export const PublicBooking: React.FC<PublicBookingProps> = ({
   appointments,
   customers,
-  onSaveCustomer,
-  onSaveAppointment,
+  onBookingCreated,
   onAdminAccess
 }) => {
   const [step, setStep] = useState<BookingStep>('PHONE');
@@ -79,27 +77,33 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     date: Date;
     time: string;
   } | null>(null);
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
 
-  const bookedSlots = useMemo(() => {
-    return new Set(
-      appointments
-        .filter(a => a.status !== AppointmentStatus.CANCELLED)
-        .map(a => new Date(a.date).getTime())
-    );
-  }, [appointments]);
+  const bookedSlots = useMemo(
+    () =>
+      new Set(
+        appointments
+          .filter(appointment => appointment.status !== AppointmentStatus.CANCELLED)
+          .map(appointment => new Date(appointment.date).getTime())
+      ),
+    [appointments]
+  );
 
   const upcomingDays = useMemo(() => {
     const today = new Date();
     const days: Array<{ date: Date; times: string[] }> = [];
-    for (let i = 0; i < 14; i += 1) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      d.setHours(0, 0, 0, 0);
-      const times = WEEKLY_SLOTS[d.getDay()] || [];
-      if (times.length) {
-        days.push({ date: d, times });
+
+    for (let index = 0; index < 14; index += 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + index);
+      date.setHours(0, 0, 0, 0);
+
+      const times = WEEKLY_SLOTS[date.getDay()] || [];
+      if (times.length > 0) {
+        days.push({ date, times });
       }
     }
+
     return days;
   }, []);
 
@@ -112,6 +116,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const handleContinueWithPhone = () => {
     setError(null);
     const e164 = toE164(phone);
+
     if (!e164) {
       setError('הזן מספר טלפון תקין.');
       return;
@@ -119,17 +124,22 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
     setVerifiedPhone(e164);
     const normalized = normalizePhoneForCompare(e164);
+
     if (ADMIN_PHONES.includes(normalized)) {
       onAdminAccess?.(normalized);
       return;
     }
-    const existing = customers.find(c => normalizePhoneForCompare(c.phone) === normalized) || null;
+
+    const existing =
+      customers.find(customer => normalizePhoneForCompare(customer.phone) === normalized) || null;
+
     setExistingCustomer(existing);
     if (existing) {
       setStep('BOOKING');
-    } else {
-      setStep('DETAILS');
+      return;
     }
+
+    setStep('DETAILS');
   };
 
   const handleSendConfirmation = async (
@@ -166,65 +176,85 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       setError('מלא שם, שם כלב וסוג.');
       return;
     }
+
     setError(null);
     setStep('BOOKING');
   };
 
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     if (!selectedSlot) {
       setError('בחר תאריך ושעה.');
       return;
     }
 
-    const slotDate = makeSlotDate(selectedSlot.date, selectedSlot.time);
     if (!isSlotAvailable(selectedSlot.date, selectedSlot.time)) {
       setError('השעה כבר נתפסה. בחר שעה אחרת.');
       return;
     }
 
-    const isNewCustomer = !existingCustomer;
-    let customer = existingCustomer;
-    if (!customer) {
-      customer = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: newCustomer.name.trim(),
-        phone: normalizePhoneForCompare(verifiedPhone),
-        petName: newCustomer.petName.trim(),
-        petType: newCustomer.petType.trim(),
-        lastVisit: new Date(),
-        visitFrequencyWeeks: 4,
-        lifecycleStatus: 'ACTIVE',
-        defaultPrice: undefined
+    const slotDate = makeSlotDate(selectedSlot.date, selectedSlot.time);
+    setError(null);
+    setIsSubmittingBooking(true);
+
+    try {
+      const response = await fetch('/api/public-booking/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: verifiedPhone,
+          slotDate: slotDate.toISOString(),
+          existingCustomerId: existingCustomer?.id,
+          customer: existingCustomer
+            ? undefined
+            : {
+                name: newCustomer.name.trim(),
+                phone: normalizePhoneForCompare(verifiedPhone),
+                petName: newCustomer.petName.trim(),
+                petType: newCustomer.petType.trim()
+              },
+          service: 'תור לקוח',
+          notes: ''
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error || 'יצירת התור נכשלה.');
+        return;
+      }
+
+      const customer: Customer = {
+        ...payload.customer,
+        lastVisit: new Date(payload.customer.lastVisit)
       };
-      onSaveCustomer(customer);
+
+      const appointment: Appointment = {
+        ...payload.appointment,
+        date: new Date(payload.appointment.date)
+      };
+
+      onBookingCreated({ customer, appointment });
+      setExistingCustomer(customer);
+
+      await handleSendConfirmation(
+        slotDate.toLocaleDateString('he-IL'),
+        selectedSlot.time,
+        payload.createdCustomer
+          ? {
+              requested: true,
+              customerName: customer.name,
+              petName: customer.petName,
+              customerPhone: customer.phone
+            }
+          : undefined
+      );
+
+      setStep('DONE');
+    } catch {
+      setError('יצירת התור נכשלה. נסה שוב.');
+    } finally {
+      setIsSubmittingBooking(false);
     }
-
-    const appointment: Appointment = {
-      id: Math.random().toString(36).substr(2, 9),
-      customerId: customer.id,
-      date: slotDate,
-      service: 'תור לקוח',
-      status: AppointmentStatus.SCHEDULED,
-      notes: '',
-      price: customer.defaultPrice ?? 0
-    };
-
-    const managerApproval = isNewCustomer
-      ? {
-          requested: true,
-          customerName: customer.name,
-          petName: customer.petName,
-          customerPhone: customer.phone
-        }
-      : undefined;
-
-    onSaveAppointment(appointment);
-    handleSendConfirmation(
-      slotDate.toLocaleDateString('he-IL'),
-      selectedSlot.time,
-      managerApproval
-    );
-    setStep('DONE');
   };
 
   return (
@@ -252,8 +282,8 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               </label>
               <input
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="לדוגמה: 050-1234567"
+                onChange={event => setPhone(event.target.value)}
+                placeholder='לדוגמה: 050-1234567'
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
               />
               <button
@@ -267,7 +297,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
           {step === 'DETAILS' && (
             <div className="space-y-4">
-              <div className="text-sm text-gray-600">לקוח חדש – מלא פרטים</div>
+              <div className="text-sm text-gray-600">לקוח חדש - מלא פרטים</div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 flex items-center gap-2">
@@ -275,7 +305,9 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                   </label>
                   <input
                     value={newCustomer.name}
-                    onChange={e => setNewCustomer(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={event =>
+                      setNewCustomer(previous => ({ ...previous, name: event.target.value }))
+                    }
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
                   />
                 </div>
@@ -285,7 +317,9 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                   </label>
                   <input
                     value={newCustomer.petName}
-                    onChange={e => setNewCustomer(prev => ({ ...prev, petName: e.target.value }))}
+                    onChange={event =>
+                      setNewCustomer(previous => ({ ...previous, petName: event.target.value }))
+                    }
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
                   />
                 </div>
@@ -295,7 +329,9 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                   </label>
                   <input
                     value={newCustomer.petType}
-                    onChange={e => setNewCustomer(prev => ({ ...prev, petType: e.target.value }))}
+                    onChange={event =>
+                      setNewCustomer(previous => ({ ...previous, petType: event.target.value }))
+                    }
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
                   />
                 </div>
@@ -311,38 +347,35 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
           {step === 'BOOKING' && (
             <div className="space-y-4">
-              <div className="text-sm text-gray-600">
-                בחר תאריך ושעה (עד שבועיים קדימה)
-              </div>
+              <div className="text-sm text-gray-600">בחר תאריך ושעה (עד שבועיים קדימה)</div>
               <div className="space-y-3">
                 {upcomingDays.map(day => (
                   <div key={day.date.toISOString()} className="border border-gray-100 rounded-2xl p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div className="font-semibold text-gray-800">
-                        {DAY_NAMES[day.date.getDay()]} • {day.date.toLocaleDateString('he-IL')}
+                        {DAY_NAMES[day.date.getDay()]} - {day.date.toLocaleDateString('he-IL')}
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {day.times.length} תורים אפשריים
-                      </div>
+                      <div className="text-xs text-gray-400">{day.times.length} תורים אפשריים</div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {day.times.map(time => {
                         const available = isSlotAvailable(day.date, time);
                         const isSelected =
-                          selectedSlot &&
-                          selectedSlot.time === time &&
-                          selectedSlot.date.getTime() === day.date.getTime();
+                          Boolean(selectedSlot) &&
+                          selectedSlot!.time === time &&
+                          selectedSlot!.date.getTime() === day.date.getTime();
+
                         return (
                           <button
                             key={time}
-                            disabled={!available}
+                            disabled={!available || isSubmittingBooking}
                             onClick={() => setSelectedSlot({ date: day.date, time })}
                             className={`px-3 py-2 rounded-xl text-sm border transition ${
                               isSelected
                                 ? 'bg-blue-600 text-white border-blue-600'
                                 : available
-                                ? 'border-blue-100 text-blue-700 hover:bg-blue-50'
-                                : 'border-gray-100 text-gray-300 cursor-not-allowed'
+                                  ? 'border-blue-100 text-blue-700 hover:bg-blue-50'
+                                  : 'border-gray-100 text-gray-300 cursor-not-allowed'
                             }`}
                           >
                             {time}
@@ -355,9 +388,10 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               </div>
               <button
                 onClick={handleConfirmBooking}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-3 font-medium"
+                disabled={isSubmittingBooking}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl py-3 font-medium"
               >
-                אישור תור
+                {isSubmittingBooking ? 'שומר...' : 'אישור תור'}
               </button>
             </div>
           )}
@@ -378,6 +412,3 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     </div>
   );
 };
-
-
-
