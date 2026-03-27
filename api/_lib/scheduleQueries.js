@@ -277,6 +277,18 @@ const formatBusyAppointmentsLine = (appointments, emptyText) => {
   return appointments.map(formatAppointmentLabel).join(', ');
 };
 
+const formatAppointmentsCountText = (count, periodLabel) => {
+  if (count === 0) {
+    return `אין תורים ב${periodLabel}.`;
+  }
+
+  if (count === 1) {
+    return `יש תור אחד ב${periodLabel}.`;
+  }
+
+  return `יש ${count} תורים ב${periodLabel}.`;
+};
+
 const buildDayScheduleReply = async ({ date, mode }) => {
   const appointments = await listAppointmentsForLocalDate(date);
   const occupiedSlots = appointments.map((appointment) => appointment.localTime);
@@ -294,10 +306,7 @@ const buildDayScheduleReply = async ({ date, mode }) => {
 
   if (mode === 'count') {
     return {
-      text:
-        appointments.length === 0
-          ? `אין תורים ב${dateLabel}.`
-          : `יש ${appointments.length} תורים ב${dateLabel}.`,
+      text: formatAppointmentsCountText(appointments.length, dateLabel),
       appointments,
       occupiedSlots,
       freeSlots
@@ -388,10 +397,7 @@ const buildWeekScheduleReply = async ({ startDate, endDate, mode }) => {
   if (mode === 'count') {
     const totalAppointments = dayResults.reduce((sum, day) => sum + day.appointments.length, 0);
     return {
-      text:
-        totalAppointments === 0
-          ? `אין תורים ב${periodLabel}.`
-          : `יש ${totalAppointments} תורים ב${periodLabel}.`,
+      text: formatAppointmentsCountText(totalAppointments, periodLabel),
       days: dayResults,
       totalAppointments
     };
