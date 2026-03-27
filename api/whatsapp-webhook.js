@@ -32,6 +32,7 @@ const whatsappToken = process.env.WHATSAPP_TOKEN || '';
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 const BOOKING_EXAMPLE = 'לדוגמה: שים את אביבית ביום שני ב-10 תספורת';
+const CUSTOMER_EXAMPLE = 'לדוגמה: לקוח חדש דניאלה להבי, טלפון 0501234567, שם חיה טופי, סוג מלטז';
 const NEW_CUSTOMER_BOOKING_EXAMPLE =
   'לדוגמה: לקוח חדש דניאלה להבי, טלפון 0501234567, שם חיה טופי, סוג מלטז, ביום ראשון ב-29 לחודש בשעה 07:00 תור';
 const APPOINTMENT_CONTEXT_KIND = 'APPOINTMENT';
@@ -196,6 +197,8 @@ const buildMissingFieldsPrompt = (
 
   return `כרגע חסר לי ${firstLabel}. ${firstQuestion} אחרי זה נשלים גם את: ${remainingLabels.join(', ')}.`;
 };
+
+const joinReplyLines = (...lines) => lines.filter(Boolean).join('\n');
 
 const detectAppointmentMissingFields = (payload = {}) => {
   const missing = [];
@@ -416,43 +419,99 @@ const buildDetectedFragments = (analysis = {}) => {
   return fragments;
 };
 
+const buildReadableMissingReply = ({
+  intro = '',
+  analysis = {},
+  missingFields = [],
+  labelsMap = APPOINTMENT_FIELD_LABELS,
+  questionsMap = APPOINTMENT_FIELD_QUESTIONS,
+  example = ''
+}) => {
+  const normalizedFields = missingFields.filter((field) => labelsMap[field]);
+  const detectedFragments = buildDetectedFragments(analysis);
+  const firstField = normalizedFields[0];
+  const remainingLabels = normalizedFields.slice(1).map((field) => labelsMap[field]);
+
+  return joinReplyLines(
+    intro,
+    detectedFragments.length > 0 ? `זיהיתי: ${detectedFragments.join(' | ')}` : '',
+    firstField ? `חסר עכשיו: ${labelsMap[firstField]}` : '',
+    firstField ? questionsMap[firstField] || `מה ${labelsMap[firstField]}?` : '',
+    remainingLabels.length > 0 ? `אחר כך נשלים: ${remainingLabels.join(', ')}` : '',
+    example
+  );
+};
+
 const buildParseFailureText = (reason = '', messageText = '', options = {}) => {
   const message = String(reason || '');
   const analysis = options.analysis || (messageText ? analyzeAppointmentMessage(messageText) : {});
   const missingFields = Array.isArray(options.missingFields)
     ? options.missingFields
     : detectAppointmentMissingFields(analysis);
-  const detectedFragments = buildDetectedFragments(analysis);
-  const detectedText =
-    detectedFragments.length > 0 ? `זיהיתי כבר: ${detectedFragments.join(', ')}. ` : '';
-  const followUpPrompt = buildMissingFieldsPrompt(
-    missingFields,
-    APPOINTMENT_FIELD_LABELS,
-    APPOINTMENT_FIELD_QUESTIONS
-  );
 
   if (analysis.isNewCustomerIntent) {
-    const uniqueMissing = Array.from(new Set(missingFields.map((field) => APPOINTMENT_FIELD_LABELS[field]).filter(Boolean)));
-    return `נראה שאת מנסה לקבוע תור ללקוח חדש. ${detectedText}חסרים לי: ${uniqueMissing.join(', ')}. ${followUpPrompt} ${NEW_CUSTOMER_BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'כדי לפתוח לקוח חדש ולקבוע תור אני צריך עוד כמה פרטים.',
+      analysis,
+      missingFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: NEW_CUSTOMER_BOOKING_EXAMPLE
+    });
   }
 
   if (message.includes('שם לקוח')) {
-    return `לא הצלחתי לזהות את שם הלקוח. ${followUpPrompt} ${BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'עוד לא זיהיתי את שם הלקוח.',
+      analysis,
+      missingFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: BOOKING_EXAMPLE
+    });
   }
 
   if (message.includes('תאריך')) {
-    return `${detectedText}חסר לי יום או תאריך. ${followUpPrompt} ${BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'עוד לא זיהיתי יום או תאריך.',
+      analysis,
+      missingFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: BOOKING_EXAMPLE
+    });
   }
 
   if (message.includes('שעה')) {
-    return `${detectedText}חסרה שעה לתור. ${followUpPrompt} ${BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'עוד לא זיהיתי שעה.',
+      analysis,
+      missingFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: BOOKING_EXAMPLE
+    });
   }
 
   if (message.includes('שירות')) {
-    return `${detectedText}חסר לי שירות. אם זה לא משנה, תכתוב פשוט אחד מאלה: ${SUPPORTED_SERVICE_HINT}. ${followUpPrompt} ${BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'עוד לא זיהיתי שירות.',
+      analysis,
+      missingFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: BOOKING_EXAMPLE
+    });
   }
 
-  return `${detectedText}לא הצלחתי להבין את ההודעה. ${followUpPrompt} ${BOOKING_EXAMPLE}`.trim();
+  return buildReadableMissingReply({
+    intro: 'לא הבנתי עד הסוף את ההודעה.',
+    analysis,
+    missingFields,
+    labelsMap: APPOINTMENT_FIELD_LABELS,
+    questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+    example: BOOKING_EXAMPLE
+  });
 };
 
 const buildBookingFailureText = (reason = '', parsed = {}, messageText = '') => {
@@ -464,39 +523,104 @@ const buildBookingFailureText = (reason = '', parsed = {}, messageText = '') => 
     ...parsed,
     ...analysis
   });
-  const followUpPrompt = buildMissingFieldsPrompt(
-    recoveryFields,
-    APPOINTMENT_FIELD_LABELS,
-    APPOINTMENT_FIELD_QUESTIONS
-  );
 
   if (message.includes('כבר נתפסה')) {
-    return `השעה${formattedTime}${formattedDate ? ` ב${formattedDate}` : ''} כבר תפוסה. תשלח שעה אחרת. ${followUpPrompt}`.trim();
+    return buildReadableMissingReply({
+      intro: `השעה${formattedTime}${formattedDate ? ` ב${formattedDate}` : ''} כבר תפוסה.`,
+      analysis: {
+        ...analysis,
+        ...parsed
+      },
+      missingFields: recoveryFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS
+    });
   }
 
   if (message.includes('כמה לקוחות')) {
-    return `מצאתי כמה לקוחות בשם ${parsed?.customerName || 'הזה'}. תשלח גם מספר טלפון או שם מדויק יותר. ${followUpPrompt}`.trim();
+    return buildReadableMissingReply({
+      intro: `מצאתי כמה לקוחות בשם ${parsed?.customerName || 'הזה'}.`,
+      analysis: {
+        ...analysis,
+        ...parsed
+      },
+      missingFields: recoveryFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS
+    });
   }
 
   if (message.includes('Missing phone for new customer')) {
     return analysis.isNewCustomerIntent
-      ? `כדי לפתוח את הלקוח החדש ולקבוע לו תור חסר לי מספר טלפון. ${followUpPrompt} ${NEW_CUSTOMER_BOOKING_EXAMPLE}`.trim()
-      : `לא מצאתי לקוח קיים בשם הזה. כדי לפתוח לקוח חדש תשלח גם מספר טלפון. ${followUpPrompt}`.trim();
+      ? buildReadableMissingReply({
+          intro: 'כדי לפתוח את הלקוח החדש ולקבוע לו תור חסר לי טלפון.',
+          analysis: {
+            ...analysis,
+            ...parsed
+          },
+          missingFields: recoveryFields,
+          labelsMap: APPOINTMENT_FIELD_LABELS,
+          questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+          example: NEW_CUSTOMER_BOOKING_EXAMPLE
+        })
+      : buildReadableMissingReply({
+          intro: 'לא מצאתי לקוח קיים בשם הזה.',
+          analysis: {
+            ...analysis,
+            ...parsed
+          },
+          missingFields: recoveryFields,
+          labelsMap: APPOINTMENT_FIELD_LABELS,
+          questionsMap: APPOINTMENT_FIELD_QUESTIONS
+        });
   }
 
   if (message.includes('New customers require petName and petType')) {
-    return `כדי לפתוח לקוח חדש אני צריך גם את שם חיית המחמד והסוג שלה. ${followUpPrompt} ${NEW_CUSTOMER_BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'כדי לפתוח לקוח חדש אני צריך גם שם חיה וגם סוג כלב.',
+      analysis: {
+        ...analysis,
+        ...parsed
+      },
+      missingFields: recoveryFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: NEW_CUSTOMER_BOOKING_EXAMPLE
+    });
   }
 
   if (message.includes('Missing customerName or phone')) {
-    return `חסר לי שם לקוח או מספר טלפון. ${followUpPrompt} ${BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'חסר לי שם לקוח או טלפון.',
+      analysis: {
+        ...analysis,
+        ...parsed
+      },
+      missingFields: recoveryFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: BOOKING_EXAMPLE
+    });
   }
 
   if (message.includes('Missing required fields')) {
-    return `חסר לי חלק מהפרטים לתור. ${followUpPrompt} ${BOOKING_EXAMPLE}`.trim();
+    return buildReadableMissingReply({
+      intro: 'חסרים לי עוד פרטים לתור.',
+      analysis: {
+        ...analysis,
+        ...parsed
+      },
+      missingFields: recoveryFields,
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: BOOKING_EXAMPLE
+    });
   }
 
-  return `לא הצלחתי לקבוע את התור. ${message || 'נסה לנסח שוב.'} ${followUpPrompt}`.trim();
+  return joinReplyLines(
+    'לא הצלחתי לקבוע את התור.',
+    message || 'נסה לנסח שוב.'
+  );
 };
 
 const buildScheduleMissingDateText = () =>
@@ -694,12 +818,14 @@ export default async function handler(req, res) {
         const apiError = toApiError(error);
         let customerFailureText = buildCustomerFailureText(apiError.message);
         if (customerMissingFields.length > 0) {
-          const followUpPrompt = buildMissingFieldsPrompt(
-            customerMissingFields,
-            CUSTOMER_FIELD_LABELS,
-            CUSTOMER_FIELD_QUESTIONS
-          );
-          customerFailureText = `${customerFailureText} ${followUpPrompt}`.trim();
+          customerFailureText = buildReadableMissingReply({
+            intro: 'כדי להוסיף לקוח חדש אני צריך עוד כמה פרטים.',
+            analysis: customerQuery,
+            missingFields: customerMissingFields,
+            labelsMap: CUSTOMER_FIELD_LABELS,
+            questionsMap: CUSTOMER_FIELD_QUESTIONS,
+            example: CUSTOMER_EXAMPLE
+          });
           await saveWhatsAppContext(conversationPhone, {
             kind: CUSTOMER_CONTEXT_KIND,
             payload: customerQuery,
