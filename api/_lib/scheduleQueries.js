@@ -108,6 +108,7 @@ const extractRelativeDate = (text) => {
 
 const includesFreeKeyword = (text) => /(פנוי|פנויה|פנויים|פנויות)/.test(text);
 const includesBusyKeyword = (text) => /(תפוס|תפוסה|תפוסים|תפוסות)/.test(text);
+const includesCountKeyword = (text) => /(כמה|מספר|סך).*(תור|תורים)|כמה יש/.test(text);
 const includesScheduleKeyword = (text) =>
   /(לוז|לו"ז|לו״ז|הלו"ז|הלו״ז|יומן|מה יש|מה קורה|מה יש לי|מה יש ב)/.test(text);
 
@@ -127,23 +128,58 @@ const getWeekWindow = () => {
   };
 };
 
+const getNextWeekWindow = () => {
+  const today = dateFromParts(getNowPartsInIsrael());
+  const daysUntilSaturday = (6 - today.getUTCDay() + 7) % 7;
+  const nextSunday = addDays(today, daysUntilSaturday + 1);
+  const nextSaturday = addDays(nextSunday, 6);
+  return {
+    startDate: formatDate(nextSunday),
+    endDate: formatDate(nextSaturday)
+  };
+};
+
 export const parseScheduleQuery = (message) => {
   const text = normalizeText(message);
   const wantsFree = includesFreeKeyword(text);
   const wantsBusy = includesBusyKeyword(text);
+  const wantsCount = includesCountKeyword(text);
   const wantsSchedule = includesScheduleKeyword(text);
 
-  if (!wantsFree && !wantsBusy && !wantsSchedule) {
+  if (!wantsFree && !wantsBusy && !wantsCount && !wantsSchedule) {
     return null;
   }
 
-  const requestsWeekWindow = text.includes('השבוע') || text.includes('לשבוע');
+  const mode = wantsCount
+    ? 'count'
+    : wantsFree && wantsBusy
+      ? 'both'
+      : wantsFree
+        ? 'free'
+        : wantsBusy
+          ? 'busy'
+          : 'overview';
+
+  const requestsNextWeekWindow = /(?:^|\s)(?:ל)?שבוע הבא(?:$|\s)/.test(text);
+  if (requestsNextWeekWindow) {
+    const { startDate, endDate } = getNextWeekWindow();
+    return {
+      kind: 'schedule_query',
+      period: 'week',
+      mode,
+      startDate,
+      endDate,
+      text
+    };
+  }
+
+  const requestsWeekWindow = /(?:^|\s)(?:השבוע|לשבוע)(?:$|\s)/.test(text);
   if (requestsWeekWindow) {
     const { startDate, endDate } = getWeekWindow();
     return {
       kind: 'schedule_query',
       period: 'week',
-      mode: wantsFree && wantsBusy ? 'both' : wantsFree ? 'free' : wantsBusy ? 'busy' : 'overview',
+      mode,
       startDate,
       endDate,
       text
@@ -165,7 +201,7 @@ export const parseScheduleQuery = (message) => {
     return {
       kind: 'schedule_query',
       period: 'day',
-      mode: wantsFree && wantsBusy ? 'both' : wantsBusy ? 'busy' : 'free',
+      mode: wantsCount ? 'count' : wantsFree && wantsBusy ? 'both' : wantsBusy ? 'busy' : 'free',
       missingDate: true,
       text
     };
@@ -174,7 +210,7 @@ export const parseScheduleQuery = (message) => {
   return {
     kind: 'schedule_query',
     period: 'day',
-    mode: wantsFree && wantsBusy ? 'both' : wantsBusy ? 'busy' : wantsFree ? 'free' : 'overview',
+    mode,
     date,
     text
   };
@@ -250,6 +286,18 @@ const buildDayScheduleReply = async ({ date, mode }) => {
   if (mode === 'overview') {
     return {
       text: `מה יש ב${dateLabel}:\n${formatBusyAppointmentsLine(appointments, 'אין תורים מתוכננים כרגע')}`,
+      appointments,
+      occupiedSlots,
+      freeSlots
+    };
+  }
+
+  if (mode === 'count') {
+    return {
+      text:
+        appointments.length === 0
+          ? `אין תורים ב${dateLabel}.`
+          : `יש ${appointments.length} תורים ב${dateLabel}.`,
       appointments,
       occupiedSlots,
       freeSlots
@@ -334,6 +382,18 @@ const buildWeekScheduleReply = async ({ startDate, endDate, mode }) => {
           )
           .join('\n'),
       days: dayResults
+    };
+  }
+
+  if (mode === 'count') {
+    const totalAppointments = dayResults.reduce((sum, day) => sum + day.appointments.length, 0);
+    return {
+      text:
+        totalAppointments === 0
+          ? `אין תורים ב${periodLabel}.`
+          : `יש ${totalAppointments} תורים ב${periodLabel}.`,
+      days: dayResults,
+      totalAppointments
     };
   }
 
