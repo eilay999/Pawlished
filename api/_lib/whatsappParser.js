@@ -44,6 +44,14 @@ const PET_TYPE_ALIASES = [
   'מלטזי'
 ];
 
+const PET_NAME_LABELS = [
+  'שם חיה',
+  'שם הכלב',
+  'שם הכלבה',
+  'שם החתול',
+  'שם החתולה'
+];
+
 const ACTION_PREFIXES = new Set([
   'שים',
   'תשים',
@@ -217,9 +225,29 @@ const extractService = (text) =>
 
 const extractPetType = (text) => PET_TYPE_ALIASES.find(label => text.includes(label)) || null;
 
+const extractPetName = (text) => {
+  for (const label of PET_NAME_LABELS) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = text.match(new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*([^,\\n]+)`, 'u'));
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return null;
+};
+
 const extractPhone = (text) => {
   const match = text.match(/(?:\+972|972|0)\d[\d\s-]{7,}/);
   return match?.[0]?.trim() || null;
+};
+
+const extractPrice = (text) => {
+  const match = text.match(/(\d{2,4})(?:\s*(?:₪|ש["']?ח|שקל(?:ים)?))/);
+  if (!match?.[1]) return null;
+
+  const price = Number(match[1]);
+  return Number.isFinite(price) ? price : null;
 };
 
 const mentionsNewCustomer = (text) => /לקוח(?:ה)? חדשה?|לקוח חדש/.test(text);
@@ -299,7 +327,9 @@ export const analyzeAppointmentMessage = (message) => {
   const customerName = extractName(text);
   const service = extractService(text);
   const phone = extractPhone(text);
+  const petName = extractPetName(text);
   const petType = extractPetType(text);
+  const price = extractPrice(text);
 
   return {
     text,
@@ -308,13 +338,16 @@ export const analyzeAppointmentMessage = (message) => {
     time,
     service,
     phone,
+    petName,
     petType,
+    price,
     isNewCustomerIntent: mentionsNewCustomer(text)
   };
 };
 
 export const parseAppointmentMessage = (message) => {
-  const { text, customerName, date, time, service } = analyzeAppointmentMessage(message);
+  const { text, customerName, date, time, service, phone, petName, petType, price } =
+    analyzeAppointmentMessage(message);
   if (!text) {
     throw new Error('Missing message text');
   }
@@ -340,6 +373,10 @@ export const parseAppointmentMessage = (message) => {
     date,
     time,
     service,
+    phone,
+    petName,
+    petType,
+    price,
     notes: text
   };
 };

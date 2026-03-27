@@ -78,6 +78,26 @@ const parsePrice = (value = '') => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+export const extractCustomerDetails = (message = '') => {
+  const text = normalizeText(message);
+  const customerName = extractLabeledValue(text, FIELD_LABELS.customerName) || extractLeadingName(text);
+  const phone = extractPhone(text);
+  const petName = extractLabeledValue(text, FIELD_LABELS.petName);
+  const petType = extractLabeledValue(text, FIELD_LABELS.petType);
+  const notes = extractLabeledValue(text, FIELD_LABELS.notes);
+  const defaultPrice = parsePrice(extractLabeledValue(text, FIELD_LABELS.defaultPrice));
+
+  return {
+    text,
+    customerName,
+    phone,
+    petName,
+    petType,
+    notes,
+    defaultPrice
+  };
+};
+
 export const parseCustomerQuery = (message) => {
   const text = normalizeText(message);
   const match = text.match(
@@ -89,23 +109,52 @@ export const parseCustomerQuery = (message) => {
   }
 
   const body = normalizeText(match[1] || '');
-  const customerName = extractLabeledValue(body, FIELD_LABELS.customerName) || extractLeadingName(body);
-  const phone = extractPhone(body);
-  const petName = extractLabeledValue(body, FIELD_LABELS.petName);
-  const petType = extractLabeledValue(body, FIELD_LABELS.petType);
-  const notes = extractLabeledValue(body, FIELD_LABELS.notes);
-  const defaultPrice = parsePrice(extractLabeledValue(body, FIELD_LABELS.defaultPrice));
+  const details = extractCustomerDetails(body);
 
   return {
     kind: 'customer_query',
     action: 'create',
     text,
-    customerName,
-    phone,
-    petName,
-    petType,
-    notes,
-    defaultPrice
+    ...details
+  };
+};
+
+export const mergeCustomerDetails = (base = {}, message = '', preferredMissingFields = []) => {
+  const details = extractCustomerDetails(message);
+  const merged = {
+    ...base,
+    ...Object.fromEntries(
+      Object.entries(details).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+    )
+  };
+
+  const normalizedMessage = normalizeText(message);
+  const meaningfulText =
+    normalizedMessage &&
+    !/^[?!.]+$/.test(normalizedMessage) &&
+    normalizeDigits(normalizedMessage).length !== normalizedMessage.length;
+
+  if (preferredMissingFields.length === 1 && meaningfulText) {
+    const target = preferredMissingFields[0];
+    if (target === 'customerName' && !details.customerName) {
+      merged.customerName = normalizedMessage;
+    } else if (target === 'petName' && !details.petName) {
+      merged.petName = normalizedMessage;
+    } else if (target === 'petType' && !details.petType) {
+      merged.petType = normalizedMessage;
+    }
+  }
+
+  if (preferredMissingFields.includes('phone') && !merged.phone) {
+    const phoneOnly = normalizeDigits(normalizedMessage);
+    if (phoneOnly.length >= 9) {
+      merged.phone = normalizedMessage;
+    }
+  }
+
+  return {
+    ...merged,
+    text: `${String(base.text || '').trim()} ${normalizedMessage}`.trim()
   };
 };
 
