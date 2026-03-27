@@ -4,6 +4,14 @@ import {
 } from './_lib/appointments.js';
 import { getScheduleReply, parseScheduleQuery } from './_lib/scheduleQueries.js';
 import { getStatsReply, parseStatsQuery } from './_lib/statsQueries.js';
+import {
+  completeTaskFromQuery,
+  createTaskFromQuery,
+  deleteTaskFromQuery,
+  getTasksReply,
+  parseTaskQuery,
+  reopenTaskFromQuery
+} from './_lib/taskQueries.js';
 import { parseAppointmentMessage } from './_lib/whatsappParser.js';
 
 const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
@@ -260,6 +268,65 @@ export default async function handler(req, res) {
         snapshot: statsReplyResult.snapshot
       });
       return;
+    }
+
+    const taskQuery = parseTaskQuery(incoming.text);
+    if (taskQuery) {
+      try {
+        let taskReplyResult;
+
+        if (taskQuery.action === 'summary') {
+          taskReplyResult = await getTasksReply('summary');
+        } else if (taskQuery.action === 'list_open') {
+          taskReplyResult = await getTasksReply('list_open');
+        } else if (taskQuery.action === 'create') {
+          taskReplyResult = await createTaskFromQuery({
+            title: taskQuery.title,
+            date: taskQuery.date
+          });
+        } else if (taskQuery.action === 'complete') {
+          taskReplyResult = await completeTaskFromQuery(taskQuery.selector);
+        } else if (taskQuery.action === 'reopen') {
+          taskReplyResult = await reopenTaskFromQuery(taskQuery.selector);
+        } else if (taskQuery.action === 'delete') {
+          taskReplyResult = await deleteTaskFromQuery(taskQuery.selector);
+        } else {
+          taskReplyResult = {
+            text: 'לא הבנתי מה לעשות עם המשימה. נסה לכתוב: תוסיף משימה לחזור ללקוח'
+          };
+        }
+
+        const taskReply = await sendReplySafely(
+          incoming.from || req.body?.customerPhone || '',
+          taskReplyResult.text
+        );
+
+        res.status(200).json({
+          ok: true,
+          accepted: true,
+          kind: 'task_query',
+          query: taskQuery,
+          reply: taskReply,
+          text: taskReplyResult.text
+        });
+        return;
+      } catch (error) {
+        const apiError = toApiError(error);
+        const taskFailureReply = await sendReplySafely(
+          incoming.from || req.body?.customerPhone || '',
+          apiError.message
+        );
+
+        res.status(200).json({
+          ok: true,
+          accepted: false,
+          kind: 'task_query',
+          query: taskQuery,
+          reason: apiError.message,
+          reply: taskFailureReply
+        });
+        return;
+      }
     }
 
     let parsed;
