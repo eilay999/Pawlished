@@ -370,6 +370,7 @@ const buildMetricReply = (metric, snapshot) => {
         `לקוחות עם תור עתידי: ${snapshot.scheduledCustomers}\n` +
         `לקוחות תקינים: ${snapshot.okCustomers}\n` +
         `לקוחות בהמתנה: ${snapshot.onHoldCustomers}\n` +
+        `סה"כ משימות: ${snapshot.totalTasks}\n` +
         `משימות פתוחות: ${snapshot.openTasks}\n` +
         `משימות שבוצעו: ${snapshot.doneTasks}`
       );
