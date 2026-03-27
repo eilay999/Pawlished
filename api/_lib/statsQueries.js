@@ -203,7 +203,7 @@ const loadStatsData = async () => {
     await Promise.all([
       supabase
         .from('customers')
-        .select('id, name, phone, pet_name, pet_type, last_visit, visit_frequency_weeks, lifecycle_status'),
+        .select('id, name, phone, pet_name, pet_type, last_visit, visit_frequency_weeks'),
       supabase
         .from('appointments')
         .select('id, customer_id, date, status, price, cancellation_fee')
