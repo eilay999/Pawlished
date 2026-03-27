@@ -433,9 +433,10 @@ export default async function handler(req, res) {
           ? req.body.parsed
           : parseAppointmentMessage(incoming.text);
     } catch (error) {
+      const parseFailureText = buildParseFailureText(error?.message, incoming.text);
       const parseReply = await sendReplySafely(
         incoming.from || req.body?.customerPhone || '',
-        buildParseFailureText(error?.message, incoming.text)
+        parseFailureText
       );
 
       res.status(200).json({
@@ -443,6 +444,7 @@ export default async function handler(req, res) {
         accepted: false,
         reason: error?.message || 'Could not parse message',
         receivedText: incoming.text,
+        text: parseFailureText,
         reply: parseReply
       });
       return;
@@ -495,9 +497,10 @@ export default async function handler(req, res) {
     } catch (error) {
       const apiError = toApiError(error);
       if (apiError.statusCode < 500) {
+        const bookingFailureText = buildBookingFailureText(apiError.message, parsed, incoming.text);
         const failureReply = await sendReplySafely(
           incoming.from || req.body?.customerPhone || '',
-          buildBookingFailureText(apiError.message, parsed, incoming.text)
+          bookingFailureText
         );
 
         res.status(200).json({
@@ -505,6 +508,7 @@ export default async function handler(req, res) {
           accepted: false,
           parsed,
           reason: apiError.message,
+          text: bookingFailureText,
           reply: failureReply
         });
         return;
