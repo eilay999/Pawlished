@@ -9,6 +9,7 @@ const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || '';
 const whatsappToken = process.env.WHATSAPP_TOKEN || '';
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
+const BOOKING_EXAMPLE = 'לדוגמה: שים את אביבית ביום שני ב-10 תספורת';
 
 const canSendWhatsAppReply = () => Boolean(whatsappToken && whatsappPhoneNumberId);
 
@@ -75,6 +76,75 @@ const sendWhatsAppTextReply = async (to, bodyText) => {
 
 const buildConfirmationText = ({ customerName, date, time, service }) =>
   `התור של ${customerName} נקבע ל${formatReplyDate(date)} בשעה ${time} עבור ${service}.`;
+
+const buildParseFailureText = (reason = '') => {
+  const message = String(reason || '');
+
+  if (message.includes('שם לקוח')) {
+    return `לא הצלחתי לזהות את שם הלקוח. ${BOOKING_EXAMPLE}`;
+  }
+
+  if (message.includes('תאריך')) {
+    return `לא הצלחתי להבין איזה יום או תאריך ביקשת. ${BOOKING_EXAMPLE}`;
+  }
+
+  if (message.includes('שעה')) {
+    return `לא הצלחתי להבין איזו שעה ביקשת. ${BOOKING_EXAMPLE}`;
+  }
+
+  if (message.includes('שירות')) {
+    return `לא הצלחתי להבין איזה שירות ביקשת. ${BOOKING_EXAMPLE}`;
+  }
+
+  return `לא הצלחתי להבין את ההודעה. ${BOOKING_EXAMPLE}`;
+};
+
+const buildBookingFailureText = (reason = '', parsed = {}) => {
+  const message = String(reason || '');
+  const formattedDate = parsed?.date ? formatReplyDate(parsed.date) : '';
+  const formattedTime = parsed?.time ? ` בשעה ${parsed.time}` : '';
+
+  if (message.includes('כבר נתפסה')) {
+    return `השעה${formattedTime}${formattedDate ? ` ב${formattedDate}` : ''} כבר תפוסה. תשלח שעה אחרת.`;
+  }
+
+  if (message.includes('כמה לקוחות')) {
+    return `מצאתי כמה לקוחות בשם ${parsed?.customerName || 'הזה'}. תשלח גם מספר טלפון או שם מדויק יותר.`;
+  }
+
+  if (message.includes('Missing phone for new customer')) {
+    return 'לא מצאתי לקוח קיים בשם הזה. כדי לפתוח לקוח חדש תשלח גם מספר טלפון.';
+  }
+
+  if (message.includes('New customers require petName and petType')) {
+    return 'כדי לפתוח לקוח חדש אני צריך גם את שם חיית המחמד והסוג שלה.';
+  }
+
+  if (message.includes('Missing customerName or phone')) {
+    return `חסר לי שם לקוח או מספר טלפון. ${BOOKING_EXAMPLE}`;
+  }
+
+  if (message.includes('Missing required fields')) {
+    return `חסר לי חלק מהפרטים לתור. ${BOOKING_EXAMPLE}`;
+  }
+
+  return `לא הצלחתי לקבוע את התור. ${message || 'נסה לנסח שוב.'}`;
+};
+
+const sendReplySafely = async (phone, text) => {
+  if (!phone || !text) {
+    return null;
+  }
+
+  try {
+    return await sendWhatsAppTextReply(phone, text);
+  } catch (error) {
+    return {
+      sent: false,
+      reason: error?.message || 'Failed to send WhatsApp reply'
+    };
+  }
+};
 
 const getProvidedSecret = (req) =>
   req.headers['x-webhook-secret'] ||
@@ -149,11 +219,17 @@ export default async function handler(req, res) {
           ? req.body.parsed
           : parseAppointmentMessage(incoming.text);
     } catch (error) {
+      const parseReply = await sendReplySafely(
+        incoming.from || req.body?.customerPhone || '',
+        buildParseFailureText(error?.message)
+      );
+
       res.status(200).json({
         ok: true,
         accepted: false,
         reason: error?.message || 'Could not parse message',
-        receivedText: incoming.text
+        receivedText: incoming.text,
+        reply: parseReply
       });
       return;
     }
@@ -185,22 +261,15 @@ export default async function handler(req, res) {
         '';
 
       if (replyPhone) {
-        try {
-          confirmation = await sendWhatsAppTextReply(
-            replyPhone,
-            buildConfirmationText({
-              customerName: result.customer?.name || parsed.customerName,
-              date: parsed.date,
-              time: parsed.time,
-              service: parsed.service
-            })
-          );
-        } catch (replyError) {
-          confirmation = {
-            sent: false,
-            reason: replyError?.message || 'Failed to send confirmation reply'
-          };
-        }
+        confirmation = await sendReplySafely(
+          replyPhone,
+          buildConfirmationText({
+            customerName: result.customer?.name || parsed.customerName,
+            date: parsed.date,
+            time: parsed.time,
+            service: parsed.service
+          })
+        );
       }
 
       res.status(200).json({
@@ -212,11 +281,17 @@ export default async function handler(req, res) {
     } catch (error) {
       const apiError = toApiError(error);
       if (apiError.statusCode < 500) {
+        const failureReply = await sendReplySafely(
+          incoming.from || req.body?.customerPhone || '',
+          buildBookingFailureText(apiError.message, parsed)
+        );
+
         res.status(200).json({
           ok: true,
           accepted: false,
           parsed,
-          reason: apiError.message
+          reason: apiError.message,
+          reply: failureReply
         });
         return;
       }
