@@ -18,7 +18,7 @@ import {
   parseTaskQuery,
   reopenTaskFromQuery
 } from './_lib/taskQueries.js';
-import { parseAppointmentMessage } from './_lib/whatsappParser.js';
+import { analyzeAppointmentMessage, parseAppointmentMessage } from './_lib/whatsappParser.js';
 
 const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
 const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || '';
@@ -26,6 +26,8 @@ const whatsappToken = process.env.WHATSAPP_TOKEN || '';
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 const BOOKING_EXAMPLE = 'לדוגמה: שים את אביבית ביום שני ב-10 תספורת';
+const NEW_CUSTOMER_BOOKING_EXAMPLE =
+  'לדוגמה: לקוח חדש דניאלה להבי, טלפון 0501234567, שם חיה טופי, סוג מלטז, ביום ראשון ב-29 לחודש בשעה 07:00 תור';
 
 const canSendWhatsAppReply = () => Boolean(whatsappToken && whatsappPhoneNumberId);
 
@@ -93,32 +95,72 @@ const sendWhatsAppTextReply = async (to, bodyText) => {
 const buildConfirmationText = ({ customerName, date, time, service }) =>
   `התור של ${customerName} נקבע ל${formatReplyDate(date)} בשעה ${time} עבור ${service}.`;
 
-const buildParseFailureText = (reason = '') => {
+const buildDetectedFragments = (analysis = {}) => {
+  const fragments = [];
+
+  if (analysis.customerName) {
+    fragments.push(`שם ${analysis.customerName}`);
+  }
+
+  if (analysis.date) {
+    fragments.push(`יום ${formatReplyDate(analysis.date)}`);
+  }
+
+  if (analysis.time) {
+    fragments.push(`שעה ${analysis.time}`);
+  }
+
+  if (analysis.service) {
+    fragments.push(`שירות ${analysis.service}`);
+  }
+
+  return fragments;
+};
+
+const buildParseFailureText = (reason = '', messageText = '') => {
   const message = String(reason || '');
+  const analysis = messageText ? analyzeAppointmentMessage(messageText) : {};
+  const detectedFragments = buildDetectedFragments(analysis);
+  const detectedText =
+    detectedFragments.length > 0 ? `זיהיתי כבר: ${detectedFragments.join(', ')}. ` : '';
+
+  if (analysis.isNewCustomerIntent) {
+    const missingParts = [];
+    if (!analysis.customerName) missingParts.push('שם לקוח');
+    if (!analysis.date) missingParts.push('יום או תאריך');
+    if (!analysis.time) missingParts.push('שעה');
+    if (!analysis.phone) missingParts.push('טלפון');
+    if (!analysis.petType) missingParts.push('סוג כלב');
+    missingParts.push('שם חיה');
+
+    const uniqueMissing = Array.from(new Set(missingParts));
+    return `נראה שאת מנסה לקבוע תור ללקוח חדש. ${detectedText}חסרים לי: ${uniqueMissing.join(', ')}. ${NEW_CUSTOMER_BOOKING_EXAMPLE}`;
+  }
 
   if (message.includes('שם לקוח')) {
     return `לא הצלחתי לזהות את שם הלקוח. ${BOOKING_EXAMPLE}`;
   }
 
   if (message.includes('תאריך')) {
-    return `לא הצלחתי להבין איזה יום או תאריך ביקשת. ${BOOKING_EXAMPLE}`;
+    return `${detectedText}חסר לי יום או תאריך. ${BOOKING_EXAMPLE}`;
   }
 
   if (message.includes('שעה')) {
-    return `חסרה שעה לתור. ${BOOKING_EXAMPLE}`;
+    return `${detectedText}חסרה שעה לתור. ${BOOKING_EXAMPLE}`;
   }
 
   if (message.includes('שירות')) {
-    return `לא הצלחתי להבין איזה שירות ביקשת. ${BOOKING_EXAMPLE}`;
+    return `${detectedText}חסר לי שירות. אם זה לא משנה, תכתוב פשוט תספורת או אמבטיה. ${BOOKING_EXAMPLE}`;
   }
 
-  return `לא הצלחתי להבין את ההודעה. ${BOOKING_EXAMPLE}`;
+  return `${detectedText}לא הצלחתי להבין את ההודעה. ${BOOKING_EXAMPLE}`;
 };
 
-const buildBookingFailureText = (reason = '', parsed = {}) => {
+const buildBookingFailureText = (reason = '', parsed = {}, messageText = '') => {
   const message = String(reason || '');
   const formattedDate = parsed?.date ? formatReplyDate(parsed.date) : '';
   const formattedTime = parsed?.time ? ` בשעה ${parsed.time}` : '';
+  const analysis = messageText ? analyzeAppointmentMessage(messageText) : {};
 
   if (message.includes('כבר נתפסה')) {
     return `השעה${formattedTime}${formattedDate ? ` ב${formattedDate}` : ''} כבר תפוסה. תשלח שעה אחרת.`;
@@ -129,11 +171,13 @@ const buildBookingFailureText = (reason = '', parsed = {}) => {
   }
 
   if (message.includes('Missing phone for new customer')) {
-    return 'לא מצאתי לקוח קיים בשם הזה. כדי לפתוח לקוח חדש תשלח גם מספר טלפון.';
+    return analysis.isNewCustomerIntent
+      ? `כדי לפתוח את הלקוח החדש ולקבוע לו תור חסר לי מספר טלפון. ${NEW_CUSTOMER_BOOKING_EXAMPLE}`
+      : 'לא מצאתי לקוח קיים בשם הזה. כדי לפתוח לקוח חדש תשלח גם מספר טלפון.';
   }
 
   if (message.includes('New customers require petName and petType')) {
-    return 'כדי לפתוח לקוח חדש אני צריך גם את שם חיית המחמד והסוג שלה.';
+    return `כדי לפתוח לקוח חדש אני צריך גם את שם חיית המחמד והסוג שלה. ${NEW_CUSTOMER_BOOKING_EXAMPLE}`;
   }
 
   if (message.includes('Missing customerName or phone')) {
@@ -391,7 +435,7 @@ export default async function handler(req, res) {
     } catch (error) {
       const parseReply = await sendReplySafely(
         incoming.from || req.body?.customerPhone || '',
-        buildParseFailureText(error?.message)
+        buildParseFailureText(error?.message, incoming.text)
       );
 
       res.status(200).json({
@@ -453,7 +497,7 @@ export default async function handler(req, res) {
       if (apiError.statusCode < 500) {
         const failureReply = await sendReplySafely(
           incoming.from || req.body?.customerPhone || '',
-          buildBookingFailureText(apiError.message, parsed)
+          buildBookingFailureText(apiError.message, parsed, incoming.text)
         );
 
         res.status(200).json({

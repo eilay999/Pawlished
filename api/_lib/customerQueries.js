@@ -81,7 +81,7 @@ const parsePrice = (value = '') => {
 export const parseCustomerQuery = (message) => {
   const text = normalizeText(message);
   const match = text.match(
-    /^(?:הוסף|תוסיף|תוסיפי|צור|תיצור)\s+(?:לי\s+)?לקוח(?:ה)?(?:\s+חדש(?:ה)?)?\s*[:\-]?\s*(.+)$/
+    /^(?:הוסף|תוסיף|תוסיפי|צור|תיצור|להוסיף|הוספת|תוכל להוסיף|תוכלי להוסיף|אפשר להוסיף)\s+(?:לי\s+)?(?:את\s+)?לקוח(?:ה)?(?:\s+חדש(?:ה)?)?\s*[:\-]?\s*(.*)$/
   );
 
   if (!match) {

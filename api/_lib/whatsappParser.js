@@ -28,6 +28,22 @@ const SERVICE_ALIASES = [
   'סירוק'
 ];
 
+const GENERIC_SERVICE = 'תור לקוח';
+
+const PET_TYPE_ALIASES = [
+  'פודל',
+  'טוי פודל',
+  'פודל ננסי',
+  'שיצו',
+  'פומרניין',
+  'פומרני',
+  'פומרנים',
+  'מלטיפו',
+  'שיצו פודל',
+  'מלטז',
+  'מלטזי'
+];
+
 const ACTION_PREFIXES = new Set([
   'שים',
   'תשים',
@@ -35,9 +51,13 @@ const ACTION_PREFIXES = new Set([
   'תקבע',
   'תקבעי',
   'תוסיף',
+  'להוסיף',
   'תכניס',
   'שריין',
-  'תשריין'
+  'תשריין',
+  'תוכל',
+  'תוכלי',
+  'אפשר'
 ]);
 
 const pad = (value) => String(value).padStart(2, '0');
@@ -47,6 +67,7 @@ const normalizeText = (value = '') =>
     .replace(/[“”״]/g, '"')
     .replace(/[’׳]/g, "'")
     .replace(/[–—]/g, '-')
+    .replace(/[()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -91,13 +112,35 @@ const formatDate = (date) =>
 
 const normalizeTime = (hours, minutes = '00') => `${pad(hours)}:${pad(minutes)}`;
 
+const collectTimeCandidates = (text) => {
+  const candidates = [];
+
+  const explicitPatterns = [
+    /(?:בשעה|שעה|לשעה)\s*(\d{1,2})(?::(\d{2}))?\b/g,
+    /(?:^|\s)(\d{1,2}):(\d{2})\b/g,
+    /(?:ב-|ב )\s*(\d{1,2})(?::(\d{2}))?(?!\s*לחודש)\b/g
+  ];
+
+  explicitPatterns.forEach((pattern, priority) => {
+    for (const match of text.matchAll(pattern)) {
+      const hours = Number(match[1]);
+      const minutes = Number(match[2] || '00');
+      if (hours > 23 || minutes > 59) continue;
+      candidates.push({
+        hours,
+        minutes,
+        priority
+      });
+    }
+  });
+
+  return candidates.sort((left, right) => left.priority - right.priority);
+};
+
 const extractTime = (text) => {
-  const match = text.match(/(?:בשעה|לשעה|ב-?|ב )?\s*(\d{1,2})(?::(\d{2}))?\b/);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2] || '00');
-  if (hours > 23 || minutes > 59) return null;
-  return normalizeTime(hours, minutes);
+  const candidate = collectTimeCandidates(text)[0];
+  if (!candidate) return null;
+  return normalizeTime(candidate.hours, candidate.minutes);
 };
 
 const extractExplicitDate = (text) => {
@@ -105,14 +148,35 @@ const extractExplicitDate = (text) => {
   if (isoMatch) return isoMatch[1];
 
   const shortMatch = text.match(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b/);
-  if (!shortMatch) return null;
+  if (shortMatch) {
+    const [, dayRaw, monthRaw, yearRaw] = shortMatch;
+    const currentYear = getNowPartsInIsrael().year;
+    const year = yearRaw ? Number(yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : currentYear;
+    const month = Number(monthRaw);
+    const day = Number(dayRaw);
+    return `${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}`;
+  }
 
-  const [, dayRaw, monthRaw, yearRaw] = shortMatch;
-  const currentYear = getNowPartsInIsrael().year;
-  const year = yearRaw ? Number(yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : currentYear;
-  const month = Number(monthRaw);
-  const day = Number(dayRaw);
-  return `${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}`;
+  const monthlessMatch = text.match(/(?:ב-?)?(\d{1,2})\s+לחודש\b/);
+  if (!monthlessMatch) return null;
+
+  const now = getNowPartsInIsrael();
+  const day = Number(monthlessMatch[1]);
+  const currentMonthDate = new Date(Date.UTC(now.year, now.month - 1, day, 12, 0, 0));
+  const today = dateFromParts(now);
+
+  if (!Number.isNaN(currentMonthDate.getTime()) && currentMonthDate.getUTCDate() === day) {
+    if (currentMonthDate.getTime() >= today.getTime()) {
+      return formatDate(currentMonthDate);
+    }
+
+    const nextMonthDate = new Date(Date.UTC(now.year, now.month, day, 12, 0, 0));
+    if (!Number.isNaN(nextMonthDate.getTime()) && nextMonthDate.getUTCDate() === day) {
+      return formatDate(nextMonthDate);
+    }
+  }
+
+  return null;
 };
 
 const extractRelativeDate = (text, time) => {
@@ -149,7 +213,16 @@ const extractRelativeDate = (text, time) => {
 };
 
 const extractService = (text) =>
-  SERVICE_ALIASES.find(label => text.includes(label)) || null;
+  SERVICE_ALIASES.find(label => text.includes(label)) || (text.includes('תור') ? GENERIC_SERVICE : null);
+
+const extractPetType = (text) => PET_TYPE_ALIASES.find(label => text.includes(label)) || null;
+
+const extractPhone = (text) => {
+  const match = text.match(/(?:\+972|972|0)\d[\d\s-]{7,}/);
+  return match?.[0]?.trim() || null;
+};
+
+const mentionsNewCustomer = (text) => /לקוח(?:ה)? חדשה?|לקוח חדש/.test(text);
 
 const extractName = (text) => {
   const sanitized = normalizeText(text)
@@ -173,7 +246,13 @@ const extractName = (text) => {
       token === 'מחר' ||
       token === 'מחרתיים' ||
       token === 'בשעה' ||
-      token === 'לשעה'
+      token === 'לשעה' ||
+      token === 'שעה' ||
+      token === 'עם' ||
+      token === 'תור' ||
+      token === 'לקוח' ||
+      token === 'חדשה' ||
+      token === 'חדש'
     ) {
       return true;
     }
@@ -194,19 +273,51 @@ const extractName = (text) => {
   });
 
   const nameTokens = stopIndex === -1 ? tokens : tokens.slice(0, stopIndex);
-  return nameTokens.join(' ').trim() || null;
+  let candidateName = nameTokens.join(' ').trim();
+
+  const removableSuffixes = [...SERVICE_ALIASES, ...PET_TYPE_ALIASES, 'לקוח חדש', 'לקוחה חדשה']
+    .sort((left, right) => right.length - left.length);
+
+  removableSuffixes.forEach((suffix) => {
+    if (candidateName === suffix) {
+      candidateName = '';
+      return;
+    }
+
+    if (candidateName.endsWith(` ${suffix}`)) {
+      candidateName = candidateName.slice(0, -(suffix.length + 1)).trim();
+    }
+  });
+
+  return candidateName || null;
 };
 
-export const parseAppointmentMessage = (message) => {
+export const analyzeAppointmentMessage = (message) => {
   const text = normalizeText(message);
-  if (!text) {
-    throw new Error('Missing message text');
-  }
-
   const time = extractTime(text);
   const date = extractExplicitDate(text) || extractRelativeDate(text, time);
   const customerName = extractName(text);
   const service = extractService(text);
+  const phone = extractPhone(text);
+  const petType = extractPetType(text);
+
+  return {
+    text,
+    customerName,
+    date,
+    time,
+    service,
+    phone,
+    petType,
+    isNewCustomerIntent: mentionsNewCustomer(text)
+  };
+};
+
+export const parseAppointmentMessage = (message) => {
+  const { text, customerName, date, time, service } = analyzeAppointmentMessage(message);
+  if (!text) {
+    throw new Error('Missing message text');
+  }
 
   if (!customerName) {
     throw new Error('לא הצלחתי לזהות שם לקוח מההודעה.');
