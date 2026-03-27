@@ -3,6 +3,7 @@ import {
   toApiError
 } from './_lib/appointments.js';
 import { getScheduleReply, parseScheduleQuery } from './_lib/scheduleQueries.js';
+import { getStatsReply, parseStatsQuery } from './_lib/statsQueries.js';
 import { parseAppointmentMessage } from './_lib/whatsappParser.js';
 
 const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
@@ -237,6 +238,26 @@ export default async function handler(req, res) {
         query: scheduleQuery,
         reply: scheduleReply,
         text: scheduleReplyText
+      });
+      return;
+    }
+
+    const statsQuery = parseStatsQuery(incoming.text);
+    if (statsQuery) {
+      const statsReplyResult = await getStatsReply(statsQuery.metric);
+      const statsReply = await sendReplySafely(
+        incoming.from || req.body?.customerPhone || '',
+        statsReplyResult.text
+      );
+
+      res.status(200).json({
+        ok: true,
+        accepted: true,
+        kind: 'stats_query',
+        query: statsQuery,
+        reply: statsReply,
+        text: statsReplyResult.text,
+        snapshot: statsReplyResult.snapshot
       });
       return;
     }
