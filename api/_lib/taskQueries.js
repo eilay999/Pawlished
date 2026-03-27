@@ -49,6 +49,15 @@ const normalizeText = (value = '') =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const normalizeTaskLines = (value = '') =>
+  String(value || '')
+    .replace(/[“”״]/g, '"')
+    .replace(/[’'׳]/g, "'")
+    .replace(/[–—־]/g, '-')
+    .split(/\r?\n/)
+    .map((line) => normalizeText(line))
+    .filter(Boolean);
+
 const getFormatterParts = (date, timeZone = ISRAEL_TIME_ZONE) => {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -158,14 +167,38 @@ const parseSelectorFromText = (text) => {
 };
 
 export const parseTaskQuery = (message) => {
+  const taskLines = normalizeTaskLines(message);
   const text = normalizeText(message);
-  if (!text.includes('משימ')) {
+  const mentionsTaskWord =
+    text.includes('משימה') || text.includes('משימות') || text.includes('למשימה') || text.includes('למשימות');
+
+  if (!mentionsTaskWord) {
     return null;
   }
 
-  const createMatch = text.match(/(?:הוסף|תוסיף|תוסיפי|צור|תיצור)\s+(?:לי\s+)?משימה\s*[:\-]?\s*(.+)$/);
+  const createMatch = text.match(
+    /^(?:הוסף|תוסיף|תוסיפי|צור|תיצור)\s+(?:לי\s+)?(?:למשימה|משימה|למשימות|משימות)\s*[:\-]?\s*(.+)$/ 
+  );
   if (createMatch) {
     const rawTitle = stripDateHints(createMatch[1] || '');
+    const firstLineMatch = taskLines[0]?.match(
+      /^(?:הוסף|תוסיף|תוסיפי|צור|תיצור)\s+(?:לי\s+)?(?:למשימה|משימה|למשימות|משימות)\s*[:\-]?\s*(.*)$/ 
+    );
+    const multiLineTitles = [
+      stripDateHints(firstLineMatch?.[1] || ''),
+      ...taskLines.slice(1).map((line) => stripDateHints(line))
+    ].filter(Boolean);
+
+    if (multiLineTitles.length > 1) {
+      return {
+        kind: 'task_query',
+        action: 'create_bulk',
+        titles: multiLineTitles,
+        date: extractTaskDate(text),
+        text
+      };
+    }
+
     return {
       kind: 'task_query',
       action: 'create',
@@ -404,6 +437,41 @@ export const createTaskFromQuery = async ({ title, date }) => {
   return {
     task: mapped,
     text: `הוספתי משימה: ${mapped.title} | ${formatTaskDate(mapped.startDate)} | פתוח`
+  };
+};
+
+export const createBulkTasksFromQuery = async ({ titles, date }) => {
+  const safeTitles = Array.from(new Set((titles || []).map((title) => normalizeText(title)).filter(Boolean)));
+  if (safeTitles.length === 0) {
+    throw createHttpError(400, 'חסר לי טקסט למשימות.');
+  }
+
+  const supabase = getSupabaseClient();
+  const startDateIso = buildSlotDateFromLocal(date || getTodayDateString(), '12:00').toISOString();
+  const rows = safeTitles.map((title) => ({
+    id: crypto.randomUUID(),
+    title,
+    status: 'OPEN',
+    created_at: new Date().toISOString(),
+    start_date: startDateIso
+  }));
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert(rows)
+    .select('id, title, status, created_at, start_date');
+
+  if (error || !data) {
+    throw createHttpError(500, error?.message || 'Failed to create tasks');
+  }
+
+  const tasks = (data || []).map(mapTask);
+  return {
+    tasks,
+    text: `הוספתי ${tasks.length} משימות:\n${tasks
+      .slice(0, 8)
+      .map((task, index) => `${index + 1}. ${task.title}`)
+      .join('\n')}`
   };
 };
 

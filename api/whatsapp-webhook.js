@@ -12,6 +12,7 @@ import { getScheduleWindowReply, parseScheduleQuery } from './_lib/scheduleQueri
 import { getStatsReply, parseStatsQuery } from './_lib/statsQueries.js';
 import {
   completeTaskFromQuery,
+  createBulkTasksFromQuery,
   createTaskFromQuery,
   deleteTaskFromQuery,
   getTaskStatusReply,
@@ -714,6 +715,7 @@ export default async function handler(req, res) {
 
     const assistantHelpQuery = parseAssistantHelpQuery(incoming.text);
     if (assistantHelpQuery) {
+      await clearWhatsAppContext(conversationPhone);
       const helpReply = await sendReplySafely(conversationPhone, ASSISTANT_HELP_TEXT);
 
       res.status(200).json({
@@ -729,6 +731,7 @@ export default async function handler(req, res) {
 
     const scheduleQuery = parseScheduleQuery(incoming.text);
     if (scheduleQuery) {
+      await clearWhatsAppContext(conversationPhone);
       const scheduleReplyText = scheduleQuery.missingDate
         ? buildScheduleMissingDateText()
         : (
@@ -759,6 +762,7 @@ export default async function handler(req, res) {
 
     const statsQuery = parseStatsQuery(incoming.text);
     if (statsQuery) {
+      await clearWhatsAppContext(conversationPhone);
       const statsReplyResult = await getStatsReply(statsQuery.metric);
       const statsReply = await sendReplySafely(
         incoming.from || req.body?.customerPhone || '',
@@ -775,6 +779,73 @@ export default async function handler(req, res) {
         snapshot: statsReplyResult.snapshot
       });
       return;
+    }
+
+    const taskQuery = parseTaskQuery(incoming.text);
+    if (taskQuery) {
+      try {
+        await clearWhatsAppContext(conversationPhone);
+        let taskReplyResult;
+
+        if (taskQuery.action === 'summary') {
+          taskReplyResult = await getTasksReply('summary');
+        } else if (taskQuery.action === 'list_open') {
+          taskReplyResult = await getTasksReply('list_open');
+        } else if (taskQuery.action === 'status') {
+          taskReplyResult = await getTaskStatusReply(taskQuery.selector);
+        } else if (taskQuery.action === 'create') {
+          taskReplyResult = await createTaskFromQuery({
+            title: taskQuery.title,
+            date: taskQuery.date
+          });
+        } else if (taskQuery.action === 'create_bulk') {
+          taskReplyResult = await createBulkTasksFromQuery({
+            titles: taskQuery.titles,
+            date: taskQuery.date
+          });
+        } else if (taskQuery.action === 'complete') {
+          taskReplyResult = await completeTaskFromQuery(taskQuery.selector);
+        } else if (taskQuery.action === 'reopen') {
+          taskReplyResult = await reopenTaskFromQuery(taskQuery.selector);
+        } else if (taskQuery.action === 'delete') {
+          taskReplyResult = await deleteTaskFromQuery(taskQuery.selector);
+        } else {
+          taskReplyResult = {
+            text: 'לא הבנתי מה לעשות עם המשימה. נסה לכתוב: תוסיף משימה לחזור ללקוח'
+          };
+        }
+
+        const taskReply = await sendReplySafely(
+          incoming.from || req.body?.customerPhone || '',
+          taskReplyResult.text
+        );
+
+        res.status(200).json({
+          ok: true,
+          accepted: true,
+          kind: 'task_query',
+          query: taskQuery,
+          reply: taskReply,
+          text: taskReplyResult.text
+        });
+        return;
+      } catch (error) {
+        const apiError = toApiError(error);
+        const taskFailureReply = await sendReplySafely(
+          incoming.from || req.body?.customerPhone || '',
+          apiError.message
+        );
+
+        res.status(200).json({
+          ok: true,
+          accepted: false,
+          kind: 'task_query',
+          query: taskQuery,
+          reason: apiError.message,
+          reply: taskFailureReply
+        });
+        return;
+      }
     }
 
     let customerQuery = parseCustomerQuery(incoming.text);
@@ -847,67 +918,6 @@ export default async function handler(req, res) {
           reason: apiError.message,
           text: customerFailureText,
           reply: customerFailureReply
-        });
-        return;
-      }
-    }
-
-    const taskQuery = parseTaskQuery(incoming.text);
-    if (taskQuery) {
-      try {
-        let taskReplyResult;
-
-        if (taskQuery.action === 'summary') {
-          taskReplyResult = await getTasksReply('summary');
-        } else if (taskQuery.action === 'list_open') {
-          taskReplyResult = await getTasksReply('list_open');
-        } else if (taskQuery.action === 'status') {
-          taskReplyResult = await getTaskStatusReply(taskQuery.selector);
-        } else if (taskQuery.action === 'create') {
-          taskReplyResult = await createTaskFromQuery({
-            title: taskQuery.title,
-            date: taskQuery.date
-          });
-        } else if (taskQuery.action === 'complete') {
-          taskReplyResult = await completeTaskFromQuery(taskQuery.selector);
-        } else if (taskQuery.action === 'reopen') {
-          taskReplyResult = await reopenTaskFromQuery(taskQuery.selector);
-        } else if (taskQuery.action === 'delete') {
-          taskReplyResult = await deleteTaskFromQuery(taskQuery.selector);
-        } else {
-          taskReplyResult = {
-            text: 'לא הבנתי מה לעשות עם המשימה. נסה לכתוב: תוסיף משימה לחזור ללקוח'
-          };
-        }
-
-        const taskReply = await sendReplySafely(
-          incoming.from || req.body?.customerPhone || '',
-          taskReplyResult.text
-        );
-
-        res.status(200).json({
-          ok: true,
-          accepted: true,
-          kind: 'task_query',
-          query: taskQuery,
-          reply: taskReply,
-          text: taskReplyResult.text
-        });
-        return;
-      } catch (error) {
-        const apiError = toApiError(error);
-        const taskFailureReply = await sendReplySafely(
-          incoming.from || req.body?.customerPhone || '',
-          apiError.message
-        );
-
-        res.status(200).json({
-          ok: true,
-          accepted: false,
-          kind: 'task_query',
-          query: taskQuery,
-          reason: apiError.message,
-          reply: taskFailureReply
         });
         return;
       }
