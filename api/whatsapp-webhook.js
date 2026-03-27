@@ -6,6 +6,75 @@ import { parseAppointmentMessage } from './_lib/whatsappParser.js';
 
 const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
 const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || '';
+const whatsappToken = process.env.WHATSAPP_TOKEN || '';
+const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
+
+const canSendWhatsAppReply = () => Boolean(whatsappToken && whatsappPhoneNumberId);
+
+const normalizeWhatsAppNumber = (value = '') => String(value || '').replace(/\D/g, '');
+
+const formatReplyDate = (value = '') => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) {
+    return String(value || '').trim();
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return new Intl.DateTimeFormat('he-IL', {
+    timeZone: ISRAEL_TIME_ZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'numeric'
+  }).format(date);
+};
+
+const sendWhatsAppTextReply = async (to, bodyText) => {
+  if (!canSendWhatsAppReply()) {
+    return {
+      sent: false,
+      reason: 'Missing WHATSAPP_TOKEN or WHATSAPP_PHONE_NUMBER_ID'
+    };
+  }
+
+  const recipient = normalizeWhatsAppNumber(to);
+  if (!recipient) {
+    return {
+      sent: false,
+      reason: 'Missing recipient phone number'
+    };
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/v19.0/${whatsappPhoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${whatsappToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'text',
+        text: {
+          preview_url: false,
+          body: bodyText
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`WhatsApp reply error: ${errorBody}`);
+  }
+
+  return { sent: true };
+};
+
+const buildConfirmationText = ({ customerName, date, time, service }) =>
+  `התור של ${customerName} נקבע ל${formatReplyDate(date)} בשעה ${time} עבור ${service}.`;
 
 const getProvidedSecret = (req) =>
   req.headers['x-webhook-secret'] ||
@@ -107,9 +176,37 @@ export default async function handler(req, res) {
         price: req.body?.price
       });
 
+      let confirmation = null;
+      const replyPhone =
+        incoming.from ||
+        req.body?.customerPhone ||
+        parsed.customerPhone ||
+        result.customer?.phone ||
+        '';
+
+      if (replyPhone) {
+        try {
+          confirmation = await sendWhatsAppTextReply(
+            replyPhone,
+            buildConfirmationText({
+              customerName: result.customer?.name || parsed.customerName,
+              date: parsed.date,
+              time: parsed.time,
+              service: parsed.service
+            })
+          );
+        } catch (replyError) {
+          confirmation = {
+            sent: false,
+            reason: replyError?.message || 'Failed to send confirmation reply'
+          };
+        }
+      }
+
       res.status(200).json({
         ok: true,
         parsed,
+        confirmation,
         ...result
       });
     } catch (error) {
