@@ -20,7 +20,7 @@ const normalizeText = (value = '') =>
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const FIELD_LABELS = {
-  customerName: ['שם לקוח', 'שם לקוחה', 'שם', 'לקוח', 'לקוחה'],
+  customerName: ['שם לקוח', 'שם לקוחה', 'שם'],
   phone: ['טלפון', 'נייד', 'פלאפון'],
   petName: ['שם חיה', 'חיה', 'שם הכלב', 'שם הכלבה', 'שם החתול', 'שם החתולה', 'כלב', 'כלבה', 'חתול', 'חתולה'],
   petType: ['סוג', 'גזע', 'זן'],
