@@ -16,12 +16,12 @@ const toE164 = (value = '') => {
   return `+${digits}`;
 };
 
-const messagingChannel = (process.env.MESSAGING_CHANNEL || 'auto').toLowerCase();
+const messagingChannel = (process.env.MESSAGING_CHANNEL || 'auto').toLowerCase().trim();
 
-const whatsappToken = process.env.WHATSAPP_TOKEN;
-const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const confirmTemplate = process.env.WHATSAPP_CONFIRM_TEMPLATE;
-const confirmLang = process.env.WHATSAPP_CONFIRM_LANG || 'he';
+const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
+const whatsappPhoneId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
+const confirmTemplate = (process.env.WHATSAPP_CONFIRM_TEMPLATE || '').trim();
+const confirmLang = (process.env.WHATSAPP_CONFIRM_LANG || 'he').trim();
 const managerApprovalPhones = (process.env.MANAGER_APPROVAL_PHONES || '')
   .split(',')
   .map((value) => value.trim())

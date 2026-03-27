@@ -5,12 +5,12 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
-const messagingChannel = (process.env.MESSAGING_CHANNEL || 'auto').toLowerCase();
+const messagingChannel = (process.env.MESSAGING_CHANNEL || 'auto').toLowerCase().trim();
 
-const whatsappToken = process.env.WHATSAPP_TOKEN;
-const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const otpTemplate = process.env.WHATSAPP_OTP_TEMPLATE;
-const otpLang = process.env.WHATSAPP_OTP_LANG || 'he';
+const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
+const whatsappPhoneId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
+const otpTemplate = (process.env.WHATSAPP_OTP_TEMPLATE || '').trim();
+const otpLang = (process.env.WHATSAPP_OTP_LANG || 'he').trim();
 
 const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;

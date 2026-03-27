@@ -100,6 +100,13 @@ const mapAppointment = (row) => ({
   cancellationFee: Number(row.cancellation_fee || 0)
 });
 
+const mapTask = (row) => ({
+  id: row.id,
+  status: row.status || 'OPEN'
+});
+
+const isMissingTableError = (message = '') => String(message || '').includes('relation "tasks" does not exist');
+
 const analyzeCustomerStatus = (customer, appointments) => {
   const today = getIsraelToday();
 
@@ -175,13 +182,16 @@ const detectMetric = (text) => {
   if (/כמה.*מתקרבים|לקוחות.*מתקרבים|קרובים/.test(text)) return 'soon_customers';
   if (/כמה.*עם תור|לקוחות.*עם תור|תור עתידי/.test(text)) return 'scheduled_customers';
   if (/כמה.*בהמתנה|לקוחות.*בהמתנה|on hold/.test(text)) return 'on_hold_customers';
+  if (/כמה.*תקינים|לקוחות.*תקינים/.test(text)) return 'ok_customers';
   if (/אחוז.*ביטול|אחוז.*ביטולים/.test(text)) return 'cancellation_rate';
   if (/כמה.*ביטולים|כמה.*בוטלו|תורים.*שבוטלו|ביטולים.*החודש/.test(text)) return 'cancelled_appointments';
   if (/כמה.*תורים.*החודש|תורים.*פעילים|תורים.*לא מבוטלים/.test(text)) return 'active_appointments';
   if (/הכנסות.*השנה|כמה.*הכנס.*השנה|כמה כסף.*השנה/.test(text)) return 'yearly_revenue';
   if (/הכנסות.*החודש|כמה.*הכנס.*החודש|כמה כסף.*החודש/.test(text)) return 'monthly_revenue';
   if (/אובדן.*ביטול|הפסד.*ביטול|כמה הפסד/.test(text)) return 'cancellation_loss';
-  if (/סטטיסטיקה|דשבורד|נתונים|מצב העסק|סיכום/.test(text)) return 'summary';
+  if (/הפסד.*פוטנציאלי|סיכון.*איחור|כמה.*סיכון/.test(text)) return 'potential_loss';
+  if (/כמה.*משימות|מה מצב המשימות|סטטוס המשימות/.test(text)) return 'tasks_summary';
+  if (/כל.*הסטטיסטיק|כל.*הנתונ|סטטיסטיקה מלאה|דשבורד|נתונים|מצב העסק|סיכום|סטטיסטיקה/.test(text)) return 'summary';
   return null;
 };
 
@@ -199,14 +209,21 @@ export const parseStatsQuery = (message) => {
 
 const loadStatsData = async () => {
   const supabase = getSupabaseClient();
-  const [{ data: customersData, error: customersError }, { data: appointmentsData, error: appointmentsError }] =
+  const [
+    { data: customersData, error: customersError },
+    { data: appointmentsData, error: appointmentsError },
+    { data: tasksData, error: tasksError }
+  ] =
     await Promise.all([
       supabase
         .from('customers')
-        .select('id, name, phone, pet_name, pet_type, last_visit, visit_frequency_weeks'),
+        .select('id, name, phone, pet_name, pet_type, last_visit, visit_frequency_weeks, lifecycle_status'),
       supabase
         .from('appointments')
-        .select('id, customer_id, date, status, price, cancellation_fee')
+        .select('id, customer_id, date, status, price, cancellation_fee'),
+      supabase
+        .from('tasks')
+        .select('id, status')
     ]);
 
   if (customersError) {
@@ -217,13 +234,18 @@ const loadStatsData = async () => {
     throw createHttpError(500, `Failed to load appointments stats: ${appointmentsError.message}`);
   }
 
+  if (tasksError && !isMissingTableError(tasksError.message)) {
+    throw createHttpError(500, `Failed to load tasks stats: ${tasksError.message}`);
+  }
+
   return {
     customers: (customersData || []).map(mapCustomer),
-    appointments: (appointmentsData || []).map(mapAppointment)
+    appointments: (appointmentsData || []).map(mapAppointment),
+    tasks: (tasksData || []).map(mapTask)
   };
 };
 
-const buildStatsSnapshot = ({ customers, appointments }) => {
+const buildStatsSnapshot = ({ customers, appointments, tasks = [] }) => {
   const { month: currentMonth, year: currentYear } = getCurrentMonthYear();
   const thisMonthAppointments = appointments.filter((appointment) => {
     const parts = getDateMonthYear(appointment.date);
@@ -268,6 +290,15 @@ const buildStatsSnapshot = ({ customers, appointments }) => {
     ...analyzeCustomerStatus(customer, appointments)
   }));
 
+  const scheduledCustomersCount = analyzedCustomers.filter((customer) => customer.status === 'SCHEDULED').length;
+  const lateCustomersCount = analyzedCustomers.filter((customer) => customer.status === 'LATE').length;
+  const soonCustomersCount = analyzedCustomers.filter((customer) => customer.status === 'SOON').length;
+  const onHoldCustomersCount = analyzedCustomers.filter((customer) => customer.status === 'ON_HOLD').length;
+  const okCustomersCount = analyzedCustomers.filter((customer) => customer.status === 'OK').length;
+  const potentialLoss = lateCustomersCount * 200;
+  const openTasks = tasks.filter((task) => task.status !== 'DONE').length;
+  const doneTasks = tasks.filter((task) => task.status === 'DONE').length;
+
   return {
     totalCustomers: customers.length,
     activeAppointments: activeCount,
@@ -276,10 +307,15 @@ const buildStatsSnapshot = ({ customers, appointments }) => {
     monthlyRevenue,
     yearlyRevenue,
     cancellationLoss,
-    scheduledCustomers: analyzedCustomers.filter((customer) => customer.status === 'SCHEDULED').length,
-    lateCustomers: analyzedCustomers.filter((customer) => customer.status === 'LATE').length,
-    soonCustomers: analyzedCustomers.filter((customer) => customer.status === 'SOON').length,
-    onHoldCustomers: analyzedCustomers.filter((customer) => customer.status === 'ON_HOLD').length
+    potentialLoss,
+    scheduledCustomers: scheduledCustomersCount,
+    lateCustomers: lateCustomersCount,
+    soonCustomers: soonCustomersCount,
+    onHoldCustomers: onHoldCustomersCount,
+    okCustomers: okCustomersCount,
+    totalTasks: tasks.length,
+    openTasks,
+    doneTasks
   };
 };
 
@@ -295,6 +331,8 @@ const buildMetricReply = (metric, snapshot) => {
       return `כרגע יש ${snapshot.scheduledCustomers} לקוחות עם תור עתידי.`;
     case 'on_hold_customers':
       return `כרגע יש ${snapshot.onHoldCustomers} לקוחות בהמתנה.`;
+    case 'ok_customers':
+      return `כרגע יש ${snapshot.okCustomers} לקוחות תקינים שלא הגיעו למועד היעד.`;
     case 'cancellation_rate':
       return `אחוז הביטולים החודש הוא ${snapshot.cancellationRate}%.`;
     case 'cancelled_appointments':
@@ -307,6 +345,15 @@ const buildMetricReply = (metric, snapshot) => {
       return `ההכנסות השנה הן ${formatCurrency(snapshot.yearlyRevenue)}.`;
     case 'cancellation_loss':
       return `האובדן מביטולים החודש הוא ${formatCurrency(snapshot.cancellationLoss)}.`;
+    case 'potential_loss':
+      return `ההפסד הפוטנציאלי מלקוחות באיחור הוא ${formatCurrency(snapshot.potentialLoss)}.`;
+    case 'tasks_summary':
+      return (
+        'מצב המשימות כרגע:\n' +
+        `סה"כ משימות: ${snapshot.totalTasks}\n` +
+        `משימות פתוחות: ${snapshot.openTasks}\n` +
+        `משימות שבוצעו: ${snapshot.doneTasks}`
+      );
     case 'summary':
     default:
       return (
@@ -314,11 +361,17 @@ const buildMetricReply = (metric, snapshot) => {
         `לקוחות: ${snapshot.totalCustomers}\n` +
         `הכנסות החודש: ${formatCurrency(snapshot.monthlyRevenue)}\n` +
         `הכנסות השנה: ${formatCurrency(snapshot.yearlyRevenue)}\n` +
+        `הפסד פוטנציאלי מלקוחות באיחור: ${formatCurrency(snapshot.potentialLoss)}\n` +
         `תורים לא מבוטלים החודש: ${snapshot.activeAppointments}\n` +
         `ביטולים החודש: ${snapshot.cancelledAppointments} (${snapshot.cancellationRate}%)\n` +
+        `אובדן מביטולים החודש: ${formatCurrency(snapshot.cancellationLoss)}\n` +
         `לקוחות באיחור: ${snapshot.lateCustomers}\n` +
         `לקוחות מתקרבים: ${snapshot.soonCustomers}\n` +
-        `לקוחות עם תור עתידי: ${snapshot.scheduledCustomers}`
+        `לקוחות עם תור עתידי: ${snapshot.scheduledCustomers}\n` +
+        `לקוחות תקינים: ${snapshot.okCustomers}\n` +
+        `לקוחות בהמתנה: ${snapshot.onHoldCustomers}\n` +
+        `משימות פתוחות: ${snapshot.openTasks}\n` +
+        `משימות שבוצעו: ${snapshot.doneTasks}`
       );
   }
 };

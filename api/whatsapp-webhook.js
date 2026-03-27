@@ -27,10 +27,10 @@ import {
   saveWhatsAppContext
 } from './_lib/whatsappContext.js';
 
-const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
-const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || '';
-const whatsappToken = process.env.WHATSAPP_TOKEN || '';
-const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const verifyToken = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
+const webhookSecret = (process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
+const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
+const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 const BOOKING_EXAMPLE = 'לדוגמה: שים את אביבית ביום שני ב-10 תספורת';
 const CUSTOMER_EXAMPLE = 'לדוגמה: לקוח חדש דניאלה להבי, טלפון 0501234567, שם חיה טופי, סוג מלטז';
