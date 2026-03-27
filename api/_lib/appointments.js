@@ -184,10 +184,40 @@ export const listAppointmentsForLocalDate = async (
     throw createHttpError(500, `Failed to load appointments for date: ${error.message}`);
   }
 
-  return (data || []).map((row) => ({
-    ...mapAppointmentResponse(row),
-    localTime: toLocalTimeLabel(row.date, timeZone)
-  }));
+  const rows = data || [];
+  const customerIds = Array.from(new Set(rows.map((row) => row.customer_id).filter(Boolean)));
+  let customerMap = new Map();
+
+  if (customerIds.length > 0) {
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name, pet_name')
+      .in('id', customerIds);
+
+    if (customersError) {
+      throw createHttpError(500, `Failed to load appointment customers: ${customersError.message}`);
+    }
+
+    customerMap = new Map(
+      (customersData || []).map((customerRow) => [
+        customerRow.id,
+        {
+          name: customerRow.name,
+          petName: customerRow.pet_name
+        }
+      ])
+    );
+  }
+
+  return rows.map((row) => {
+    const customer = customerMap.get(row.customer_id) || {};
+    return {
+      ...mapAppointmentResponse(row),
+      localTime: toLocalTimeLabel(row.date, timeZone),
+      customerName: customer.name || '',
+      petName: customer.petName || ''
+    };
+  });
 };
 
 const mapCustomerResponse = (row) => ({

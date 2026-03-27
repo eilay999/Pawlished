@@ -108,20 +108,63 @@ const extractRelativeDate = (text) => {
 
 const includesFreeKeyword = (text) => /(פנוי|פנויה|פנויים|פנויות)/.test(text);
 const includesBusyKeyword = (text) => /(תפוס|תפוסה|תפוסים|תפוסות)/.test(text);
+const includesScheduleKeyword = (text) =>
+  /(לוז|לו"ז|לו״ז|הלו"ז|הלו״ז|יומן|מה יש|מה קורה|מה יש לי|מה יש ב)/.test(text);
+
+const formatDateRange = (startDate, endDate) => {
+  const startLabel = formatDateLabel(startDate);
+  const endLabel = formatDateLabel(endDate);
+  return startDate === endDate ? startLabel : `${startLabel} עד ${endLabel}`;
+};
+
+const getWeekWindow = () => {
+  const today = dateFromParts(getNowPartsInIsrael());
+  const daysUntilSaturday = (6 - today.getUTCDay() + 7) % 7;
+  const endDate = formatDate(addDays(today, daysUntilSaturday));
+  return {
+    startDate: formatDate(today),
+    endDate
+  };
+};
 
 export const parseScheduleQuery = (message) => {
   const text = normalizeText(message);
   const wantsFree = includesFreeKeyword(text);
   const wantsBusy = includesBusyKeyword(text);
+  const wantsSchedule = includesScheduleKeyword(text);
 
-  if (!wantsFree && !wantsBusy) {
+  if (!wantsFree && !wantsBusy && !wantsSchedule) {
     return null;
+  }
+
+  const requestsWeekWindow = text.includes('השבוע') || text.includes('לשבוע');
+  if (requestsWeekWindow) {
+    const { startDate, endDate } = getWeekWindow();
+    return {
+      kind: 'schedule_query',
+      period: 'week',
+      mode: wantsFree && wantsBusy ? 'both' : wantsFree ? 'free' : wantsBusy ? 'busy' : 'overview',
+      startDate,
+      endDate,
+      text
+    };
   }
 
   const date = extractExplicitDate(text) || extractRelativeDate(text);
   if (!date) {
+    if (wantsSchedule && !wantsFree && !wantsBusy) {
+      return {
+        kind: 'schedule_query',
+        period: 'day',
+        mode: 'overview',
+        missingDate: true,
+        text
+      };
+    }
+
     return {
       kind: 'schedule_query',
+      period: 'day',
       mode: wantsFree && wantsBusy ? 'both' : wantsBusy ? 'busy' : 'free',
       missingDate: true,
       text
@@ -130,7 +173,8 @@ export const parseScheduleQuery = (message) => {
 
   return {
     kind: 'schedule_query',
-    mode: wantsFree && wantsBusy ? 'both' : wantsBusy ? 'busy' : 'free',
+    period: 'day',
+    mode: wantsFree && wantsBusy ? 'both' : wantsBusy ? 'busy' : wantsFree ? 'free' : 'overview',
     date,
     text
   };
@@ -184,15 +228,38 @@ const formatLine = (label, slots, emptyText) => {
   return `${label}: ${compressSlots(slots).join(', ')}`;
 };
 
-export const getScheduleReply = async ({ date, mode }) => {
+const formatAppointmentLabel = (appointment) => {
+  const nameLabel = appointment.customerName || appointment.petName || 'לקוח';
+  return `${appointment.localTime} ${nameLabel} - ${appointment.service}`;
+};
+
+const formatBusyAppointmentsLine = (appointments, emptyText) => {
+  if (appointments.length === 0) {
+    return emptyText;
+  }
+
+  return appointments.map(formatAppointmentLabel).join(', ');
+};
+
+const buildDayScheduleReply = async ({ date, mode }) => {
   const appointments = await listAppointmentsForLocalDate(date);
   const occupiedSlots = appointments.map((appointment) => appointment.localTime);
   const freeSlots = TIME_SLOTS.filter((slot) => !occupiedSlots.includes(slot));
   const dateLabel = formatDateLabel(date);
 
+  if (mode === 'overview') {
+    return {
+      text: `מה יש ב${dateLabel}:\n${formatBusyAppointmentsLine(appointments, 'אין תורים מתוכננים כרגע')}`,
+      appointments,
+      occupiedSlots,
+      freeSlots
+    };
+  }
+
   if (mode === 'free') {
     return {
       text: `השעות הפנויות ב${dateLabel}:\n${formatLine('פנויות', freeSlots, 'אין שעות פנויות כרגע')}`,
+      appointments,
       occupiedSlots,
       freeSlots
     };
@@ -200,7 +267,11 @@ export const getScheduleReply = async ({ date, mode }) => {
 
   if (mode === 'busy') {
     return {
-      text: `השעות התפוסות ב${dateLabel}:\n${formatLine('תפוסות', occupiedSlots, 'כרגע אין שעות תפוסות')}`,
+      text:
+        `השעות התפוסות ב${dateLabel}:\n` +
+        `${formatLine('תפוסות', occupiedSlots, 'כרגע אין שעות תפוסות')}\n` +
+        `פירוט: ${formatBusyAppointmentsLine(appointments, 'אין תורים מתוכננים כרגע')}`,
+      appointments,
       occupiedSlots,
       freeSlots
     };
@@ -211,7 +282,94 @@ export const getScheduleReply = async ({ date, mode }) => {
       `הלו״ז ב${dateLabel}:\n` +
       `${formatLine('פנויות', freeSlots, 'אין שעות פנויות כרגע')}\n` +
       `${formatLine('תפוסות', occupiedSlots, 'כרגע אין שעות תפוסות')}`,
+    appointments,
     occupiedSlots,
     freeSlots
   };
+};
+
+const buildWeekScheduleReply = async ({ startDate, endDate, mode }) => {
+  const start = dateFromParts(
+    (() => {
+      const [year, month, day] = startDate.split('-').map(Number);
+      return { year, month, day };
+    })()
+  );
+  const end = dateFromParts(
+    (() => {
+      const [year, month, day] = endDate.split('-').map(Number);
+      return { year, month, day };
+    })()
+  );
+
+  const dates = [];
+  for (let cursor = new Date(start.getTime()); cursor.getTime() <= end.getTime(); cursor = addDays(cursor, 1)) {
+    dates.push(formatDate(cursor));
+  }
+
+  const dayResults = await Promise.all(
+    dates.map(async (date) => ({
+      date,
+      appointments: await listAppointmentsForLocalDate(date)
+    }))
+  );
+
+  const periodLabel = formatDateRange(startDate, endDate);
+
+  if (mode === 'overview') {
+    const occupiedDays = dayResults.filter((day) => day.appointments.length > 0);
+    if (occupiedDays.length === 0) {
+      return {
+        text: `אין תורים מתוכננים ב${periodLabel}.`,
+        days: dayResults
+      };
+    }
+
+    return {
+      text:
+        `מה יש ב${periodLabel}:\n` +
+        occupiedDays
+          .map(
+            (day) => `${formatDateLabel(day.date)}: ${formatBusyAppointmentsLine(day.appointments, 'אין תורים')}`
+          )
+          .join('\n'),
+      days: dayResults
+    };
+  }
+
+  const lines = dayResults.map((day) => {
+    const occupiedSlots = day.appointments.map((appointment) => appointment.localTime);
+    const freeSlots = TIME_SLOTS.filter((slot) => !occupiedSlots.includes(slot));
+
+    if (mode === 'free') {
+      return `${formatDateLabel(day.date)}: ${compressSlots(freeSlots).join(', ') || 'אין שעות פנויות כרגע'}`;
+    }
+
+    if (mode === 'busy') {
+      return `${formatDateLabel(day.date)}: ${formatBusyAppointmentsLine(day.appointments, 'אין תורים מתוכננים')}`;
+    }
+
+    return (
+      `${formatDateLabel(day.date)}:\n` +
+      `פנויות: ${compressSlots(freeSlots).join(', ') || 'אין שעות פנויות כרגע'}\n` +
+      `תפוסות: ${compressSlots(occupiedSlots).join(', ') || 'כרגע אין שעות תפוסות'}`
+    );
+  });
+
+  return {
+    text: `הלו״ז ב${periodLabel}:\n${lines.join('\n')}`,
+    days: dayResults
+  };
+};
+
+export const getScheduleReply = async ({ date, mode }) => {
+  return buildDayScheduleReply({ date, mode });
+};
+
+export const getScheduleWindowReply = async ({ period = 'day', date, startDate, endDate, mode }) => {
+  if (period === 'week') {
+    return buildWeekScheduleReply({ startDate, endDate, mode });
+  }
+
+  return buildDayScheduleReply({ date, mode });
 };

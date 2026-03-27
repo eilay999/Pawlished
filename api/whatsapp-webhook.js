@@ -7,7 +7,7 @@ import {
   createCustomerFromQuery,
   parseCustomerQuery
 } from './_lib/customerQueries.js';
-import { getScheduleReply, parseScheduleQuery } from './_lib/scheduleQueries.js';
+import { getScheduleWindowReply, parseScheduleQuery } from './_lib/scheduleQueries.js';
 import { getStatsReply, parseStatsQuery } from './_lib/statsQueries.js';
 import {
   completeTaskFromQuery,
@@ -148,7 +148,7 @@ const buildBookingFailureText = (reason = '', parsed = {}) => {
 };
 
 const buildScheduleMissingDateText = () =>
-  'תגיד לי לאיזה יום לבדוק. לדוגמה: מה השעות הפנויות ביום שלישי';
+  'תגיד לי לאיזה יום לבדוק. לדוגמה: מה השעות הפנויות ביום שלישי או מה הלוז השבוע';
 
 const sendReplySafely = async (phone, text) => {
   if (!phone || !text) {
@@ -235,10 +235,15 @@ export default async function handler(req, res) {
     if (scheduleQuery) {
       const scheduleReplyText = scheduleQuery.missingDate
         ? buildScheduleMissingDateText()
-        : (await getScheduleReply({
-            date: scheduleQuery.date,
-            mode: scheduleQuery.mode
-          })).text;
+        : (
+            await getScheduleWindowReply({
+              period: scheduleQuery.period,
+              date: scheduleQuery.date,
+              startDate: scheduleQuery.startDate,
+              endDate: scheduleQuery.endDate,
+              mode: scheduleQuery.mode
+            })
+          ).text;
 
       const scheduleReply = await sendReplySafely(
         incoming.from || req.body?.customerPhone || '',
