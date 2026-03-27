@@ -160,14 +160,6 @@ export const parseTaskQuery = (message) => {
     return null;
   }
 
-  if (/(מה|תראה|תציג|רשימת|סטטוס|מצב).*(משימות|משימה)|משימות פתוחות|משימות פתוחות/.test(text)) {
-    return {
-      kind: 'task_query',
-      action: text.includes('פתוחות') ? 'list_open' : 'summary',
-      text
-    };
-  }
-
   const createMatch = text.match(/(?:הוסף|תוסיף|תוסיפי|צור|תיצור)\s+(?:לי\s+)?משימה\s*[:\-]?\s*(.+)$/);
   if (createMatch) {
     const rawTitle = stripDateHints(createMatch[1] || '');
@@ -203,6 +195,31 @@ export const parseTaskQuery = (message) => {
       kind: 'task_query',
       action: 'delete',
       selector: parseSelectorFromText(text),
+      text
+    };
+  }
+
+  const isOpenListQuery =
+    /(?:^|\s)משימות פתוחות(?:$|\s)/.test(text) ||
+    /^(?:מה|תראה|תציג|רשימת|סטטוס|מצב|איזה|אילו)\s+.*משימות פתוחות/.test(text);
+
+  if (isOpenListQuery) {
+    return {
+      kind: 'task_query',
+      action: 'list_open',
+      text
+    };
+  }
+
+  const isSummaryQuery =
+    text === 'משימות' ||
+    text === 'מה המשימות' ||
+    /^(?:מה|תראה|תציג|רשימת|סטטוס|מצב|איזה|אילו)\s+.*(?:משימות|משימה)/.test(text);
+
+  if (isSummaryQuery) {
+    return {
+      kind: 'task_query',
+      action: 'summary',
       text
     };
   }
