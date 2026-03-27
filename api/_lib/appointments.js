@@ -135,6 +135,61 @@ export const buildSlotDateFromLocal = (
   return new Date(utcGuess.getTime() - (zonedAsUtc - utcGuess.getTime()));
 };
 
+export const generateTimeSlots = () => {
+  const slots = [];
+  for (let hour = 7; hour <= 20; hour += 1) {
+    slots.push(`${String(hour).padStart(2, '0')}:00`);
+    if (hour !== 20) {
+      slots.push(`${String(hour).padStart(2, '0')}:30`);
+    }
+  }
+  return slots;
+};
+
+export const TIME_SLOTS = generateTimeSlots();
+
+const addDaysToDateString = (dateValue, daysToAdd) => {
+  const normalizedDate = normalizeDateString(dateValue);
+  const [year, month, day] = normalizedDate.split('-').map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  utcDate.setUTCDate(utcDate.getUTCDate() + daysToAdd);
+  const parts = getFormatterParts(utcDate, ISRAEL_TIME_ZONE);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+
+const toLocalTimeLabel = (value, timeZone = ISRAEL_TIME_ZONE) => {
+  const parts = getFormatterParts(new Date(value), timeZone);
+  return `${parts.hour}:${parts.minute}`;
+};
+
+export const listAppointmentsForLocalDate = async (
+  dateValue,
+  timeZone = ISRAEL_TIME_ZONE
+) => {
+  const supabase = getSupabaseClient();
+  const normalizedDate = normalizeDateString(dateValue);
+  const nextDate = addDaysToDateString(normalizedDate, 1);
+  const start = buildSlotDateFromLocal(normalizedDate, '00:00', timeZone).toISOString();
+  const end = buildSlotDateFromLocal(nextDate, '00:00', timeZone).toISOString();
+
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('id, customer_id, date, service, status, notes, price, cancellation_fee')
+    .gte('date', start)
+    .lt('date', end)
+    .neq('status', 'CANCELLED')
+    .order('date', { ascending: true });
+
+  if (error) {
+    throw createHttpError(500, `Failed to load appointments for date: ${error.message}`);
+  }
+
+  return (data || []).map((row) => ({
+    ...mapAppointmentResponse(row),
+    localTime: toLocalTimeLabel(row.date, timeZone)
+  }));
+};
+
 const mapCustomerResponse = (row) => ({
   id: row.id,
   name: row.name,

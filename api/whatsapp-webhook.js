@@ -2,6 +2,7 @@ import {
   createAppointmentFromStructuredInput,
   toApiError
 } from './_lib/appointments.js';
+import { getScheduleReply, parseScheduleQuery } from './_lib/scheduleQueries.js';
 import { parseAppointmentMessage } from './_lib/whatsappParser.js';
 
 const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || '';
@@ -131,6 +132,9 @@ const buildBookingFailureText = (reason = '', parsed = {}) => {
   return `לא הצלחתי לקבוע את התור. ${message || 'נסה לנסח שוב.'}`;
 };
 
+const buildScheduleMissingDateText = () =>
+  'תגיד לי לאיזה יום לבדוק. לדוגמה: מה השעות הפנויות ביום שלישי';
+
 const sendReplySafely = async (phone, text) => {
   if (!phone || !text) {
     return null;
@@ -208,6 +212,31 @@ export default async function handler(req, res) {
         ok: true,
         ignored: true,
         reason: incoming.type ? `Unsupported message type: ${incoming.type}` : 'No message text received'
+      });
+      return;
+    }
+
+    const scheduleQuery = parseScheduleQuery(incoming.text);
+    if (scheduleQuery) {
+      const scheduleReplyText = scheduleQuery.missingDate
+        ? buildScheduleMissingDateText()
+        : (await getScheduleReply({
+            date: scheduleQuery.date,
+            mode: scheduleQuery.mode
+          })).text;
+
+      const scheduleReply = await sendReplySafely(
+        incoming.from || req.body?.customerPhone || '',
+        scheduleReplyText
+      );
+
+      res.status(200).json({
+        ok: true,
+        accepted: true,
+        kind: 'schedule_query',
+        query: scheduleQuery,
+        reply: scheduleReply,
+        text: scheduleReplyText
       });
       return;
     }
