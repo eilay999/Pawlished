@@ -105,7 +105,7 @@ const buildParseFailureText = (reason = '') => {
   }
 
   if (message.includes('שעה')) {
-    return `לא הצלחתי להבין איזו שעה ביקשת. ${BOOKING_EXAMPLE}`;
+    return `חסרה שעה לתור. ${BOOKING_EXAMPLE}`;
   }
 
   if (message.includes('שירות')) {
