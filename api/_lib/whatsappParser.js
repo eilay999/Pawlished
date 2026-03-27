@@ -95,6 +95,12 @@ const normalizeText = (value = '') =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const normalizeLines = (value = '') =>
+  String(value || '')
+    .split(/\r?\n/)
+    .map((line) => normalizeText(line))
+    .filter(Boolean);
+
 const getNowPartsInIsrael = () => {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: ISRAEL_TIME_ZONE,
@@ -241,7 +247,49 @@ const extractService = (text) =>
 
 const extractPetType = (text) => PET_TYPE_ALIASES.find(label => text.includes(label)) || null;
 
+const isMetadataLine = (line = '') => {
+  if (!line) return true;
+  if (/^לקוח(?:ה)? חדשה?$|^לקוח חדש$/.test(line)) return true;
+  if (extractPhone(line)) return true;
+  if (extractPrice(line) !== null) return true;
+  if (extractTime(line)) return true;
+  if (extractExplicitDate(line) || extractRelativeDate(line, extractTime(line))) return true;
+  if (line.includes('לקבוע תור')) return true;
+  if (line.includes('לכלב קוראים') || line.includes('לכלבה קוראים') || line.includes('לחתול קוראים') || line.includes('לחתולה קוראים')) return true;
+  if (extractService(line) && line !== GENERIC_SERVICE) return true;
+  if (PET_TYPE_ALIASES.some((label) => line === label)) return true;
+  return false;
+};
+
+const extractStructuredCustomerName = (lines = []) => {
+  const markerIndex = lines.findIndex((line) => /^לקוח(?:ה)? חדשה?$|^לקוח חדש$/.test(line));
+  if (markerIndex === -1) return null;
+
+  for (let index = markerIndex + 1; index < lines.length; index += 1) {
+    const candidate = lines[index];
+    if (!isMetadataLine(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
+const extractStructuredPetType = (lines = []) => {
+  const aliases = [...PET_TYPE_ALIASES].sort((left, right) => right.length - left.length);
+  for (const line of lines) {
+    const match = aliases.find((label) => line === label || line.includes(`מסוג ${label}`) || line.includes(`סוג ${label}`));
+    if (match) return match;
+  }
+  return null;
+};
+
 const extractPetName = (text) => {
+  const namedMatch = text.match(/ל(?:כלב|כלבה|חתול|חתולה)\s+קור(?:א|אים)\s+([^,\n]+)/u);
+  if (namedMatch?.[1]) {
+    return namedMatch[1].trim();
+  }
+
   for (const label of PET_NAME_LABELS) {
     const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const match = text.match(new RegExp(`${escapedLabel}\\s*[:\\-]?\\s*([^,\\n]+)`, 'u'));
@@ -364,13 +412,14 @@ const extractName = (text) => {
 
 export const analyzeAppointmentMessage = (message) => {
   const text = normalizeText(message);
+  const lines = normalizeLines(message);
   const time = extractTime(text);
   const date = extractExplicitDate(text) || extractRelativeDate(text, time);
-  const customerName = extractName(text);
+  const customerName = extractStructuredCustomerName(lines) || extractName(text);
   const service = extractService(text) || (mentionsNewCustomer(text) && (date || time) ? GENERIC_SERVICE : null);
   const phone = extractPhone(text);
-  const petName = extractPetName(text);
-  const petType = extractPetType(text);
+  const petName = extractPetName(String(message || '')) || extractPetName(text);
+  const petType = extractStructuredPetType(lines) || extractPetType(text);
   const price = extractPrice(text);
 
   return {
