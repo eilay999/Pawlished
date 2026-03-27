@@ -2,6 +2,11 @@ import {
   createAppointmentFromStructuredInput,
   toApiError
 } from './_lib/appointments.js';
+import {
+  buildCustomerFailureText,
+  createCustomerFromQuery,
+  parseCustomerQuery
+} from './_lib/customerQueries.js';
 import { getScheduleReply, parseScheduleQuery } from './_lib/scheduleQueries.js';
 import { getStatsReply, parseStatsQuery } from './_lib/statsQueries.js';
 import {
@@ -269,6 +274,46 @@ export default async function handler(req, res) {
         snapshot: statsReplyResult.snapshot
       });
       return;
+    }
+
+    const customerQuery = parseCustomerQuery(incoming.text);
+    if (customerQuery) {
+      try {
+        const customerResult = await createCustomerFromQuery(customerQuery);
+        const customerReply = await sendReplySafely(
+          incoming.from || req.body?.customerPhone || '',
+          customerResult.text
+        );
+
+        res.status(200).json({
+          ok: true,
+          accepted: true,
+          kind: 'customer_query',
+          query: customerQuery,
+          reply: customerReply,
+          text: customerResult.text,
+          customer: customerResult.customer
+        });
+        return;
+      } catch (error) {
+        const apiError = toApiError(error);
+        const customerFailureText = buildCustomerFailureText(apiError.message);
+        const customerFailureReply = await sendReplySafely(
+          incoming.from || req.body?.customerPhone || '',
+          customerFailureText
+        );
+
+        res.status(200).json({
+          ok: true,
+          accepted: false,
+          kind: 'customer_query',
+          query: customerQuery,
+          reason: apiError.message,
+          text: customerFailureText,
+          reply: customerFailureReply
+        });
+        return;
+      }
     }
 
     const taskQuery = parseTaskQuery(incoming.text);

@@ -281,11 +281,52 @@ const findExistingCustomer = async (supabase, { existingCustomerId, phone, custo
   return null;
 };
 
-const createCustomerRecord = async (supabase, { customerName, phone, petName, petType, notes }) => {
+const insertCustomerRow = async (supabase, payload) => {
+  let { data, error } = await supabase
+    .from('customers')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error?.message?.includes('lifecycle_status')) {
+    const { lifecycle_status, ...fallbackPayload } = payload;
+    const retry = await supabase
+      .from('customers')
+      .insert(fallbackPayload)
+      .select('*')
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data) {
+    throw createHttpError(500, error?.message || 'Failed to create customer');
+  }
+
+  return data;
+};
+
+const createCustomerRecord = async (
+  supabase,
+  { customerName, phone, petName, petType, notes, defaultPrice, visitFrequencyWeeks, lifecycleStatus, lastVisit }
+) => {
   const safeName = String(customerName || '').trim();
   const safePhone = normalizePhoneForStorage(phone);
   const safePetName = String(petName || '').trim();
   const safePetType = String(petType || '').trim();
+  const safeFrequency =
+    Number.isFinite(Number(visitFrequencyWeeks)) && Number(visitFrequencyWeeks) > 0
+      ? Number(visitFrequencyWeeks)
+      : 4;
+  const safeLifecycleStatus = String(lifecycleStatus || 'ACTIVE').trim() || 'ACTIVE';
+  const safeLastVisit =
+    lastVisit instanceof Date
+      ? lastVisit
+      : typeof lastVisit === 'string' && lastVisit.trim()
+        ? new Date(lastVisit)
+        : new Date();
+  const safeDefaultPrice =
+    typeof defaultPrice === 'number' && Number.isFinite(defaultPrice) ? defaultPrice : null;
 
   if (!safeName) {
     throw createHttpError(400, 'Missing customer name');
@@ -299,28 +340,22 @@ const createCustomerRecord = async (supabase, { customerName, phone, petName, pe
     throw createHttpError(400, 'New customers require petName and petType');
   }
 
-  const { data, error } = await supabase
-    .from('customers')
-    .insert({
-      id: crypto.randomUUID(),
-      name: safeName,
-      phone: safePhone,
-      pet_name: safePetName,
-      pet_type: safePetType,
-      last_visit: new Date().toISOString(),
-      visit_frequency_weeks: 4,
-      lifecycle_status: 'ACTIVE',
-      default_price: null,
-      notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null
-    })
-    .select('*')
-    .single();
-
-  if (error || !data) {
-    throw createHttpError(500, error?.message || 'Failed to create customer');
+  if (!isValidDate(safeLastVisit)) {
+    throw createHttpError(400, 'Invalid lastVisit');
   }
 
-  return data;
+  return insertCustomerRow(supabase, {
+    id: crypto.randomUUID(),
+    name: safeName,
+    phone: safePhone,
+    pet_name: safePetName,
+    pet_type: safePetType,
+    last_visit: safeLastVisit.toISOString(),
+    visit_frequency_weeks: safeFrequency,
+    lifecycle_status: safeLifecycleStatus,
+    default_price: safeDefaultPrice,
+    notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null
+  });
 };
 
 export const createAppointmentRecord = async ({
@@ -451,6 +486,63 @@ export const createAppointmentFromStructuredInput = async ({
     notes,
     price
   });
+};
+
+export const createCustomerFromStructuredInput = async ({
+  customerName,
+  phone,
+  petName,
+  petType,
+  notes,
+  defaultPrice,
+  visitFrequencyWeeks,
+  lifecycleStatus,
+  lastVisit
+}) => {
+  if (!customerName) {
+    throw createHttpError(400, 'Missing customer name');
+  }
+
+  if (!phone) {
+    throw createHttpError(400, 'Missing phone for new customer');
+  }
+
+  if (!petName || !petType) {
+    throw createHttpError(400, 'New customers require petName and petType');
+  }
+
+  const supabase = getSupabaseClient();
+  const existingCustomer = await findExistingCustomer(supabase, {
+    phone,
+    customerName
+  });
+
+  if (existingCustomer) {
+    const normalizedInputPhone = normalizePhoneForStorage(phone);
+    const normalizedExistingPhone = normalizePhoneForStorage(existingCustomer.phone);
+
+    if (normalizedInputPhone && normalizedInputPhone === normalizedExistingPhone) {
+      throw createHttpError(409, 'כבר קיים לקוח עם הטלפון הזה.');
+    }
+
+    throw createHttpError(409, `כבר קיים לקוח בשם ${existingCustomer.name}.`);
+  }
+
+  const createdCustomer = await createCustomerRecord(supabase, {
+    customerName,
+    phone,
+    petName,
+    petType,
+    notes,
+    defaultPrice,
+    visitFrequencyWeeks,
+    lifecycleStatus,
+    lastVisit
+  });
+
+  return {
+    customer: mapCustomerResponse(createdCustomer)
+  };
 };
 
 export const toApiError = (error) => ({
