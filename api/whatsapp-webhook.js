@@ -160,11 +160,41 @@ const CUSTOMER_FIELD_LABELS = {
   petType: 'סוג כלב'
 };
 
-const buildMissingFieldsPrompt = (missingFields = [], labelsMap = APPOINTMENT_FIELD_LABELS) => {
-  const labels = missingFields.map((field) => labelsMap[field]).filter(Boolean);
-  if (labels.length === 0) return '';
-  if (labels.length === 1) return `אפשר לענות עכשיו רק עם ${labels[0]}.`;
-  return `אפשר לענות עכשיו רק עם: ${labels.join(', ')}.`;
+const APPOINTMENT_FIELD_QUESTIONS = {
+  customerName: 'מה שם הלקוח?',
+  date: 'לאיזה יום או תאריך לקבוע?',
+  time: 'מה השעה? אפשר לענות רק עם 7 או 07:00.',
+  service: `איזה שירות לקבוע? אפשר לכתוב: ${SUPPORTED_SERVICE_HINT}.`,
+  phone: 'מה מספר הטלפון של הלקוח?',
+  petName: 'מה השם של חיית המחמד?',
+  petType: 'איזה סוג או גזע הכלב? למשל מלטז או פודל.'
+};
+
+const CUSTOMER_FIELD_QUESTIONS = {
+  customerName: 'מה שם הלקוח החדש?',
+  phone: 'מה מספר הטלפון של הלקוח?',
+  petName: 'מה השם של חיית המחמד?',
+  petType: 'איזה סוג או גזע הכלב? למשל מלטז או פודל.'
+};
+
+const buildMissingFieldsPrompt = (
+  missingFields = [],
+  labelsMap = APPOINTMENT_FIELD_LABELS,
+  questionsMap = APPOINTMENT_FIELD_QUESTIONS
+) => {
+  const normalizedFields = missingFields.filter((field) => labelsMap[field]);
+  if (normalizedFields.length === 0) return '';
+
+  const firstField = normalizedFields[0];
+  const firstLabel = labelsMap[firstField];
+  const firstQuestion = questionsMap[firstField] || `מה ${firstLabel}?`;
+  const remainingLabels = normalizedFields.slice(1).map((field) => labelsMap[field]);
+
+  if (remainingLabels.length === 0) {
+    return `חסר לי רק ${firstLabel}. ${firstQuestion}`;
+  }
+
+  return `כרגע חסר לי ${firstLabel}. ${firstQuestion} אחרי זה נשלים גם את: ${remainingLabels.join(', ')}.`;
 };
 
 const detectAppointmentMissingFields = (payload = {}) => {
@@ -395,7 +425,11 @@ const buildParseFailureText = (reason = '', messageText = '', options = {}) => {
   const detectedFragments = buildDetectedFragments(analysis);
   const detectedText =
     detectedFragments.length > 0 ? `זיהיתי כבר: ${detectedFragments.join(', ')}. ` : '';
-  const followUpPrompt = buildMissingFieldsPrompt(missingFields, APPOINTMENT_FIELD_LABELS);
+  const followUpPrompt = buildMissingFieldsPrompt(
+    missingFields,
+    APPOINTMENT_FIELD_LABELS,
+    APPOINTMENT_FIELD_QUESTIONS
+  );
 
   if (analysis.isNewCustomerIntent) {
     const uniqueMissing = Array.from(new Set(missingFields.map((field) => APPOINTMENT_FIELD_LABELS[field]).filter(Boolean)));
@@ -430,7 +464,11 @@ const buildBookingFailureText = (reason = '', parsed = {}, messageText = '') => 
     ...parsed,
     ...analysis
   });
-  const followUpPrompt = buildMissingFieldsPrompt(recoveryFields, APPOINTMENT_FIELD_LABELS);
+  const followUpPrompt = buildMissingFieldsPrompt(
+    recoveryFields,
+    APPOINTMENT_FIELD_LABELS,
+    APPOINTMENT_FIELD_QUESTIONS
+  );
 
   if (message.includes('כבר נתפסה')) {
     return `השעה${formattedTime}${formattedDate ? ` ב${formattedDate}` : ''} כבר תפוסה. תשלח שעה אחרת. ${followUpPrompt}`.trim();
@@ -658,7 +696,8 @@ export default async function handler(req, res) {
         if (customerMissingFields.length > 0) {
           const followUpPrompt = buildMissingFieldsPrompt(
             customerMissingFields,
-            CUSTOMER_FIELD_LABELS
+            CUSTOMER_FIELD_LABELS,
+            CUSTOMER_FIELD_QUESTIONS
           );
           customerFailureText = `${customerFailureText} ${followUpPrompt}`.trim();
           await saveWhatsAppContext(conversationPhone, {
