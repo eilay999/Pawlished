@@ -52,6 +52,22 @@ const PET_NAME_LABELS = [
   'שם החתולה'
 ];
 
+const NON_NAME_PREFIXES = [
+  'טלפון',
+  'נייד',
+  'פלאפון',
+  'סוג',
+  'גזע',
+  'מחיר',
+  'שם חיה',
+  'שם הכלב',
+  'שם הכלבה',
+  'שם החתול',
+  'שם החתולה'
+];
+
+const CUSTOMER_NAME_PREFIXES = ['שם לקוח', 'שם לקוחה', 'שם'];
+
 const ACTION_PREFIXES = new Set([
   'שים',
   'תשים',
@@ -257,12 +273,36 @@ const extractName = (text) => {
     .replace(/[,.!?]/g, ' ')
     .replace(/\s+/g, ' ');
 
+  const explicitNamePrefix = CUSTOMER_NAME_PREFIXES.find(
+    (prefix) => sanitized.startsWith(`${prefix} `) || sanitized.startsWith(`${prefix}:`)
+  );
+
+  if (explicitNamePrefix) {
+    return sanitized.slice(explicitNamePrefix.length).replace(/^[:\s-]+/, '').trim() || null;
+  }
+
+  if (
+    NON_NAME_PREFIXES.some(
+      (prefix) => sanitized.startsWith(`${prefix} `) || sanitized.startsWith(`${prefix}:`)
+    )
+  ) {
+    return null;
+  }
+
   const tokens = sanitized.split(' ').filter(Boolean);
   while (tokens.length > 0 && ACTION_PREFIXES.has(tokens[0])) {
     tokens.shift();
   }
 
   if (tokens[0] === 'את') {
+    tokens.shift();
+  }
+
+  if (tokens[0] === 'לקוח' || tokens[0] === 'לקוחה') {
+    tokens.shift();
+  }
+
+  if (tokens[0] === 'חדש' || tokens[0] === 'חדשה') {
     tokens.shift();
   }
 
@@ -277,6 +317,8 @@ const extractName = (text) => {
       token === 'לשעה' ||
       token === 'שעה' ||
       token === 'עם' ||
+      token === 'מסוג' ||
+      token === 'מהסוג' ||
       token === 'תור' ||
       token === 'לקוח' ||
       token === 'חדשה' ||
@@ -325,7 +367,7 @@ export const analyzeAppointmentMessage = (message) => {
   const time = extractTime(text);
   const date = extractExplicitDate(text) || extractRelativeDate(text, time);
   const customerName = extractName(text);
-  const service = extractService(text);
+  const service = extractService(text) || (mentionsNewCustomer(text) && (date || time) ? GENERIC_SERVICE : null);
   const phone = extractPhone(text);
   const petName = extractPetName(text);
   const petType = extractPetType(text);
