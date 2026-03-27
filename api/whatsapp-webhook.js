@@ -90,6 +90,11 @@ const getNowPartsInIsrael = () => {
   };
 };
 
+const getIsraelTodayDateString = () => {
+  const now = getNowPartsInIsrael();
+  return `${String(now.year).padStart(4, '0')}-${String(now.month).padStart(2, '0')}-${String(now.day).padStart(2, '0')}`;
+};
+
 const inferUpcomingDateFromDayOfMonth = (value = '') => {
   const match = normalizeMessageText(value).match(/^(?:ב-?)?(\d{1,2})$/);
   if (!match) return null;
@@ -320,6 +325,14 @@ const determineAppointmentRecoveryFields = (reason = '', payload = {}) => {
     return ['time'];
   }
 
+  if (message.includes('Cannot create appointments in the past')) {
+    const today = getIsraelTodayDateString();
+    if (payload.date && payload.date === today) {
+      return ['time'];
+    }
+    return ['date'];
+  }
+
   if (message.includes('כמה לקוחות')) {
     return ['phone'];
   }
@@ -535,6 +548,22 @@ const buildBookingFailureText = (reason = '', parsed = {}, messageText = '') => 
       missingFields: recoveryFields,
       labelsMap: APPOINTMENT_FIELD_LABELS,
       questionsMap: APPOINTMENT_FIELD_QUESTIONS
+    });
+  }
+
+  if (message.includes('Cannot create appointments in the past')) {
+    return buildReadableMissingReply({
+      intro: formattedDate
+        ? `אי אפשר לקבוע תור ל${formattedDate}${formattedTime}. התאריך או השעה כבר עברו.`
+        : 'אי אפשר לקבוע תור לזמן שכבר עבר.',
+      analysis: {
+        ...analysis,
+        ...parsed
+      },
+      missingFields: recoveryFields.length > 0 ? recoveryFields : ['date'],
+      labelsMap: APPOINTMENT_FIELD_LABELS,
+      questionsMap: APPOINTMENT_FIELD_QUESTIONS,
+      example: BOOKING_EXAMPLE
     });
   }
 
