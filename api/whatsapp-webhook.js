@@ -8,6 +8,7 @@ import {
   completeTaskFromQuery,
   createTaskFromQuery,
   deleteTaskFromQuery,
+  getTaskStatusReply,
   getTasksReply,
   parseTaskQuery,
   reopenTaskFromQuery
@@ -279,6 +280,8 @@ export default async function handler(req, res) {
           taskReplyResult = await getTasksReply('summary');
         } else if (taskQuery.action === 'list_open') {
           taskReplyResult = await getTasksReply('list_open');
+        } else if (taskQuery.action === 'status') {
+          taskReplyResult = await getTaskStatusReply(taskQuery.selector);
         } else if (taskQuery.action === 'create') {
           taskReplyResult = await createTaskFromQuery({
             title: taskQuery.title,

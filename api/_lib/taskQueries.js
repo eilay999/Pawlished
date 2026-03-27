@@ -147,7 +147,10 @@ const parseSelectorFromText = (text) => {
   }
 
   const cleaned = normalizeText(text)
-    .replace(/\b(סמן|תסמן|עדכן|תעדכן|סגור|תסגור|פתח|תפתח|מחק|תמחק|הסר|תסיר|את|משימה|כ|ל|למצב|מצב|בוצע|פתוח|מחוקה|שוב)\b/g, ' ')
+    .replace(
+      /(?:^|\s)(?:מה|מצב|סטטוס|המצב|הסטטוס|סמן|תסמן|עדכן|תעדכן|סגור|תסגור|פתח|תפתח|מחק|תמחק|הסר|תסיר|את|משימה|למצב|בוצע|פתוח|מחוקה|שוב|חדש)(?=$|\s)/g,
+      ' '
+    )
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -194,6 +197,19 @@ export const parseTaskQuery = (message) => {
     return {
       kind: 'task_query',
       action: 'delete',
+      selector: parseSelectorFromText(text),
+      text
+    };
+  }
+
+  const isStatusQuery =
+    /^(?:מה|תראה|תציג)\s+.*(?:מצב|סטטוס)\s+.*משימה/.test(text) ||
+    /^(?:מצב|סטטוס)\s+.*משימה/.test(text);
+
+  if (isStatusQuery) {
+    return {
+      kind: 'task_query',
+      action: 'status',
       selector: parseSelectorFromText(text),
       text
     };
@@ -330,7 +346,7 @@ export const getTasksReply = async (mode = 'summary') => {
       text:
         'המשימות הפתוחות:\n' +
         openTasks.map((task, index) => formatTaskLine(task, index + 1)).join('\n') +
-        '\nכדי לעדכן: סמן משימה 2 בוצע',
+        `\nכדי לעדכן: סמן משימה 1 בוצע`,
       tasks
     };
   }
@@ -347,6 +363,15 @@ export const getTasksReply = async (mode = 'summary') => {
   return {
     text: lines.join('\n'),
     tasks
+  };
+};
+
+export const getTaskStatusReply = async (selector) => {
+  const tasks = await loadTasks();
+  const task = resolveTaskBySelector(tasks, selector);
+  return {
+    task,
+    text: `מצב המשימה:\n${formatTaskLine(task, tasks.indexOf(task) + 1)}`
   };
 };
 
