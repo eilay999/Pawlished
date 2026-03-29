@@ -760,7 +760,7 @@ const App: React.FC = () => {
 
     if (updatedTask) {
       persistCloudMutation('עדכון משימה בענן נכשל', () =>
-        supabase!.from('tasks').upsert(mapTaskToDb(updatedTask))
+        supabase!.from('tasks').update(mapTaskToDb(updatedTask)).eq('id', updatedTask.id)
       );
     }
   };
