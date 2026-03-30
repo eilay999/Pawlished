@@ -313,6 +313,19 @@ const App: React.FC = () => {
         ? []
         : (tasksRes.data || []).map(mapTaskFromDb);
 
+    if (tasksError) {
+      if (isMissingTableError(tasksError.message)) {
+        setCloudStatus('error');
+        setLoadError('טבלת המשימות לא נמצאה בענן. יש לבצע מיגרציה או לבדוק את הבסיס.');
+        return false;
+      }
+
+      console.error('Supabase tasks load error', tasksError);
+      setCloudStatus('error');
+      setLoadError(formatSupabaseError('טעינת המשימות מהענן נכשלה. בדוק הרשאות/חיבור Supabase', tasksError));
+      return false;
+    }
+
     if (customersSignature(customersRef.current) !== customersSignature(mappedCustomers)) {
       setCustomers(mappedCustomers);
     }
@@ -323,10 +336,6 @@ const App: React.FC = () => {
 
     if (tasksSignature(tasksRef.current) !== tasksSignature(mappedTasks)) {
       setTasks(mappedTasks);
-    }
-
-    if (tasksError && !isMissingTableError(tasksError.message)) {
-      console.error('Supabase tasks load error', tasksError);
     }
 
     setCloudStatus('online');
@@ -760,7 +769,7 @@ const App: React.FC = () => {
 
     if (updatedTask) {
       persistCloudMutation('עדכון משימה בענן נכשל', () =>
-        supabase!.from('tasks').update(mapTaskToDb(updatedTask)).eq('id', updatedTask.id)
+        supabase!.from('tasks').update({ status: updatedTask.status }).eq('id', updatedTask.id)
       );
     }
   };
