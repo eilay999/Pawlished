@@ -176,12 +176,21 @@ const calendarEventSignature = (list: CalendarEvent[]) =>
     }))
   );
 
+const isMissingSpecificTableError = (message: string, tableName: string) => {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes(`relation "${tableName}" does not exist`) ||
+    lower.includes(`could not find the table 'public.${tableName}' in the schema cache`) ||
+    lower.includes(`could not find the table "public.${tableName}" in the schema cache`)
+  );
+};
+
 const isMissingTableError = (message?: string) => {
   if (!message) return false;
   return (
-    message.includes('relation "tasks" does not exist') ||
-    message.includes('relation "calendar_events" does not exist') ||
-    message.includes('relation "whatsapp_messages" does not exist')
+    isMissingSpecificTableError(message, 'tasks') ||
+    isMissingSpecificTableError(message, 'calendar_events') ||
+    isMissingSpecificTableError(message, 'whatsapp_messages')
   );
 };
 
@@ -279,6 +288,7 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
+  const [whatsappMessagesTableMissing, setWhatsappMessagesTableMissing] = useState(false);
   const [syncingTaskIds, setSyncingTaskIds] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>(
@@ -393,6 +403,7 @@ const App: React.FC = () => {
     try {
     if (!supabase) {
       setCloudStatus('offline');
+      setWhatsappMessagesTableMissing(false);
       setLoadError('אין חיבור Supabase בפרויקט. היומן עובד בענן בלבד עד שתוגדר גישה תקינה.');
       return false;
     }
@@ -420,6 +431,10 @@ const App: React.FC = () => {
     const calendarEventsError = calendarEventsRes.error;
     const tasksError = tasksRes.error;
     const whatsappMessagesError = whatsappMessagesRes.error;
+    const whatsappMessagesMissing = Boolean(
+      whatsappMessagesError && isMissingTableError(whatsappMessagesError.message)
+    );
+    setWhatsappMessagesTableMissing(whatsappMessagesMissing);
 
     if (customersError || appointmentsError) {
       console.error('Supabase load error', customersError || appointmentsError);
@@ -440,7 +455,7 @@ const App: React.FC = () => {
         ? []
         : (calendarEventsRes.data || []).map(mapCalendarEventFromDb);
     const mappedWhatsAppMessages =
-      whatsappMessagesError && isMissingTableError(whatsappMessagesError.message)
+      whatsappMessagesMissing
         ? []
         : (whatsappMessagesRes.data || []).map(mapWhatsAppMessageFromDb);
 
@@ -488,7 +503,7 @@ const App: React.FC = () => {
       setTasks(mappedTasks);
     }
 
-    if (whatsappMessagesError && !isMissingTableError(whatsappMessagesError.message)) {
+    if (whatsappMessagesError && !whatsappMessagesMissing) {
       console.error('Supabase WhatsApp messages load error', whatsappMessagesError);
       setCloudStatus('error');
       setLoadError(formatSupabaseError('טעינת הודעות WhatsApp מהענן נכשלה. בדוק הרשאות/חיבור Supabase', whatsappMessagesError));
@@ -1283,7 +1298,7 @@ const App: React.FC = () => {
             onAddCustomer={handleAddCustomer}
           />
         ) : currentView === 'MESSAGES' ? (
-          <MessagesView messages={whatsappMessages} />
+          <MessagesView messages={whatsappMessages} isTableMissing={whatsappMessagesTableMissing} />
         ) : (
           <StatsView 
             customers={customers}

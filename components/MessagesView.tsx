@@ -4,6 +4,7 @@ import { WhatsAppMessage } from '../types';
 
 interface MessagesViewProps {
   messages: WhatsAppMessage[];
+  isTableMissing?: boolean;
 }
 
 type Conversation = {
@@ -58,7 +59,7 @@ const groupMessages = (messages: WhatsAppMessage[]): Conversation[] => {
     .sort((left, right) => right.latest.createdAt.getTime() - left.latest.createdAt.getTime());
 };
 
-export const MessagesView: React.FC<MessagesViewProps> = ({ messages }) => {
+export const MessagesView: React.FC<MessagesViewProps> = ({ messages, isTableMissing = false }) => {
   const conversations = useMemo(() => groupMessages(messages), [messages]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const selectedConversation =
@@ -70,10 +71,35 @@ export const MessagesView: React.FC<MessagesViewProps> = ({ messages }) => {
       <div className="h-full overflow-y-auto p-6 md:p-8 bg-gray-50">
         <div className="max-w-5xl mx-auto bg-white border border-gray-200 rounded-2xl p-8 text-center shadow-sm">
           <MessageCircle className="w-10 h-10 mx-auto text-gray-300 mb-3" />
-          <h2 className="text-xl font-bold text-gray-800">אין עדיין הודעות WhatsApp</h2>
-          <p className="text-sm text-gray-500 mt-2">
-            אחרי שלקוחות ישלחו הודעה למספר העסק, השיחות יופיעו כאן.
-          </p>
+          <h2 className="text-xl font-bold text-gray-800">
+            {isTableMissing ? 'יומן הודעות WhatsApp לא הופעל עדיין' : 'אין עדיין הודעות WhatsApp'}
+          </h2>
+          {isTableMissing ? (
+            <div className="mt-4 text-sm text-gray-600 space-y-3 text-right">
+              <p>
+                נראה שחסרה הטבלה <code className="px-1 py-0.5 bg-gray-100 rounded">whatsapp_messages</code> ב-Supabase,
+                ולכן אין אפשרות להציג כאן את השיחות.
+              </p>
+              <div>
+                <div className="font-bold text-gray-800 mb-1">כדי להפעיל:</div>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>
+                    בפרויקט: <code className="px-1 py-0.5 bg-gray-100 rounded">npm run supabase:push</code>
+                  </li>
+                  <li>
+                    או ב-Supabase SQL Editor: להריץ את{' '}
+                    <code className="px-1 py-0.5 bg-gray-100 rounded">
+                      supabase/migrations/20260417120000_add_whatsapp_messages.sql
+                    </code>
+                  </li>
+                </ol>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 mt-2">
+              אחרי שלקוחות ישלחו הודעה למספר העסק, השיחות יופיעו כאן.
+            </p>
+          )}
         </div>
       </div>
     );
