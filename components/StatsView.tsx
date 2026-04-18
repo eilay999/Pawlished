@@ -120,7 +120,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
             aria-label="WhatsApp messages"
           >
             <MessageCircle className="w-5 h-5" />
-            <span>׳”׳•׳“׳¢׳•׳× WhatsApp</span>
+            <span>הודעות WhatsApp</span>
           </button>
         )}
       </div>

@@ -637,7 +637,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               aria-label="WhatsApp messages"
             >
               <MessageCircle className="w-4 h-4" />
-              <span className="hidden sm:inline">׳”׳•׳“׳¢׳•׳×</span>
+              <span className="hidden sm:inline">הודעות</span>
             </button>
           )}
         </div>
