@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Dog, Calendar, User, Phone, Clock, CircleDollarSign, Trash2 } from 'lucide-react';
 import { Customer, CustomerLifecycleStatus } from '../types';
+import { normalizePhoneForCompare } from '../utils';
 
 interface CustomerModalProps {
   customer?: Customer | null;
@@ -88,12 +89,13 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.petName) return;
+    const normalizedPhone = normalizePhoneForCompare(formData.phone || '');
+    if (!formData.name || !formData.petName || !normalizedPhone) return;
 
     onSave({
       id: customer?.id || Math.random().toString(36).substr(2, 9),
       name: formData.name || '',
-      phone: formData.phone || '',
+      phone: normalizedPhone,
       petName: formData.petName || '',
       petType: formData.petType?.trim() || '',
       visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
@@ -169,6 +171,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                         <Phone className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
                         <input 
                             type="tel" 
+                            required
                             className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 transition-all" 
                             placeholder="050-0000000"
                             value={formData.phone}

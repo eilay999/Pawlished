@@ -1,4 +1,4 @@
-import { TIME_SLOTS, listAppointmentsForLocalDate } from './appointments.js';
+import { TIME_SLOTS, getFreeSlotsForAppointments, listAppointmentsForLocalDate } from './appointments.js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 
@@ -111,6 +111,21 @@ const includesBusyKeyword = (text) => /(תפוס|תפוסה|תפוסים|תפו�
 const includesCountKeyword = (text) => /(כמה|מספר|סך).*(תור|תורים)|כמה יש/.test(text);
 const includesScheduleKeyword = (text) =>
   /(לוז|לו"ז|לו״ז|הלו"ז|הלו״ז|יומן|מה יש|מה קורה|מה יש לי|מה יש ב)/.test(text);
+const includesAppointmentListKeyword = (text) => {
+  const hasAppointmentListTerm =
+    /(התורים|תורים)/.test(text) || /(מה|איזה|אילו|אלו|כמה).*(תור|תורים)/.test(text);
+
+  if (!hasAppointmentListTerm) return false;
+
+  const hasQuestionOrListWord = /(מה|איזה|אילו|אלו|כמה|רשימה|רשימת|הצג|תראה|תראי|תן|תני|יש)/.test(text);
+  const isDateOnlyShorthand =
+    /^(?:ה)?תורים(?:\s+(?:היום|מחר|מחרתיים|השבוע|לשבוע|שבוע הבא))?$/.test(text);
+  const hasBookingVerb = /(?:^|\s)(?:קבע|תקבע|לקבוע|שים|תוסיף|הוסף|להוסיף|שריין|פתח)\s+/.test(text);
+
+  if (hasBookingVerb && !hasQuestionOrListWord && !isDateOnlyShorthand) return false;
+
+  return hasQuestionOrListWord || isDateOnlyShorthand;
+};
 
 const formatDateRange = (startDate, endDate) => {
   const startLabel = formatDateLabel(startDate);
@@ -144,7 +159,7 @@ export const parseScheduleQuery = (message) => {
   const wantsFree = includesFreeKeyword(text);
   const wantsBusy = includesBusyKeyword(text);
   const wantsCount = includesCountKeyword(text);
-  const wantsSchedule = includesScheduleKeyword(text);
+  const wantsSchedule = includesScheduleKeyword(text) || includesAppointmentListKeyword(text);
 
   if (!wantsFree && !wantsBusy && !wantsCount && !wantsSchedule) {
     return null;
@@ -292,7 +307,7 @@ const formatAppointmentsCountText = (count, periodLabel) => {
 const buildDayScheduleReply = async ({ date, mode }) => {
   const appointments = await listAppointmentsForLocalDate(date);
   const occupiedSlots = appointments.map((appointment) => appointment.localTime);
-  const freeSlots = TIME_SLOTS.filter((slot) => !occupiedSlots.includes(slot));
+  const freeSlots = getFreeSlotsForAppointments(appointments, date);
   const dateLabel = formatDateLabel(date);
 
   if (mode === 'overview') {
@@ -405,7 +420,7 @@ const buildWeekScheduleReply = async ({ startDate, endDate, mode }) => {
 
   const lines = dayResults.map((day) => {
     const occupiedSlots = day.appointments.map((appointment) => appointment.localTime);
-    const freeSlots = TIME_SLOTS.filter((slot) => !occupiedSlots.includes(slot));
+    const freeSlots = getFreeSlotsForAppointments(day.appointments, day.date);
 
     if (mode === 'free') {
       return `${formatDateLabel(day.date)}: ${compressSlots(freeSlots).join(', ') || 'אין שעות פנויות כרגע'}`;

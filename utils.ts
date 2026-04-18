@@ -10,6 +10,16 @@ export interface CustomerAnalysis {
   lastEffectiveVisit: Date;
 }
 
+export const normalizeDigits = (value: string) => String(value || '').replace(/\D/g, '');
+
+// Normalizes Israeli phone numbers into a comparable storage format (digits only, leading 0).
+export const normalizePhoneForCompare = (value: string) => {
+  const digits = normalizeDigits(value);
+  if (!digits) return '';
+  if (digits.startsWith('972')) return `0${digits.slice(3)}`;
+  return digits;
+};
+
 export const analyzeCustomerStatus = (customer: Customer, appointments: Appointment[]): CustomerAnalysis => {
   // 1. Normalize today's date to local midnight
   const today = new Date();

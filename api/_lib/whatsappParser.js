@@ -19,6 +19,7 @@ const WEEKDAY_MAP = {
 
 const SERVICE_ALIASES = [
   'טיפול מלא',
+  'טיפוח',
   'גזירת ציפורניים',
   'ניקוי אוזניים',
   'תספורת',
@@ -28,7 +29,7 @@ const SERVICE_ALIASES = [
   'סירוק'
 ];
 
-const GENERIC_SERVICE = 'תור לקוח';
+const GENERIC_SERVICE = 'תספורת';
 
 const PET_TYPE_ALIASES = [
   'פודל',
@@ -36,10 +37,12 @@ const PET_TYPE_ALIASES = [
   'פודל ננסי',
   'שיצו',
   'פומרניין',
+  'פום',
   'פומרני',
   'פומרנים',
   'מלטיפו',
   'שיצו פודל',
+  'יורקשייר',
   'מלטז',
   'מלטזי'
 ];
@@ -314,6 +317,20 @@ const extractPrice = (text) => {
   return Number.isFinite(price) ? price : null;
 };
 
+const extractVisitFrequencyWeeks = (text) => {
+  const explicitMatch = text.match(/(?:כל\s*)?(\d{1,2})\s*שבוע/);
+  if (explicitMatch?.[1]) {
+    const weeks = Number(explicitMatch[1]);
+    return Number.isFinite(weeks) && weeks > 0 ? weeks : null;
+  }
+
+  const frequencyLabelMatch = text.match(/תדירות\s*[:\-]?\s*(\d{1,2})/);
+  if (!frequencyLabelMatch?.[1]) return null;
+
+  const weeks = Number(frequencyLabelMatch[1]);
+  return Number.isFinite(weeks) && weeks > 0 ? weeks : null;
+};
+
 const mentionsNewCustomer = (text) => /לקוח(?:ה)? חדשה?|לקוח חדש/.test(text);
 
 const extractName = (text) => {
@@ -421,6 +438,7 @@ export const analyzeAppointmentMessage = (message) => {
   const petName = extractPetName(String(message || '')) || extractPetName(text);
   const petType = extractStructuredPetType(lines) || extractPetType(text);
   const price = extractPrice(text);
+  const visitFrequencyWeeks = extractVisitFrequencyWeeks(text);
 
   return {
     text,
@@ -432,19 +450,31 @@ export const analyzeAppointmentMessage = (message) => {
     petName,
     petType,
     price,
+    visitFrequencyWeeks,
     isNewCustomerIntent: mentionsNewCustomer(text)
   };
 };
 
 export const parseAppointmentMessage = (message) => {
-  const { text, customerName, date, time, service, phone, petName, petType, price } =
+  const {
+    text,
+    customerName,
+    date,
+    time,
+    service,
+    phone,
+    petName,
+    petType,
+    price,
+    visitFrequencyWeeks
+  } =
     analyzeAppointmentMessage(message);
   if (!text) {
     throw new Error('Missing message text');
   }
 
-  if (!customerName) {
-    throw new Error('לא הצלחתי לזהות שם לקוח מההודעה.');
+  if (!customerName && !phone && !petName) {
+    throw new Error('לא הצלחתי לזהות שם לקוח, שם כלב או טלפון מההודעה.');
   }
 
   if (!date) {
@@ -455,19 +485,16 @@ export const parseAppointmentMessage = (message) => {
     throw new Error('לא הצלחתי לזהות שעה מההודעה.');
   }
 
-  if (!service) {
-    throw new Error('לא הצלחתי לזהות שירות מההודעה.');
-  }
-
   return {
     customerName,
     date,
     time,
-    service,
+    service: service || GENERIC_SERVICE,
     phone,
     petName,
     petType,
     price,
+    visitFrequencyWeeks,
     notes: text
   };
 };

@@ -2,7 +2,21 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
-const DEFAULT_SERVICE = 'תור לקוח';
+const DEFAULT_SERVICE = 'תספורת';
+export const APPOINTMENT_DURATION_MINUTES = 150;
+export const APPOINTMENT_SLOT_INTERVAL_MINUTES = 30;
+
+// Pawlished fixed weekly slots (small dogs only) as provided by the business.
+// Note: JS weekday indexing: 0=Sunday ... 6=Saturday.
+export const WEEKLY_BUSINESS_SLOTS = {
+  0: ['07:00'],
+  1: ['09:00', '12:00', '15:00'],
+  2: ['09:00', '12:00', '15:00'],
+  3: ['08:00', '11:00', '14:00'],
+  4: ['07:00'],
+  5: [],
+  6: []
+};
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey =
@@ -135,18 +149,38 @@ export const buildSlotDateFromLocal = (
   return new Date(utcGuess.getTime() - (zonedAsUtc - utcGuess.getTime()));
 };
 
-export const generateTimeSlots = () => {
-  const slots = [];
-  for (let hour = 7; hour <= 20; hour += 1) {
-    slots.push(`${String(hour).padStart(2, '0')}:00`);
-    if (hour !== 20) {
-      slots.push(`${String(hour).padStart(2, '0')}:30`);
-    }
-  }
-  return slots;
+const WEEKDAY_SHORT_TO_INDEX = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6
 };
 
-export const TIME_SLOTS = generateTimeSlots();
+const getWeekdayIndexForLocalDate = (dateValue, timeZone = ISRAEL_TIME_ZONE) => {
+  const normalizedDate = normalizeDateString(dateValue);
+  const date = buildSlotDateFromLocal(normalizedDate, '12:00', timeZone);
+  const weekdayShort = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short'
+  }).format(date);
+
+  return WEEKDAY_SHORT_TO_INDEX[weekdayShort] ?? null;
+};
+
+export const getAllowedSlotsForLocalDate = (dateValue, timeZone = ISRAEL_TIME_ZONE) => {
+  try {
+    const weekdayIndex = getWeekdayIndexForLocalDate(dateValue, timeZone);
+    if (weekdayIndex === null) return [];
+    return WEEKLY_BUSINESS_SLOTS[weekdayIndex] || [];
+  } catch {
+    return [];
+  }
+};
+
+export const TIME_SLOTS = Array.from(new Set(Object.values(WEEKLY_BUSINESS_SLOTS).flat())).sort();
 
 const addDaysToDateString = (dateValue, daysToAdd) => {
   const normalizedDate = normalizeDateString(dateValue);
@@ -244,22 +278,157 @@ const mapAppointmentResponse = (row) => ({
   cancellationFee: row.cancellation_fee == null ? undefined : Number(row.cancellation_fee)
 });
 
+const addMinutes = (dateValue, minutes) => new Date(new Date(dateValue).getTime() + minutes * 60 * 1000);
+
+const rangesOverlap = (leftStart, leftEnd, rightStart, rightEnd) =>
+  new Date(leftStart).getTime() < new Date(rightEnd).getTime() &&
+  new Date(leftEnd).getTime() > new Date(rightStart).getTime();
+
+const buildDayBoundsFromSlot = (slotDateIso) => {
+  const date = new Date(slotDateIso);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ISRAEL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+
+  const parts = formatter
+    .formatToParts(date)
+    .filter((part) => part.type !== 'literal')
+    .reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+  const localDate = `${parts.year}-${parts.month}-${parts.day}`;
+  const nextDate = addDaysToDateString(localDate, 1);
+
+  return {
+    start: buildSlotDateFromLocal(localDate, '00:00').toISOString(),
+    end: buildSlotDateFromLocal(nextDate, '00:00').toISOString(),
+    localDate
+  };
+};
+
 const ensureSlotAvailable = async (supabase, slotDateIso) => {
+  const targetEndIso = addMinutes(slotDateIso, APPOINTMENT_DURATION_MINUTES).toISOString();
+  const bounds = buildDayBoundsFromSlot(slotDateIso);
+
   const { data, error } = await supabase
     .from('appointments')
-    .select('id')
-    .eq('date', slotDateIso)
+    .select('id, date')
+    .gte('date', bounds.start)
+    .lt('date', bounds.end)
     .neq('status', 'CANCELLED')
-    .limit(1);
+    .order('date', { ascending: true });
 
   if (error) {
     throw createHttpError(500, `Failed to validate slot: ${error.message}`);
   }
 
-  return (data?.length ?? 0) === 0;
+  return !(data || []).some((row) =>
+    rangesOverlap(row.date, addMinutes(row.date, APPOINTMENT_DURATION_MINUTES), slotDateIso, targetEndIso)
+  );
 };
 
-const findExistingCustomer = async (supabase, { existingCustomerId, phone, customerName }) => {
+const dedupeCustomers = (rows = []) => {
+  const seen = new Set();
+  return rows.filter((row) => {
+    if (!row?.id || seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+};
+
+const searchCustomersByText = async (supabase, column, value) => {
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedValue) return [];
+
+  const exactResponse = await supabase
+    .from('customers')
+    .select('*')
+    .ilike(column, normalizedValue)
+    .limit(10);
+
+  if (exactResponse.error) {
+    throw createHttpError(500, `Failed to search customer by ${column}: ${exactResponse.error.message}`);
+  }
+
+  if ((exactResponse.data?.length || 0) > 0) {
+    return exactResponse.data;
+  }
+
+  const partialResponse = await supabase
+    .from('customers')
+    .select('*')
+    .ilike(column, `%${normalizedValue}%`)
+    .limit(10);
+
+  if (partialResponse.error) {
+    throw createHttpError(500, `Failed to search customer by ${column}: ${partialResponse.error.message}`);
+  }
+
+  return partialResponse.data || [];
+};
+
+const formatCustomerCandidate = (row) => {
+  const name = row?.name || 'לקוח';
+  const petName = row?.pet_name ? ` (${row.pet_name})` : '';
+  return `${name}${petName}`;
+};
+
+const buildLoosePhoneIlikePattern = (value = '') => {
+  const digits = normalizeDigits(value);
+  if (!digits || digits.length < 7) return '';
+  return `%${digits.split('').join('%')}%`;
+};
+
+const findCustomerRowByPhone = async (supabase, phone) => {
+  const phoneVariants = buildPhoneVariants(phone);
+  if (phoneVariants.length === 0) {
+    return null;
+  }
+
+  const exactResponse = await supabase
+    .from('customers')
+    .select('*')
+    .in('phone', phoneVariants)
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  if (exactResponse.error) {
+    throw createHttpError(500, `Failed to find customer by phone: ${exactResponse.error.message}`);
+  }
+
+  if ((exactResponse.data?.length || 0) > 0) {
+    return exactResponse.data?.[0] || null;
+  }
+
+  const loosePatterns = Array.from(new Set(phoneVariants.map(buildLoosePhoneIlikePattern).filter(Boolean)));
+  if (loosePatterns.length === 0) return null;
+
+  const looseResponse = await supabase
+    .from('customers')
+    .select('*')
+    .or(loosePatterns.map((pattern) => `phone.ilike.${pattern}`).join(','))
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  if (looseResponse.error) {
+    throw createHttpError(500, `Failed to find customer by phone: ${looseResponse.error.message}`);
+  }
+
+  return looseResponse.data?.[0] || null;
+};
+
+export const findCustomerByPhone = async (phone) => {
+  const supabase = getSupabaseClient();
+  const customerRow = await findCustomerRowByPhone(supabase, phone);
+  return customerRow ? mapCustomerResponse(customerRow) : null;
+};
+
+const findExistingCustomer = async (supabase, { existingCustomerId, phone, customerName, petName }) => {
   if (existingCustomerId) {
     const { data, error } = await supabase
       .from('customers')
@@ -274,41 +443,74 @@ const findExistingCustomer = async (supabase, { existingCustomerId, phone, custo
     if (data) return data;
   }
 
-  const phoneVariants = buildPhoneVariants(phone);
-  if (phoneVariants.length > 0) {
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .in('phone', phoneVariants)
-      .limit(1);
-
-    if (error) {
-      throw createHttpError(500, `Failed to find customer by phone: ${error.message}`);
-    }
-
-    if (data?.[0]) return data[0];
-  }
+  const customerByPhone = await findCustomerRowByPhone(supabase, phone);
+  if (customerByPhone) return customerByPhone;
 
   const normalizedName = String(customerName || '').trim();
-  if (normalizedName) {
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('name', normalizedName)
-      .limit(2);
+  const normalizedPetName = String(petName || '').trim();
+  const candidates = dedupeCustomers([
+    ...(normalizedName ? await searchCustomersByText(supabase, 'name', normalizedName) : []),
+    ...(normalizedPetName ? await searchCustomersByText(supabase, 'pet_name', normalizedPetName) : [])
+  ]);
 
-    if (error) {
-      throw createHttpError(500, `Failed to find customer by name: ${error.message}`);
-    }
+  if (candidates.length > 1) {
+    throw createHttpError(
+      409,
+      `נמצאו כמה לקוחות דומים: ${candidates.map(formatCustomerCandidate).join(', ')}. תשלח שם כלב או טלפון כדי שאדע בדיוק.`
+    );
+  }
 
-    if ((data?.length ?? 0) > 1) {
-      throw createHttpError(409, 'נמצאו כמה לקוחות בשם הזה. צריך מספר טלפון או מזהה מדויק.');
-    }
-
-    if (data?.[0]) return data[0];
+  if (candidates[0]) {
+    return candidates[0];
   }
 
   return null;
+};
+
+const resolveAppointmentStartMinutes = (appointment) => {
+  const localTime = appointment?.localTime;
+  if (typeof localTime === 'string' && /^\d{2}:\d{2}$/.test(localTime)) {
+    const [hours, minutes] = localTime.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+
+  const appointmentDate = new Date(appointment.date);
+  return appointmentDate.getHours() * 60 + appointmentDate.getMinutes();
+};
+
+export const getFreeSlotsForAppointments = (appointments = [], dateValue = null) => {
+  const slots = dateValue ? getAllowedSlotsForLocalDate(dateValue) : TIME_SLOTS;
+
+  return slots.filter((slot) => {
+    const [hours, minutes] = slot.split(':').map(Number);
+    const targetStart = hours * 60 + minutes;
+    const targetEnd = targetStart + APPOINTMENT_DURATION_MINUTES;
+
+    return !appointments.some((appointment) => {
+      const appointmentStart = resolveAppointmentStartMinutes(appointment);
+      const appointmentEnd = appointmentStart + APPOINTMENT_DURATION_MINUTES;
+      return targetStart < appointmentEnd && targetEnd > appointmentStart;
+    });
+  });
+};
+
+export const suggestAlternativeSlots = async (dateValue, maxSuggestions = 6) => {
+  const suggestions = [];
+
+  for (let dayOffset = 0; dayOffset < 4 && suggestions.length < maxSuggestions; dayOffset += 1) {
+    const currentDate = addDaysToDateString(dateValue, dayOffset);
+    const appointments = await listAppointmentsForLocalDate(currentDate);
+    const freeSlots = getFreeSlotsForAppointments(appointments, currentDate);
+
+    freeSlots.slice(0, maxSuggestions - suggestions.length).forEach((slot) => {
+      suggestions.push({
+        date: currentDate,
+        time: slot
+      });
+    });
+  }
+
+  return suggestions;
 };
 
 const insertCustomerRow = async (supabase, payload) => {
@@ -396,7 +598,9 @@ export const createAppointmentRecord = async ({
   customerName,
   service,
   notes,
-  price
+  price,
+  visitFrequencyWeeks,
+  allowNewCustomerDefaults = false
 }) => {
   const supabase = getSupabaseClient();
   const parsedSlotDate = slotDate instanceof Date ? slotDate : new Date(slotDate);
@@ -410,25 +614,67 @@ export const createAppointmentRecord = async ({
   }
 
   const slotDateIso = parsedSlotDate.toISOString();
+
+  const slotLocalDate = buildDayBoundsFromSlot(slotDateIso).localDate;
+  const allowedSlots = getAllowedSlotsForLocalDate(slotLocalDate, ISRAEL_TIME_ZONE);
+  if (allowedSlots.length === 0) {
+    throw createHttpError(400, 'ביום שבחרת אנחנו לא עובדים. אנחנו עובדים ראשון עד חמישי בבוקר בלבד.');
+  }
+
+  const slotLocalTime = toLocalTimeLabel(slotDateIso, ISRAEL_TIME_ZONE);
+  if (!allowedSlots.includes(slotLocalTime)) {
+    throw createHttpError(
+      400,
+      `בשביל ${slotLocalDate} אפשר לקבוע רק בשעות: ${allowedSlots.join(', ')}.`
+    );
+  }
+
   const slotAvailable = await ensureSlotAvailable(supabase, slotDateIso);
   if (!slotAvailable) {
-    throw createHttpError(409, 'השעה כבר נתפסה. בחר שעה אחרת.');
+    const alternatives = await suggestAlternativeSlots(slotLocalDate);
+    const alternativesText =
+      alternatives.length > 0
+        ? ` אפשרויות קרובות: ${alternatives
+            .map((option) => `${option.date} ${option.time}`)
+            .join(', ')}.`
+        : '';
+    throw createHttpError(409, `השעה שביקשת כבר תפוסה.${alternativesText}`);
   }
 
   let customerRow = await findExistingCustomer(supabase, {
     existingCustomerId,
     phone: phone || customer?.phone,
-    customerName: customerName || customer?.name
+    customerName: customerName || customer?.name,
+    petName: customer?.petName
   });
   let createdCustomer = false;
 
   if (!customerRow) {
+    const hasNewCustomerBasics = Boolean(
+      (customerName || customer?.name) && (phone || customer?.phone) && customer?.petName && customer?.petType
+    );
+    const hasBusinessDefaults = Boolean(
+      price !== undefined &&
+        price !== null &&
+        visitFrequencyWeeks !== undefined &&
+        visitFrequencyWeeks !== null
+    );
+    const canCreateNewCustomer = allowNewCustomerDefaults
+      ? hasNewCustomerBasics
+      : hasNewCustomerBasics && hasBusinessDefaults;
+
+    if (!canCreateNewCustomer) {
+      throw createHttpError(404, 'לא מצאתי לקוח קיים לפי השם, הכלב או הטלפון. אם זה לקוח חדש תשלח את כל הפרטים.');
+    }
+
     customerRow = await createCustomerRecord(supabase, {
       customerName: customerName || customer?.name,
       phone: phone || customer?.phone,
       petName: customer?.petName,
       petType: customer?.petType,
-      notes
+      notes,
+      defaultPrice: price,
+      visitFrequencyWeeks
     });
     createdCustomer = true;
   } else if (customerRow.lifecycle_status === 'ON_HOLD') {
@@ -448,7 +694,14 @@ export const createAppointmentRecord = async ({
 
   const slotStillAvailable = await ensureSlotAvailable(supabase, slotDateIso);
   if (!slotStillAvailable) {
-    throw createHttpError(409, 'השעה כבר נתפסה. בחר שעה אחרת.');
+    const alternatives = await suggestAlternativeSlots(slotLocalDate);
+    const alternativesText =
+      alternatives.length > 0
+        ? ` אפשרויות קרובות: ${alternatives
+            .map((option) => `${option.date} ${option.time}`)
+            .join(', ')}.`
+        : '';
+    throw createHttpError(409, `השעה שביקשת כבר תפוסה.${alternativesText}`);
   }
 
   const normalizedPrice =
@@ -491,14 +744,16 @@ export const createAppointmentFromStructuredInput = async ({
   notes,
   petName,
   petType,
-  price
+  price,
+  visitFrequencyWeeks,
+  allowNewCustomerDefaults
 }) => {
-  if (!customerName && !existingCustomerId && !phone) {
-    throw createHttpError(400, 'Missing customerName or phone');
+  if (!customerName && !existingCustomerId && !phone && !petName) {
+    throw createHttpError(400, 'Missing customer identifier');
   }
 
-  if (!date || !time || !service) {
-    throw createHttpError(400, 'Missing required fields: date, time, service');
+  if (!date || !time) {
+    throw createHttpError(400, 'Missing required fields: date, time');
   }
 
   return createAppointmentRecord({
@@ -512,9 +767,11 @@ export const createAppointmentFromStructuredInput = async ({
       petName,
       petType
     },
-    service,
+    service: service || DEFAULT_SERVICE,
     notes,
-    price
+    price,
+    visitFrequencyWeeks,
+    allowNewCustomerDefaults
   });
 };
 

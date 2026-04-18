@@ -15,7 +15,8 @@ export default async function handler(req, res) {
       customer,
       service,
       notes,
-      price
+      price,
+      visitFrequencyWeeks
     } = req.body || {};
 
     const result = await createAppointmentRecord({
@@ -26,7 +27,9 @@ export default async function handler(req, res) {
       customerName: customer?.name,
       service,
       notes,
-      price
+      price,
+      visitFrequencyWeeks,
+      allowNewCustomerDefaults: true
     });
 
     res.status(200).json({

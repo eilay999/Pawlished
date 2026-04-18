@@ -1,7 +1,7 @@
 import { createCustomerFromStructuredInput, normalizeDigits } from './appointments.js';
 
 const CUSTOMER_EXAMPLE =
-  'לדוגמה: תוסיף לקוח חדש: שם דני, טלפון 0501234567, שם חיה ריי, סוג פודל';
+  'לדוגמה: לקוח חדש: שם לקוח דני כהן, טלפון 0501234567, שם חיה ריי, סוג פודל, מחיר 250, תדירות 6 שבועות';
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -17,75 +17,248 @@ const normalizeText = (value = '') =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const normalizeLines = (value = '') =>
+  String(value || '')
+    .split(/\r?\n/)
+    .map((line) => normalizeText(line))
+    .filter(Boolean);
+
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const FIELD_LABELS = {
-  customerName: ['שם לקוח', 'שם לקוחה', 'שם'],
-  phone: ['טלפון', 'נייד', 'פלאפון'],
-  petName: ['שם חיה', 'חיה', 'שם הכלב', 'שם הכלבה', 'שם החתול', 'שם החתולה', 'כלב', 'כלבה', 'חתול', 'חתולה'],
-  petType: ['סוג', 'גזע', 'זן'],
-  notes: ['הערות', 'הערה', 'notes', 'note'],
-  defaultPrice: ['מחיר קבוע', 'מחיר']
+  customerName: ['שם לקוח', 'שם לקוחה', 'שם בעלים', 'לקוח בשם', 'לקוחה בשם'],
+  phone: ['טלפון', 'נייד', 'פלאפון', 'מספר טלפון', 'מספר'],
+  petName: [
+    'שם חיה',
+    'שם חיית מחמד',
+    'שם הכלב',
+    'שם כלב',
+    'שם הכלבה',
+    'שם החתול',
+    'שם חתול',
+    'שם החתולה',
+    'חיה',
+    'כלב',
+    'כלבה',
+    'חתול',
+    'חתולה'
+  ],
+  petType: ['סוג כלב', 'סוג חיה', 'סוג', 'גזע', 'זן'],
+  notes: ['הערות לקוח', 'הערות', 'הערה', 'מידע נוסף', 'רגישות', 'רגישויות'],
+  defaultPrice: ['מחיר קבוע', 'מחיר', 'עלות'],
+  visitFrequencyWeeks: ['תדירות', 'כל כמה שבועות', 'חוזר כל', 'חוזרת כל'],
+  lifecycleStatus: ['סטטוס', 'מצב']
 };
 
-const ALL_LABELS = Array.from(new Set(Object.values(FIELD_LABELS).flat())).sort(
-  (left, right) => right.length - left.length
-);
+const ALL_BOUNDARY_LABELS = [
+  ...Object.values(FIELD_LABELS).flat(),
+  'שם',
+  'ביקור אחרון',
+  'תור אחרון',
+  'לקוח חדש',
+  'לקוחה חדשה'
+].sort((left, right) => right.length - left.length);
 
-const buildFieldRegex = (labels) => {
-  const labelPattern = labels.map(escapeRegex).join('|');
-  const stopPattern = ALL_LABELS.map(escapeRegex).join('|');
+const STOP_PATTERN = ALL_BOUNDARY_LABELS.map(escapeRegex).join('|');
+
+const cleanValue = (value = '') =>
+  normalizeText(value)
+    .replace(/^[\s,:=-]+/, '')
+    .replace(/[\s,;]+$/, '')
+    .trim();
+
+const buildValueRegex = (labels, flags = 'u') => {
+  const labelsPattern = labels.map(escapeRegex).join('|');
   return new RegExp(
-    `(?:^|[\\s,\\n])(?:${labelPattern})\\s*[:\\-]?\\s*(.+?)(?=(?:[\\s,\\n]+|,\\s*)(?:${stopPattern})\\s*[:\\-]?|$)`
+    `(?:^|[\\s,;\\n])(?:${labelsPattern})\\s*[:=-]?\\s*(.+?)(?=(?:[\\s,;\\n]+)(?:${STOP_PATTERN})\\s*[:=-]?|$)`,
+    flags
   );
 };
 
-const extractLabeledValue = (text, labels) => {
-  const match = normalizeText(text).match(buildFieldRegex(labels));
-  return match?.[1]?.trim() || '';
+const extractBoundedValue = (text, labels) => {
+  const match = normalizeText(text).match(buildValueRegex(labels));
+  return cleanValue(match?.[1] || '');
 };
 
-const looksLikeLabeledPrefix = (text = '') =>
-  ALL_LABELS.some((label) => normalizeText(text).startsWith(`${label} `) || normalizeText(text).startsWith(`${label}:`));
+const extractCustomerNameByGenericName = (text) => {
+  const match = normalizeText(text).match(
+    /(?:^|[\s,;\n])שם(?!\s*(?:חיה|חיית|כלב|הכלב|כלבה|הכלבה|חתול|החתול|חתולה|החתולה|מחמד))\s*[:=-]?\s*(.+?)(?=(?:[\s,;\n]+)(?:טלפון|נייד|פלאפון|שם חיה|שם חיית מחמד|שם הכלב|שם כלב|שם הכלבה|שם החתול|שם חתול|שם החתולה|חיה|כלב|כלבה|חתול|חתולה|סוג|גזע|זן|מחיר|עלות|תדירות|כל כמה שבועות|חוזר כל|הערות|הערה|סטטוס|מצב)\s*[:=-]?|$)/u
+  );
+  return cleanValue(match?.[1] || '');
+};
+
+const stripCustomerIntentPrefix = (text = '') =>
+  normalizeText(text).replace(
+    /^(?:(?:תוסיף|הוסף|תוסיפי|צור|תיצור|תיצרי|פתח|תפתח|להוסיף|אפשר להוסיף|תוכל להוסיף|תוכלי להוסיף)\s+(?:לי\s+)?(?:את\s+)?)?(?:לקוח|לקוחה|לקו)(?:\s+חדש(?:ה)?)?\s*[:=-]?\s*/u,
+    ''
+  );
+
+const stripTrailingStructuredParts = (value = '') =>
+  cleanValue(value).replace(
+    /\s+(?:(?:\+972|972|0)\d[\d\s-]{7,}|ל(?:כלב|כלבה|חתול|חתולה|חיה)\s+קורא(?:ים|ת)?|טלפון|נייד|פלאפון|מספר|שם חיה|שם חיית מחמד|שם הכלב|שם כלב|שם הכלבה|שם החתול|שם חתול|שם החתולה|חיה|כלב|כלבה|חתול|חתולה|סוג|גזע|זן|מחיר|עלות|תדירות|כל כמה שבועות|חוזר כל|הערות|הערה|סטטוס|מצב)\b.*$/u,
+    ''
+  );
 
 const extractLeadingName = (text = '') => {
-  const safeText = normalizeText(text);
-  if (!safeText || looksLikeLabeledPrefix(safeText)) {
-    return '';
-  }
+  const body = stripCustomerIntentPrefix(text);
+  if (!body || /\d/.test(body.split(/\s+/)[0] || '')) return '';
 
-  const stopPattern = ALL_LABELS.map(escapeRegex).join('|');
-  const match = safeText.match(new RegExp(`^(.+?)(?=(?:[\\s,\\n]+|,\\s*)(?:${stopPattern})\\s*[:\\-]?|$)`));
-  return match?.[1]?.trim() || '';
+  const labelsPattern = [
+    'טלפון',
+    'נייד',
+    'פלאפון',
+    'מספר',
+    'שם חיה',
+    'שם חיית מחמד',
+    'שם הכלב',
+    'שם כלב',
+    'שם הכלבה',
+    'שם החתול',
+    'שם חתול',
+    'שם החתולה',
+    'חיה',
+    'כלב',
+    'כלבה',
+    'חתול',
+    'חתולה',
+    'סוג',
+    'גזע',
+    'זן',
+    'מחיר',
+    'עלות',
+    'תדירות',
+    'כל כמה שבועות',
+    'חוזר כל',
+    'הערות',
+    'הערה',
+    'סטטוס',
+    'מצב'
+  ]
+    .map(escapeRegex)
+    .join('|');
+
+  const match = body.match(new RegExp(`^(.+?)(?=(?:[\\s,;\\n]+)(?:${labelsPattern})\\s*[:=-]?|$)`, 'u'));
+  return stripTrailingStructuredParts(match?.[1] || '');
 };
 
 const extractPhone = (text = '') => {
-  const labeledPhone = extractLabeledValue(text, FIELD_LABELS.phone);
-  if (labeledPhone) {
-    return labeledPhone;
-  }
-
-  const match = normalizeText(text).match(/(?:\+972|972|0)\d[\d\s-]{7,}/);
-  return match?.[0]?.trim() || '';
+  const labeledPhone = extractBoundedValue(text, FIELD_LABELS.phone);
+  const source = labeledPhone || normalizeText(text);
+  const match = source.match(/(?:\+972|972|0)\d[\d\s-]{7,}/);
+  return cleanValue(match?.[0] || labeledPhone || '');
 };
 
 const parsePrice = (value = '') => {
-  const numeric = String(value || '').replace(/[^\d.]/g, '');
-  if (!numeric) {
-    return undefined;
-  }
-  const parsed = Number(numeric);
+  const match = String(value || '').match(/\d{2,4}(?:[.,]\d+)?/);
+  if (!match) return undefined;
+  const parsed = Number(match[0].replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const extractPrice = (text = '') => {
+  const labeledValue = extractBoundedValue(text, FIELD_LABELS.defaultPrice);
+  const labeledPrice = parsePrice(labeledValue);
+  if (labeledPrice !== undefined) return labeledPrice;
+
+  const match = normalizeText(text).match(/(?:₪|ש"ח|שח|שקל|שקלים)\s*(\d{2,4})|(\d{2,4})\s*(?:₪|ש"ח|שח|שקל|שקלים)/u);
+  return parsePrice(match?.[1] || match?.[2] || '');
+};
+
+const parseFrequencyWeeks = (value = '') => {
+  const text = normalizeText(value);
+  const match = text.match(/(\d{1,2})/);
+  if (!match) return undefined;
+  const weeks = Number(match[1]);
+  return Number.isFinite(weeks) && weeks > 0 ? weeks : undefined;
+};
+
+const extractFrequencyWeeks = (text = '') => {
+  const labeledValue = extractBoundedValue(text, FIELD_LABELS.visitFrequencyWeeks);
+  const labeledFrequency = parseFrequencyWeeks(labeledValue);
+  if (labeledFrequency !== undefined) return labeledFrequency;
+
+  const match = normalizeText(text).match(/(?:כל|חוזר(?:ת)? כל)\s*(\d{1,2})\s*שבוע/u);
+  return parseFrequencyWeeks(match?.[1] || '');
+};
+
+const extractPetName = (text = '') => {
+  const directCallMatch = normalizeText(text).match(
+    /(?:לכלב|לכלבה|לחתול|לחתולה|לחיה)\s+קורא(?:ים|ת)?\s+(.+?)(?=(?:[\s,;]+)(?:סוג|גזע|זן|מחיר|עלות|תדירות|כל כמה שבועות|טלפון|נייד|פלאפון|הערות|הערה)|$)/u
+  );
+  if (directCallMatch?.[1]) return cleanValue(directCallMatch[1]);
+
+  return extractBoundedValue(text, FIELD_LABELS.petName);
+};
+
+const extractLifecycleStatus = (text = '') => {
+  const value = extractBoundedValue(text, FIELD_LABELS.lifecycleStatus);
+  const haystack = value || normalizeText(text);
+  if (/בהמתנה|מושהה|לא פעיל|עצור/i.test(haystack)) return 'ON_HOLD';
+  if (/פעיל|רגיל|אקטיבי/i.test(haystack)) return 'ACTIVE';
+  return undefined;
+};
+
+const extractLastVisit = (text = '') => {
+  const match = normalizeText(text).match(
+    /(?:ביקור אחרון|תור אחרון|הגיע(?:ה)? לאחרונה)\s*[:=-]?\s*(\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?|\d{4}-\d{1,2}-\d{1,2})/u
+  );
+  if (!match?.[1]) return undefined;
+
+  const token = match[1];
+  const isoMatch = token.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${String(Number(month)).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
+  }
+
+  const shortMatch = token.match(/^(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?$/);
+  if (!shortMatch) return undefined;
+
+  const currentYear = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric'
+  }).format(new Date());
+  const [, dayRaw, monthRaw, yearRaw] = shortMatch;
+  const year = yearRaw ? Number(yearRaw.length === 2 ? `20${yearRaw}` : yearRaw) : Number(currentYear);
+  return `${String(year).padStart(4, '0')}-${String(Number(monthRaw)).padStart(2, '0')}-${String(
+    Number(dayRaw)
+  ).padStart(2, '0')}`;
+};
+
+const hasCustomerCreateIntent = (text = '') =>
+  /(?:^|\s)(?:לקוח|לקוחה|לקו)\s+חדש(?:ה)?(?:$|[\s,:=-])/u.test(normalizeText(text)) ||
+  /^(?:תוסיף|הוסף|תוסיפי|צור|תיצור|תיצרי|פתח|תפתח|להוסיף|אפשר להוסיף|תוכל להוסיף|תוכלי להוסיף)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח|לקוחה|לקו)/u.test(
+    normalizeText(text)
+  );
+
+const looksLikeBookingRequest = (text = '') => {
+  const normalized = normalizeText(text);
+  const hasBookingWord = /(?:תור|לקבוע|קבע|תקבע|שריין|שעה|בשעה)/u.test(normalized);
+  const hasDateOrTime = /(?:היום|מחר|מחרתיים|ביום|יום|בתאריך|\d{1,2}:\d{2}|\b\d{1,2}\s*(?:בבוקר|בערב|בצהריים)?\b)/u.test(
+    normalized
+  );
+  return hasBookingWord && hasDateOrTime;
 };
 
 export const extractCustomerDetails = (message = '') => {
   const text = normalizeText(message);
-  const customerName = extractLabeledValue(text, FIELD_LABELS.customerName) || extractLeadingName(text);
-  const phone = extractPhone(text);
-  const petName = extractLabeledValue(text, FIELD_LABELS.petName);
-  const petType = extractLabeledValue(text, FIELD_LABELS.petType);
-  const notes = extractLabeledValue(text, FIELD_LABELS.notes);
-  const defaultPrice = parsePrice(extractLabeledValue(text, FIELD_LABELS.defaultPrice));
+  const rawText = String(message || '');
+  const lines = normalizeLines(rawText);
+  const lineText = lines.join(' ');
+  const source = lineText || text;
+
+  const customerName =
+    extractBoundedValue(source, FIELD_LABELS.customerName) ||
+    extractCustomerNameByGenericName(source) ||
+    extractLeadingName(source);
+  const phone = extractPhone(source);
+  const petName = extractPetName(source);
+  const petType = extractBoundedValue(source, FIELD_LABELS.petType);
+  const notes = extractBoundedValue(source, FIELD_LABELS.notes);
+  const defaultPrice = extractPrice(source);
+  const visitFrequencyWeeks = extractFrequencyWeeks(source);
+  const lifecycleStatus = extractLifecycleStatus(source);
+  const lastVisit = extractLastVisit(source);
 
   return {
     text,
@@ -94,22 +267,20 @@ export const extractCustomerDetails = (message = '') => {
     petName,
     petType,
     notes,
-    defaultPrice
+    defaultPrice,
+    visitFrequencyWeeks,
+    lifecycleStatus,
+    lastVisit
   };
 };
 
 export const parseCustomerQuery = (message) => {
   const text = normalizeText(message);
-  const match = text.match(
-    /^(?:הוסף|תוסיף|תוסיפי|צור|תיצור|להוסיף|הוספת|תוכל להוסיף|תוכלי להוסיף|אפשר להוסיף)\s+(?:לי\s+)?(?:את\s+)?לקוח(?:ה)?(?:\s+חדש(?:ה)?)?\s*[:\-]?\s*(.*)$/
-  );
-
-  if (!match) {
+  if (!text || !hasCustomerCreateIntent(text) || looksLikeBookingRequest(text)) {
     return null;
   }
 
-  const body = normalizeText(match[1] || '');
-  const details = extractCustomerDetails(body);
+  const details = extractCustomerDetails(message);
 
   return {
     kind: 'customer_query',
@@ -142,6 +313,10 @@ export const mergeCustomerDetails = (base = {}, message = '', preferredMissingFi
       merged.petName = normalizedMessage;
     } else if (target === 'petType' && !details.petType) {
       merged.petType = normalizedMessage;
+    } else if (target === 'defaultPrice' && details.defaultPrice === undefined) {
+      merged.defaultPrice = parsePrice(normalizedMessage);
+    } else if (target === 'visitFrequencyWeeks' && details.visitFrequencyWeeks === undefined) {
+      merged.visitFrequencyWeeks = parseFrequencyWeeks(normalizedMessage);
     }
   }
 
@@ -152,13 +327,31 @@ export const mergeCustomerDetails = (base = {}, message = '', preferredMissingFi
     }
   }
 
+  if (preferredMissingFields.includes('defaultPrice') && merged.defaultPrice === undefined) {
+    merged.defaultPrice = parsePrice(normalizedMessage);
+  }
+
+  if (
+    preferredMissingFields.includes('visitFrequencyWeeks') &&
+    merged.visitFrequencyWeeks === undefined
+  ) {
+    merged.visitFrequencyWeeks = parseFrequencyWeeks(normalizedMessage);
+  }
+
   return {
     ...merged,
     text: `${String(base.text || '').trim()} ${normalizedMessage}`.trim()
   };
 };
 
-export const buildCustomerQueryMissingText = ({ customerName, phone, petName, petType }) => {
+export const buildCustomerQueryMissingText = ({
+  customerName,
+  phone,
+  petName,
+  petType,
+  defaultPrice,
+  visitFrequencyWeeks
+}) => {
   if (!customerName) {
     return `חסר לי שם לקוח. ${CUSTOMER_EXAMPLE}`;
   }
@@ -175,16 +368,30 @@ export const buildCustomerQueryMissingText = ({ customerName, phone, petName, pe
     return `חסר לי סוג או גזע של חיית המחמד. ${CUSTOMER_EXAMPLE}`;
   }
 
+  if (defaultPrice === undefined) {
+    return `חסר לי מחיר קבוע ללקוח. ${CUSTOMER_EXAMPLE}`;
+  }
+
+  if (visitFrequencyWeeks === undefined) {
+    return `חסרה לי תדירות בשבועות. ${CUSTOMER_EXAMPLE}`;
+  }
+
   return '';
 };
 
 export const buildCustomerSuccessText = (customer) =>
-  `הוספתי לקוח חדש: ${customer.name} | ${customer.petName} | ${customer.petType} | ${customer.phone}`;
+  `הוספתי לקוח חדש מסודר:
+שם לקוח: ${customer.name}
+טלפון: ${customer.phone}
+שם חיה: ${customer.petName}
+סוג/גזע: ${customer.petType}
+מחיר קבוע: ${customer.defaultPrice ?? '-'}
+תדירות: כל ${customer.visitFrequencyWeeks || 4} שבועות`;
 
 export const buildCustomerFailureText = (reason = '') => {
   const message = String(reason || '');
 
-  if (message.startsWith('חסר לי')) {
+  if (message.startsWith('חסר לי') || message.startsWith('חסרה לי')) {
     return message;
   }
 
@@ -200,11 +407,7 @@ export const buildCustomerFailureText = (reason = '') => {
     return `כדי לפתוח לקוח חדש אני צריך גם שם חיה וגם סוג או גזע. ${CUSTOMER_EXAMPLE}`;
   }
 
-  if (message.includes('כבר קיים לקוח עם הטלפון הזה')) {
-    return message;
-  }
-
-  if (message.includes('כבר קיים לקוח בשם')) {
+  if (message.includes('כבר קיים לקוח')) {
     return message;
   }
 
@@ -216,7 +419,14 @@ export const buildCustomerFailureText = (reason = '') => {
 };
 
 export const createCustomerFromQuery = async (query) => {
-  if (!query?.customerName || !query?.phone || !query?.petName || !query?.petType) {
+  if (
+    !query?.customerName ||
+    !query?.phone ||
+    !query?.petName ||
+    !query?.petType ||
+    query?.defaultPrice === undefined ||
+    query?.visitFrequencyWeeks === undefined
+  ) {
     throw createHttpError(400, buildCustomerQueryMissingText(query || {}));
   }
 
@@ -226,7 +436,10 @@ export const createCustomerFromQuery = async (query) => {
     petName: query.petName,
     petType: query.petType,
     notes: query.notes,
-    defaultPrice: query.defaultPrice
+    defaultPrice: query.defaultPrice,
+    visitFrequencyWeeks: query.visitFrequencyWeeks,
+    lifecycleStatus: query.lifecycleStatus,
+    lastVisit: query.lastVisit
   });
 
   return {

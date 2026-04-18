@@ -43,7 +43,9 @@ export default async function handler(req, res) {
       notes,
       petName,
       petType,
-      price
+      price,
+      visitFrequencyWeeks,
+      allowNewCustomerDefaults
     } = req.body || {};
 
     const result = await createAppointmentFromStructuredInput({
@@ -56,7 +58,9 @@ export default async function handler(req, res) {
       notes,
       petName,
       petType,
-      price
+      price,
+      visitFrequencyWeeks,
+      allowNewCustomerDefaults
     });
 
     res.status(200).json({

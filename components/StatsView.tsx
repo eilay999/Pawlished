@@ -1,18 +1,29 @@
 import React, { useState } from 'react';
 import { Customer, Appointment, Task } from '../types';
-import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity, Trash2 } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity, Trash2, MessageCircle } from 'lucide-react';
 import { analyzeCustomerStatus } from '../utils';
 
 interface StatsViewProps {
   customers: Customer[];
   appointments: Appointment[];
   tasks: Task[];
+  onOpenMessages?: () => void;
+  syncingTaskIds?: ReadonlySet<string>;
   onAddTask: (title: string, startDate: Date) => void;
   onToggleTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, tasks, onAddTask, onToggleTask, onDeleteTask }) => {
+export const StatsView: React.FC<StatsViewProps> = ({
+  customers,
+  appointments,
+  tasks,
+  onOpenMessages,
+  syncingTaskIds,
+  onAddTask,
+  onToggleTask,
+  onDeleteTask
+}) => {
   const [taskTitle, setTaskTitle] = useState('');
   const [taskStartDate, setTaskStartDate] = useState(() => {
     const today = new Date();
@@ -95,9 +106,23 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
 
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-y-auto border border-gray-100 custom-scrollbar backdrop-blur-sm">
-      <div className="p-8 pb-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50">
+      <div className="p-8 pb-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
         <h2 className="text-3xl font-bold text-gray-800 tracking-tight">דשבורד ביצועים</h2>
         <p className="text-gray-500 mt-1">תמונת מצב של הכנסות, לקוחות ושימור</p>
+        </div>
+
+        {onOpenMessages && (
+          <button
+            type="button"
+            onClick={onOpenMessages}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-100 transition-all active:scale-95"
+            aria-label="WhatsApp messages"
+          >
+            <MessageCircle className="w-5 h-5" />
+            <span>׳”׳•׳“׳¢׳•׳× WhatsApp</span>
+          </button>
+        )}
       </div>
 
       <div className="p-8 space-y-8">
@@ -369,40 +394,61 @@ export const StatsView: React.FC<StatsViewProps> = ({ customers, appointments, t
             </div>
           ) : (
             <div className="space-y-2">
-              {tasks.map(task => (
-                <div
-                  key={task.id}
-                  className={`w-full text-right px-3 py-2 rounded-xl border flex items-center justify-between transition-colors ${
-                    task.status === 'DONE'
-                      ? 'bg-green-50 border-green-200 text-green-800'
-                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <button
-                    onClick={() => onToggleTask(task.id)}
-                    className="flex-1 text-right"
+              {tasks.map(task => {
+                const isTaskSyncing = syncingTaskIds?.has(task.id) ?? false;
+
+                return (
+                  <div
+                    key={task.id}
+                    className={`w-full text-right px-3 py-2 rounded-xl border flex items-center justify-between transition-colors ${
+                      task.status === 'DONE'
+                        ? 'bg-green-50 border-green-200 text-green-800'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    } ${isTaskSyncing ? 'opacity-70' : ''}`}
                   >
-                    <span className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>
-                      {task.title}
-                    </span>
-                    <div className="text-[11px] text-gray-400 mt-1">
-                      מתאריך: {task.startDate.toLocaleDateString('he-IL')}
-                    </div>
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold">
-                      {task.status === 'DONE' ? 'בוצע' : 'פתוח'}
-                    </span>
                     <button
-                      onClick={() => onDeleteTask(task.id)}
-                      className="p-1.5 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                      aria-label="מחק משימה"
+                      onClick={() => onToggleTask(task.id)}
+                      disabled={isTaskSyncing}
+                      className={`flex-1 text-right ${isTaskSyncing ? 'cursor-wait' : ''}`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <span className={`text-sm font-medium ${task.status === 'DONE' ? 'line-through' : ''}`}>
+                        {task.title}
+                      </span>
+                      <div className="text-[11px] text-gray-400 mt-1">
+                        מתאריך: {task.startDate.toLocaleDateString('he-IL')}
+                      </div>
                     </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onToggleTask(task.id)}
+                        disabled={isTaskSyncing}
+                        className={`text-xs font-bold px-2 py-1 rounded-lg border transition-colors ${
+                          isTaskSyncing
+                            ? 'border-gray-200 text-gray-400 cursor-wait'
+                            : task.status === 'DONE'
+                              ? 'border-green-300 bg-green-100 text-green-800'
+                              : 'border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                        }`}
+                        aria-label={task.status === 'DONE' ? 'סמן כפתוח' : 'סמן כבוצע'}
+                      >
+                        {isTaskSyncing ? 'שומר...' : task.status === 'DONE' ? 'בוצע' : 'פתוח'}
+                      </button>
+                      <button
+                        onClick={() => onDeleteTask(task.id)}
+                        disabled={isTaskSyncing}
+                        className={`p-1.5 rounded-full transition-colors ${
+                          isTaskSyncing
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                        }`}
+                        aria-label="מחק משימה"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

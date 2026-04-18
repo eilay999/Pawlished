@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Calendar, Clock, Scissors, User, CircleDollarSign, Plus, Phone, Dog, History, AlertCircle, PenLine, List, Trash2, AlertTriangle, CheckCircle2, Search } from 'lucide-react';
 import { Customer, Appointment, AppointmentStatus } from '../types';
 import { SERVICE_PRICES } from '../constants';
+import { normalizeDigits, normalizePhoneForCompare } from '../utils';
 
 interface AppointmentModalProps {
   isOpen: boolean;
@@ -17,18 +18,52 @@ interface AppointmentModalProps {
   appointment?: Appointment | null;
 }
 
-// Generate Time Slots from 07:00 to 20:00
-const generateTimeSlots = () => {
-    const slots = [];
-    for (let i = 7; i <= 20; i++) {
-        slots.push(`${String(i).padStart(2, '0')}:00`);
-        if (i !== 20) {
-            slots.push(`${String(i).padStart(2, '0')}:30`);
-        }
-    }
-    return slots;
+// Pawlished fixed weekly slots (0=Sunday ... 6=Saturday).
+const WEEKLY_SLOTS: Record<number, string[]> = {
+  0: ['07:00'],
+  1: ['09:00', '12:00', '15:00'],
+  2: ['09:00', '12:00', '15:00'],
+  3: ['08:00', '11:00', '14:00'],
+  4: ['07:00'],
+  5: [],
+  6: []
 };
-const TIME_SLOTS = generateTimeSlots();
+
+const getAllowedSlotsForDateString = (dateValue: string) => {
+  const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return [];
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const localDate = new Date(year, month - 1, day, 12, 0, 0);
+  return WEEKLY_SLOTS[localDate.getDay()] || [];
+};
+
+const toDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const resolveNextWorkingDateString = (dateValue: string) => {
+  const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateValue;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const cursor = new Date(year, month - 1, day, 12, 0, 0);
+
+  for (let index = 0; index < 7; index += 1) {
+    const dateString = toDateString(cursor);
+    if (getAllowedSlotsForDateString(dateString).length > 0) {
+      return dateString;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dateValue;
+};
 
 export const AppointmentModal: React.FC<AppointmentModalProps> = ({ 
   isOpen, 
@@ -54,6 +89,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [customerNotes, setCustomerNotes] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [isCustomerMenuOpen, setIsCustomerMenuOpen] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const [isCustomService, setIsCustomService] = useState(false);
   const [showError, setShowError] = useState(false);
@@ -65,10 +101,15 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const formatCustomerOption = (c: Customer) =>
     `${c.name} (${c.petName})${c.lifecycleStatus === 'ON_HOLD' ? ' • בהמתנה' : ''}`;
   const normalizedCustomerSearch = customerSearch.trim().toLowerCase();
+  const normalizedCustomerSearchDigits = normalizeDigits(customerSearch);
+  const normalizedCustomerPhoneSearch =
+    normalizedCustomerSearchDigits.length >= 4 ? normalizePhoneForCompare(normalizedCustomerSearchDigits) : '';
   const filteredCustomers = customers.filter(c => {
     if (!normalizedCustomerSearch) return true;
     const haystack = `${c.name} ${c.petName} ${c.phone} ${c.petType}`.toLowerCase();
-    return haystack.includes(normalizedCustomerSearch);
+    if (haystack.includes(normalizedCustomerSearch)) return true;
+    if (!normalizedCustomerPhoneSearch) return false;
+    return normalizePhoneForCompare(c.phone).includes(normalizedCustomerPhoneSearch);
   });
   const customerOptions =
     selectedCustomer && !filteredCustomers.some(c => c.id === selectedCustomer.id)
@@ -120,19 +161,15 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       } else {
         // Create Mode
         setIsCustomService(false);
-        
-        // Smart time logic: if selected date is today, pick next slot. Else 07:00
-        const isToday = initialDate && toInputDate(initialDate) === toInputDate(new Date());
-        let defaultTime = isToday ? getSmartDefaultTime() : '07:00';
-        
-        // Validate if defaultTime exists in slots, if not find closest
-        if (!TIME_SLOTS.includes(defaultTime)) {
-            defaultTime = '07:00';
-        }
+
+        const initialDateValue = initialDate ? toInputDate(initialDate) : toInputDate(new Date());
+        const resolvedDate = resolveNextWorkingDateString(initialDateValue);
+        const allowedSlots = getAllowedSlotsForDateString(resolvedDate);
+        const defaultTime = allowedSlots[0] || '07:00';
 
         setFormData({
             customerId: preSelectedCustomerId || '',
-            date: initialDate ? toInputDate(initialDate) : toInputDate(new Date()),
+            date: resolvedDate,
             time: defaultTime,
             service: 'תספורת מלאה',
             price: SERVICE_PRICES['תספורת מלאה'] || 0,
@@ -152,6 +189,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         }
       }
       setShowError(false);
+      setScheduleError(null);
       setIsCustomerMenuOpen(false);
       
       // Scroll to selected time in slider after render
@@ -243,6 +281,28 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
     if (!formData.date || !formData.time) return;
 
+    const allowedSlotsForDate = getAllowedSlotsForDateString(formData.date);
+    const originalDateString = appointment ? toInputDate(new Date(appointment.date)) : '';
+    const originalTimeString = appointment
+      ? `${String(new Date(appointment.date).getHours()).padStart(2, '0')}:${String(
+          new Date(appointment.date).getMinutes()
+        ).padStart(2, '0')}`
+      : '';
+    const isOriginalSlot =
+      Boolean(appointment) && formData.date === originalDateString && formData.time === originalTimeString;
+
+    if (!isOriginalSlot) {
+      if (allowedSlotsForDate.length === 0) {
+        setScheduleError('אין תורים ביום הזה. אנחנו עובדים ראשון עד חמישי בבוקר בלבד.');
+        return;
+      }
+
+      if (!allowedSlotsForDate.includes(formData.time)) {
+        setScheduleError(`בשביל היום הזה אפשר לקבוע רק בשעות: ${allowedSlotsForDate.join(', ')}.`);
+        return;
+      }
+    }
+
     const [year, month, day] = formData.date.split('-').map(Number);
     const [hours, minutes] = formData.time.split(':').map(Number);
     const appointmentDate = new Date(year, month - 1, day, hours, minutes);
@@ -268,6 +328,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   };
 
   const isEditMode = !!appointment;
+  const allowedTimeSlotsForDate = formData.date ? getAllowedSlotsForDateString(formData.date) : [];
+  const timeSlotOptions =
+    isEditMode && formData.time && !allowedTimeSlotsForDate.includes(formData.time)
+      ? [formData.time, ...allowedTimeSlotsForDate].filter(Boolean).sort()
+      : allowedTimeSlotsForDate;
 
   const STATUS_LABELS: Record<string, string> = {
       [AppointmentStatus.SCHEDULED]: 'נקבע',
@@ -438,7 +503,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 required
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm"
                 value={formData.date}
-                onChange={e => setFormData({...formData, date: e.target.value})}
+                onChange={e => {
+                  const nextDate = e.target.value;
+                  const allowedSlots = getAllowedSlotsForDateString(nextDate);
+                  setFormData(previous => ({
+                    ...previous,
+                    date: nextDate,
+                    time: allowedSlots.includes(previous.time) ? previous.time : allowedSlots[0] || ''
+                  }));
+                  setScheduleError(null);
+                }}
               />
             </div>
             
@@ -450,14 +524,17 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 className="flex overflow-x-auto gap-2 pb-2 -mx-1 px-1 custom-scrollbar snap-x"
                 style={{ scrollBehavior: 'smooth' }}
               >
-                  {TIME_SLOTS.map((slot) => {
+                  {timeSlotOptions.map((slot) => {
                       const isSelected = formData.time === slot;
                       return (
                         <button
                             key={slot}
                             type="button"
                             data-selected={isSelected}
-                            onClick={() => setFormData({ ...formData, time: slot })}
+                            onClick={() => {
+                              setFormData({ ...formData, time: slot });
+                              setScheduleError(null);
+                            }}
                             className={`
                                 flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold border transition-all snap-center
                                 ${isSelected 
@@ -469,7 +546,16 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                         </button>
                       );
                   })}
+                  {timeSlotOptions.length === 0 && (
+                    <div className="text-sm text-gray-400 py-2">אין תורים ביום הזה</div>
+                  )}
               </div>
+              {scheduleError && (
+                <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {scheduleError}
+                </div>
+              )}
             </div>
           </div>
 

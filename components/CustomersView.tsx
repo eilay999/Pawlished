@@ -12,7 +12,7 @@ import {
   PauseCircle
 } from 'lucide-react';
 import { Appointment, Customer } from '../types';
-import { analyzeCustomerStatus } from '../utils';
+import { analyzeCustomerStatus, normalizeDigits, normalizePhoneForCompare } from '../utils';
 
 interface CustomersViewProps {
   customers: Customer[];
@@ -33,14 +33,24 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
   const [filter, setFilter] = useState<CustomerFilter>('ACTIVE');
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
+  const normalizedSearchDigits = normalizeDigits(searchTerm);
+  const normalizedPhoneSearch =
+    normalizedSearchDigits.length >= 4 ? normalizePhoneForCompare(normalizedSearchDigits) : '';
   const activeCount = customers.filter(customer => customer.lifecycleStatus !== 'ON_HOLD').length;
   const onHoldCount = customers.filter(customer => customer.lifecycleStatus === 'ON_HOLD').length;
 
   const filteredCustomers = useMemo(() => {
     const matchesSearch = (customer: Customer) => {
       if (!normalizedSearch) return true;
-      return [customer.name, customer.petName, customer.phone]
-        .some(value => value.toLowerCase().includes(normalizedSearch));
+      if ([customer.name, customer.petName].some(value => value.toLowerCase().includes(normalizedSearch))) {
+        return true;
+      }
+
+      if (normalizedPhoneSearch) {
+        return normalizePhoneForCompare(customer.phone).includes(normalizedPhoneSearch);
+      }
+
+      return customer.phone.toLowerCase().includes(normalizedSearch);
     };
 
     return customers
@@ -51,7 +61,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
       })
       .filter(matchesSearch)
       .sort((left, right) => left.name.localeCompare(right.name, 'he'));
-  }, [customers, filter, normalizedSearch]);
+  }, [customers, filter, normalizedSearch, normalizedPhoneSearch]);
 
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">

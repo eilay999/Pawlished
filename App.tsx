@@ -6,10 +6,12 @@ import { Calendar } from './components/Calendar';
 import { CustomersView } from './components/CustomersView';
 import { CustomerModal } from './components/CustomerModal';
 import { AppointmentModal } from './components/AppointmentModal';
+import { CalendarEventModal } from './components/CalendarEventModal';
 import { StatsView } from './components/StatsView';
+import { MessagesView } from './components/MessagesView';
 import { PublicBooking } from './components/PublicBooking';
 import { ThemePanel } from './components/ThemePanel';
-import { ViewType, Appointment, Customer, AppointmentStatus, Task, TaskStatus } from './types';
+import { ViewType, Appointment, CalendarEvent, Customer, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
 import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
 import { supabase } from './services/supabaseClient';
 import { applyTheme, loadTheme } from './theme';
@@ -44,6 +46,28 @@ type DbTask = {
   status: TaskStatus;
   created_at: string;
   start_date: string | null;
+};
+
+type DbCalendarEvent = {
+  id: string;
+  title: string;
+  starts_at: string;
+  kind: 'EVENT';
+  color_key: string;
+  show_in_calendar: boolean;
+  blocks_time: boolean;
+  notes?: string | null;
+};
+
+type DbWhatsAppMessage = {
+  id: string;
+  phone: string;
+  direction: 'INCOMING' | 'OUTGOING' | 'SYSTEM';
+  body: string;
+  message_type: string;
+  intent_kind: string | null;
+  needs_human: boolean;
+  created_at: string;
 };
 
 const mapCustomerFromDb = (row: DbCustomer): Customer => ({
@@ -102,6 +126,39 @@ const mapTaskFromDb = (row: DbTask): Task => ({
   startDate: new Date(row.start_date || row.created_at),
 });
 
+const mapCalendarEventFromDb = (row: DbCalendarEvent): CalendarEvent => ({
+  id: row.id,
+  title: row.title,
+  date: new Date(row.starts_at),
+  kind: row.kind,
+  colorKey: row.color_key,
+  showInCalendar: row.show_in_calendar,
+  blocksTime: row.blocks_time,
+  notes: row.notes ?? undefined,
+});
+
+const mapWhatsAppMessageFromDb = (row: DbWhatsAppMessage): WhatsAppMessage => ({
+  id: row.id,
+  phone: row.phone,
+  direction: row.direction,
+  body: row.body,
+  messageType: row.message_type,
+  intentKind: row.intent_kind ?? undefined,
+  needsHuman: row.needs_human,
+  createdAt: new Date(row.created_at),
+});
+
+const mapCalendarEventToDb = (event: CalendarEvent): DbCalendarEvent => ({
+  id: event.id,
+  title: event.title,
+  starts_at: event.date.toISOString(),
+  kind: event.kind,
+  color_key: event.colorKey,
+  show_in_calendar: event.showInCalendar,
+  blocks_time: event.blocksTime,
+  notes: event.notes ?? null
+});
+
 const mapTaskToDb = (task: Task): DbTask => ({
   id: task.id,
   title: task.title,
@@ -110,13 +167,29 @@ const mapTaskToDb = (task: Task): DbTask => ({
   start_date: task.startDate.toISOString(),
 });
 
+const calendarEventSignature = (list: CalendarEvent[]) =>
+  JSON.stringify(
+    sortById(list).map(event => ({
+      ...event,
+      date: event.date.toISOString(),
+      notes: event.notes ?? null
+    }))
+  );
+
 const isMissingTableError = (message?: string) => {
   if (!message) return false;
-  return message.includes('relation "tasks" does not exist');
+  return (
+    message.includes('relation "tasks" does not exist') ||
+    message.includes('relation "calendar_events" does not exist') ||
+    message.includes('relation "whatsapp_messages" does not exist')
+  );
 };
 
 const sortById = <T extends { id: string }>(list: T[]): T[] =>
   [...list].sort((a, b) => a.id.localeCompare(b.id));
+
+const sortCalendarEventsByDate = (list: CalendarEvent[]) =>
+  [...list].sort((left, right) => left.date.getTime() - right.date.getTime());
 
 const customersSignature = (list: Customer[]) =>
   JSON.stringify(
@@ -148,6 +221,14 @@ const tasksSignature = (list: Task[]) =>
     }))
   );
 
+const whatsappMessagesSignature = (list: WhatsAppMessage[]) =>
+  JSON.stringify(
+    sortById(list).map(message => ({
+      ...message,
+      createdAt: message.createdAt.toISOString()
+    }))
+  );
+
 const formatSupabaseError = (
   fallback: string,
   error?: { message?: string | null; code?: string | null } | null
@@ -157,6 +238,7 @@ const formatSupabaseError = (
 };
 
 type CloudSyncStatus = 'connecting' | 'online' | 'syncing' | 'offline' | 'error';
+type CloudLoadSource = 'initial' | 'manual' | 'realtime' | 'auto' | 'reconnect';
 
 const CLOUD_STATUS_UI: Record<CloudSyncStatus, { label: string; className: string }> = {
   connecting: {
@@ -182,6 +264,10 @@ const CLOUD_STATUS_UI: Record<CloudSyncStatus, { label: string; className: strin
 };
 
 const AUTO_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
+const CLOUD_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000];
+
+const isBrowserOffline = () =>
+  typeof navigator !== 'undefined' && navigator.onLine === false;
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('CALENDAR');
@@ -189,13 +275,17 @@ const App: React.FC = () => {
   
   // Data State
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
+  const [syncingTaskIds, setSyncingTaskIds] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>(
-    supabase ? 'connecting' : 'offline'
+    supabase && !isBrowserOffline() ? 'connecting' : 'offline'
   );
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<Date | null>(null);
+  const [realtimeReconnectKey, setRealtimeReconnectKey] = useState(0);
   const [askedAppointmentIds, setAskedAppointmentIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('pawlished_asked_appt_ids');
@@ -219,6 +309,8 @@ const App: React.FC = () => {
   const [selectedDateForAppointment, setSelectedDateForAppointment] = useState<Date>(new Date());
   const [preSelectedCustomerId, setPreSelectedCustomerId] = useState<string | undefined>(undefined);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [isCalendarEventModalOpen, setIsCalendarEventModalOpen] = useState(false);
+  const [selectedDateForEvent, setSelectedDateForEvent] = useState<Date>(new Date());
   const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null);
   const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
   const [isAdminOverride, setIsAdminOverride] = useState(() => {
@@ -230,9 +322,15 @@ const App: React.FC = () => {
   });
   const localMutationSuppressUntilRef = useRef(0);
   const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const realtimeReconnectTimerRef = useRef<number | null>(null);
+  const cloudLoadInFlightRef = useRef(false);
+  const cloudRetryTimerRef = useRef<number | null>(null);
+  const cloudRetryAttemptRef = useRef(0);
   const customersRef = useRef<Customer[]>([]);
   const appointmentsRef = useRef<Appointment[]>([]);
+  const calendarEventsRef = useRef<CalendarEvent[]>([]);
   const tasksRef = useRef<Task[]>([]);
+  const whatsappMessagesRef = useRef<WhatsAppMessage[]>([]);
   const { isPublicEntry, isForcedPublic } = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const path = window.location.pathname.toLowerCase();
@@ -269,30 +367,59 @@ const App: React.FC = () => {
   }, [appointments]);
 
   useEffect(() => {
+    calendarEventsRef.current = calendarEvents;
+  }, [calendarEvents]);
+
+  useEffect(() => {
     tasksRef.current = tasks;
   }, [tasks]);
 
+  useEffect(() => {
+    whatsappMessagesRef.current = whatsappMessages;
+  }, [whatsappMessages]);
+
   const loadDataFromCloud = useCallback(
-    async (source: 'initial' | 'manual' | 'realtime' | 'auto' = 'manual') => {
+    async (source: CloudLoadSource = 'manual') => {
     if ((source === 'realtime' || source === 'auto') && Date.now() < localMutationSuppressUntilRef.current) {
       return true;
     }
 
+    if (cloudLoadInFlightRef.current) {
+      return source === 'manual' || source === 'initial';
+    }
+
+    cloudLoadInFlightRef.current = true;
+
+    try {
     if (!supabase) {
       setCloudStatus('offline');
       setLoadError('אין חיבור Supabase בפרויקט. היומן עובד בענן בלבד עד שתוגדר גישה תקינה.');
       return false;
     }
 
-    const [customersRes, appointmentsRes, tasksRes] = await Promise.all([
+    if (isBrowserOffline()) {
+      setCloudStatus('offline');
+      setLoadError('\u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05DB\u05E8\u05D2\u05E2. \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D9\u05D8\u05E2\u05E0\u05D5 \u05DE\u05D4\u05E2\u05E0\u05DF \u05DB\u05E9\u05D4\u05E8\u05E9\u05EA \u05EA\u05D7\u05D6\u05D5\u05E8.');
+      return false;
+    }
+
+    if (source === 'initial' || source === 'manual' || source === 'reconnect') {
+      setCloudStatus('connecting');
+    }
+
+    const [customersRes, appointmentsRes, calendarEventsRes, tasksRes, whatsappMessagesRes] = await Promise.all([
       supabase.from('customers').select('*').order('id', { ascending: true }),
       supabase.from('appointments').select('*').order('date', { ascending: true }),
-      supabase.from('tasks').select('*').order('created_at', { ascending: false })
+      supabase.from('calendar_events').select('*').order('starts_at', { ascending: true }),
+      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+      supabase.from('whatsapp_messages').select('*').order('created_at', { ascending: false }).limit(300)
     ]);
 
     const customersError = customersRes.error;
     const appointmentsError = appointmentsRes.error;
+    const calendarEventsError = calendarEventsRes.error;
     const tasksError = tasksRes.error;
+    const whatsappMessagesError = whatsappMessagesRes.error;
 
     if (customersError || appointmentsError) {
       console.error('Supabase load error', customersError || appointmentsError);
@@ -308,10 +435,36 @@ const App: React.FC = () => {
 
     const mappedCustomers = (customersRes.data || []).map(mapCustomerFromDb);
     const mappedAppointments = (appointmentsRes.data || []).map(mapAppointmentFromDb);
-    const mappedTasks =
-      tasksError && isMissingTableError(tasksError.message)
+    const mappedCalendarEvents =
+      calendarEventsError && isMissingTableError(calendarEventsError.message)
         ? []
-        : (tasksRes.data || []).map(mapTaskFromDb);
+        : (calendarEventsRes.data || []).map(mapCalendarEventFromDb);
+    const mappedWhatsAppMessages =
+      whatsappMessagesError && isMissingTableError(whatsappMessagesError.message)
+        ? []
+        : (whatsappMessagesRes.data || []).map(mapWhatsAppMessageFromDb);
+
+    if (customersSignature(customersRef.current) !== customersSignature(mappedCustomers)) {
+      setCustomers(mappedCustomers);
+    }
+
+    if (appointmentsSignature(appointmentsRef.current) !== appointmentsSignature(mappedAppointments)) {
+      setAppointments(mappedAppointments);
+    }
+
+    if (calendarEventsError && !isMissingTableError(calendarEventsError.message)) {
+      console.error('Supabase calendar events load error', calendarEventsError);
+      setCloudStatus('error');
+      setLoadError(formatSupabaseError('טעינת האירועים מהענן נכשלה. בדוק הרשאות/חיבור Supabase', calendarEventsError));
+      return false;
+    }
+
+    if (
+      calendarEventSignature(calendarEventsRef.current) !==
+      calendarEventSignature(mappedCalendarEvents)
+    ) {
+      setCalendarEvents(mappedCalendarEvents);
+    }
 
     if (tasksError) {
       if (isMissingTableError(tasksError.message)) {
@@ -326,31 +479,65 @@ const App: React.FC = () => {
       return false;
     }
 
-    if (customersSignature(customersRef.current) !== customersSignature(mappedCustomers)) {
-      setCustomers(mappedCustomers);
-    }
-
-    if (appointmentsSignature(appointmentsRef.current) !== appointmentsSignature(mappedAppointments)) {
-      setAppointments(mappedAppointments);
-    }
+    const mappedTasks =
+      tasksError && isMissingTableError(tasksError.message)
+        ? []
+        : (tasksRes.data || []).map(mapTaskFromDb);
 
     if (tasksSignature(tasksRef.current) !== tasksSignature(mappedTasks)) {
       setTasks(mappedTasks);
+    }
+
+    if (whatsappMessagesError && !isMissingTableError(whatsappMessagesError.message)) {
+      console.error('Supabase WhatsApp messages load error', whatsappMessagesError);
+      setCloudStatus('error');
+      setLoadError(formatSupabaseError('טעינת הודעות WhatsApp מהענן נכשלה. בדוק הרשאות/חיבור Supabase', whatsappMessagesError));
+      return false;
+    }
+
+    if (whatsappMessagesSignature(whatsappMessagesRef.current) !== whatsappMessagesSignature(mappedWhatsAppMessages)) {
+      setWhatsAppMessages(mappedWhatsAppMessages);
     }
 
     setCloudStatus('online');
     setLastCloudSyncAt(new Date());
     setLoadError(null);
     return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Supabase load exception', error);
+      setCloudStatus(isBrowserOffline() ? 'offline' : 'error');
+      setLoadError(`\u05D8\u05E2\u05D9\u05E0\u05EA \u05D4\u05D9\u05D5\u05DE\u05DF \u05DE\u05D4\u05E2\u05E0\u05DF \u05E0\u05DB\u05E9\u05DC\u05D4: ${message}`);
+      return false;
+    } finally {
+      cloudLoadInFlightRef.current = false;
+    }
   }, []);
 
   useEffect(() => {
-    setCloudStatus(supabase ? 'connecting' : 'offline');
+    setCloudStatus(supabase && !isBrowserOffline() ? 'connecting' : 'offline');
     void loadDataFromCloud('initial');
   }, [loadDataFromCloud]);
 
   useEffect(() => {
     if (!supabase) return;
+
+    const clearRealtimeReconnectTimer = () => {
+      if (realtimeReconnectTimerRef.current) {
+        window.clearTimeout(realtimeReconnectTimerRef.current);
+        realtimeReconnectTimerRef.current = null;
+      }
+    };
+
+    const scheduleRealtimeReconnect = () => {
+      if (realtimeReconnectTimerRef.current || isBrowserOffline()) return;
+
+      realtimeReconnectTimerRef.current = window.setTimeout(() => {
+        realtimeReconnectTimerRef.current = null;
+        setRealtimeReconnectKey(key => key + 1);
+        void loadDataFromCloud('reconnect');
+      }, 3_000);
+    };
 
     const scheduleRefresh = () => {
       if (realtimeRefreshTimerRef.current) {
@@ -381,13 +568,30 @@ const App: React.FC = () => {
       )
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'calendar_events' },
+        scheduleRefresh
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'tasks' },
         scheduleRefresh
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'whatsapp_messages' },
+        scheduleRefresh
+      )
       .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setCloudStatus('error');
-          setLoadError('Realtime בענן נותק. רענן דף אם הסנכרון נעצר.');
+        if (status === 'SUBSCRIBED') {
+          clearRealtimeReconnectTimer();
+          void loadDataFromCloud('realtime');
+          return;
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setCloudStatus(isBrowserOffline() ? 'offline' : 'error');
+          setLoadError('\u05D7\u05D9\u05D1\u05D5\u05E8 Realtime \u05D1\u05E2\u05E0\u05DF \u05E0\u05D5\u05EA\u05E7. \u05DE\u05E0\u05E1\u05D4 \u05DC\u05D4\u05EA\u05D7\u05D1\u05E8 \u05DE\u05D7\u05D3\u05E9 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA.');
+          scheduleRealtimeReconnect();
         }
       });
 
@@ -395,9 +599,10 @@ const App: React.FC = () => {
       if (realtimeRefreshTimerRef.current) {
         window.clearTimeout(realtimeRefreshTimerRef.current);
       }
+      clearRealtimeReconnectTimer();
       void supabase.removeChannel(channel);
     };
-  }, [loadDataFromCloud]);
+  }, [loadDataFromCloud, realtimeReconnectKey]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -421,6 +626,77 @@ const App: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [loadDataFromCloud]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const handleOffline = () => {
+      setCloudStatus('offline');
+      setLoadError('\u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05D0\u05D9\u05E0\u05D8\u05E8\u05E0\u05D8 \u05DB\u05E8\u05D2\u05E2. \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D9\u05EA\u05E2\u05D3\u05DB\u05E0\u05D5 \u05DB\u05E9\u05D4\u05E8\u05E9\u05EA \u05EA\u05D7\u05D6\u05D5\u05E8.');
+    };
+
+    const handleOnline = () => {
+      cloudRetryAttemptRef.current = 0;
+      setCloudStatus('connecting');
+      setRealtimeReconnectKey(key => key + 1);
+      void loadDataFromCloud('reconnect');
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    if (isBrowserOffline()) {
+      handleOffline();
+    }
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [loadDataFromCloud]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    if (cloudStatus !== 'error') {
+      cloudRetryAttemptRef.current = 0;
+      if (cloudRetryTimerRef.current) {
+        window.clearTimeout(cloudRetryTimerRef.current);
+        cloudRetryTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (isBrowserOffline()) return;
+
+    let cancelled = false;
+
+    const scheduleRetry = () => {
+      const delay = CLOUD_RETRY_DELAYS_MS[
+        Math.min(cloudRetryAttemptRef.current, CLOUD_RETRY_DELAYS_MS.length - 1)
+      ];
+
+      cloudRetryTimerRef.current = window.setTimeout(async () => {
+        cloudRetryTimerRef.current = null;
+        const isConnected = await loadDataFromCloud('auto');
+
+        if (!isConnected && !cancelled && !isBrowserOffline()) {
+          cloudRetryAttemptRef.current += 1;
+          scheduleRetry();
+        }
+      }, delay);
+    };
+
+    scheduleRetry();
+
+    return () => {
+      cancelled = true;
+      if (cloudRetryTimerRef.current) {
+        window.clearTimeout(cloudRetryTimerRef.current);
+        cloudRetryTimerRef.current = null;
+      }
+    };
+  }, [cloudStatus, loadDataFromCloud]);
 
   useEffect(() => {
     if (pendingCheck) return;
@@ -447,7 +723,8 @@ const App: React.FC = () => {
 
   const persistCloudMutation = (
     fallbackMessage: string,
-    writer: () => Promise<{ error: { message?: string | null; code?: string | null } | null }>
+    writer: () => Promise<{ error: { message?: string | null; code?: string | null } | null }>,
+    refreshAfterSuccess = false
   ) => {
     if (!supabase) return;
     void writer()
@@ -462,6 +739,9 @@ const App: React.FC = () => {
         setCloudStatus('online');
         setLastCloudSyncAt(new Date());
         setLoadError(null);
+        if (refreshAfterSuccess) {
+          void loadDataFromCloud('manual');
+        }
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
@@ -471,8 +751,40 @@ const App: React.FC = () => {
       });
   };
 
+  const markCloudMutationSuccess = (refreshAfterSuccess = false) => {
+    setCloudStatus('online');
+    setLastCloudSyncAt(new Date());
+    setLoadError(null);
+    if (refreshAfterSuccess) {
+      void loadDataFromCloud('manual');
+    }
+  };
+
+  const reportCloudMutationError = (fallbackMessage: string, error: unknown) => {
+    const normalizedError =
+      error && typeof error === 'object' && 'message' in error
+        ? { message: String((error as { message?: unknown }).message || '') }
+        : { message: error instanceof Error ? error.message : String(error) };
+
+    console.error('Supabase mutation error', error);
+    setCloudStatus('error');
+    setLoadError(formatSupabaseError(fallbackMessage, normalizedError));
+  };
+
+  const setTaskSyncing = (taskId: string, isSyncing: boolean) => {
+    setSyncingTaskIds(prev => {
+      const next = new Set(prev);
+      if (isSyncing) {
+        next.add(taskId);
+      } else {
+        next.delete(taskId);
+      }
+      return next;
+    });
+  };
+
   const ensureCloudWritable = () => {
-    if (!supabase || cloudStatus === 'offline') {
+    if (!supabase || cloudStatus === 'offline' || isBrowserOffline()) {
       setCloudStatus('offline');
       setLoadError('אין חיבור לענן כרגע. שינויים נחסמו עד שחיבור Supabase יחזור.');
       return false;
@@ -490,7 +802,13 @@ const App: React.FC = () => {
   };
 
   const handleDaySelect = (date: Date) => {
+    setCurrentDate(date);
     setDayPanelDate(date);
+  };
+
+  const openCalendarEventModal = (date = new Date()) => {
+    setSelectedDateForEvent(date);
+    setIsCalendarEventModalOpen(true);
   };
   
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -716,6 +1034,24 @@ const App: React.FC = () => {
     );
   };
 
+  const handleSaveCalendarEvent = (savedEvent: CalendarEvent) => {
+    if (!ensureCloudWritable()) return;
+
+    setCalendarEvents(prev =>
+      sortCalendarEventsByDate([
+        ...prev.filter((event) => event.id !== savedEvent.id),
+        savedEvent
+      ])
+    );
+    setIsCalendarEventModalOpen(false);
+
+    persistCloudMutation(
+      'שמירת אירוע בענן נכשלה',
+      () => supabase!.from('calendar_events').upsert(mapCalendarEventToDb(savedEvent)),
+      true
+    );
+  };
+
   const handlePublicBookingCreated = ({
     customer,
     appointment
@@ -743,43 +1079,113 @@ const App: React.FC = () => {
   const handleAddTask = (title: string, startDate: Date) => {
     if (!ensureCloudWritable()) return;
     const newTask: Task = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       title,
       status: 'OPEN',
       createdAt: new Date(),
       startDate
     };
     setTasks(prev => [newTask, ...prev]);
+    setTaskSyncing(newTask.id, true);
 
-    persistCloudMutation('יצירת משימה בענן נכשלה', () =>
-      supabase!.from('tasks').insert(mapTaskToDb(newTask))
-    );
+    void supabase!
+      .from('tasks')
+      .insert(mapTaskToDb(newTask))
+      .select('*')
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          throw error ?? new Error('Task insert returned no row');
+        }
+
+        setTasks(prev => prev.map(task => (task.id === newTask.id ? mapTaskFromDb(data as DbTask) : task)));
+        markCloudMutationSuccess(true);
+      })
+      .catch((error) => {
+        setTasks(prev => prev.filter(task => task.id !== newTask.id));
+        reportCloudMutationError('\u05D9\u05E6\u05D9\u05E8\u05EA \u05DE\u05E9\u05D9\u05DE\u05D4 \u05D1\u05E2\u05E0\u05DF \u05E0\u05DB\u05E9\u05DC\u05D4', error);
+      })
+      .finally(() => {
+        setTaskSyncing(newTask.id, false);
+      });
   };
 
   const handleToggleTask = (taskId: string) => {
     if (!ensureCloudWritable()) return;
-    let updatedTask: Task | null = null;
-    setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        updatedTask = { ...t, status: t.status === 'OPEN' ? 'DONE' : 'OPEN' };
-        return updatedTask;
-      }
-      return t;
-    }));
+    if (syncingTaskIds.has(taskId)) return;
+    const currentTask = tasks.find(t => t.id === taskId);
+    if (!currentTask) return;
 
-    if (updatedTask) {
-      persistCloudMutation('עדכון משימה בענן נכשל', () =>
-        supabase!.from('tasks').update({ status: updatedTask.status }).eq('id', updatedTask.id)
-      );
-    }
+    const updatedTask: Task = {
+      ...currentTask,
+      status: currentTask.status === 'OPEN' ? 'DONE' : 'OPEN'
+    };
+
+    setTasks(prev => prev.map(t => (t.id === taskId ? updatedTask : t)));
+    setTaskSyncing(taskId, true);
+
+    void supabase!
+      .from('tasks')
+      .update({ status: updatedTask.status })
+      .eq('id', updatedTask.id)
+      .select('*')
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          throw error ?? new Error('Task update returned no row');
+        }
+
+        setTasks(prev => prev.map(task => (task.id === taskId ? mapTaskFromDb(data as DbTask) : task)));
+        markCloudMutationSuccess(true);
+      })
+      .catch((error) => {
+        setTasks(prev => prev.map(task => (task.id === taskId ? currentTask : task)));
+        reportCloudMutationError('\u05E2\u05D3\u05DB\u05D5\u05DF \u05DE\u05E9\u05D9\u05DE\u05D4 \u05D1\u05E2\u05E0\u05DF \u05E0\u05DB\u05E9\u05DC', error);
+      })
+      .finally(() => {
+        setTaskSyncing(taskId, false);
+      });
   };
 
   const handleDeleteTask = (taskId: string) => {
     if (!ensureCloudWritable()) return;
+    if (syncingTaskIds.has(taskId)) return;
+    const deletedTask = tasks.find(task => task.id === taskId);
+    const deletedTaskIndex = tasks.findIndex(task => task.id === taskId);
+    if (!deletedTask) return;
+
     setTasks(prev => prev.filter(t => t.id !== taskId));
-    persistCloudMutation('מחיקת משימה בענן נכשלה', () =>
-      supabase!.from('tasks').delete().eq('id', taskId)
-    );
+    setTaskSyncing(taskId, true);
+
+    void supabase!
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+      .select('id')
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          throw error ?? new Error('Task delete returned no row');
+        }
+
+        markCloudMutationSuccess(true);
+      })
+      .catch((error) => {
+        setTasks(prev => {
+          if (prev.some(task => task.id === taskId)) {
+            return prev;
+          }
+
+          const next = [...prev];
+          const insertAt = deletedTaskIndex >= 0 ? Math.min(deletedTaskIndex, next.length) : next.length;
+          next.splice(insertAt, 0, deletedTask);
+          return next;
+        });
+        reportCloudMutationError('\u05DE\u05D7\u05D9\u05E7\u05EA \u05DE\u05E9\u05D9\u05DE\u05D4 \u05D1\u05E2\u05E0\u05DF \u05E0\u05DB\u05E9\u05DC\u05D4', error);
+      })
+      .finally(() => {
+        setTaskSyncing(taskId, false);
+      });
   };
 
   const handleAdminAccess = (phone: string) => {
@@ -801,7 +1207,7 @@ const App: React.FC = () => {
           void loadDataFromCloud();
         }
       }}
-      className={`fixed right-3 bottom-20 md:top-3 md:bottom-auto z-[210] border text-xs px-3 py-1.5 rounded-full shadow-sm backdrop-blur ${CLOUD_STATUS_UI[cloudStatus].className}`}
+      className={`fixed right-24 bottom-[4.75rem] sm:right-4 md:right-3 md:bottom-auto md:top-3 z-[210] border text-xs px-3 py-1.5 rounded-full shadow-sm backdrop-blur ${CLOUD_STATUS_UI[cloudStatus].className}`}
       title={
         cloudStatus === 'error' || cloudStatus === 'offline'
           ? 'לחץ לניסיון חיבור מחדש'
@@ -830,10 +1236,10 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-slate-50 via-white to-gray-100 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
+    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-gradient-to-br from-slate-50 via-white to-gray-100 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
       {cloudStatusBadge}
       {loadError && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[200] bg-amber-50 text-amber-900 border border-amber-200 text-xs px-3 py-1.5 rounded-full shadow-sm">
+        <div className="fixed left-3 right-3 bottom-[8.75rem] md:left-1/2 md:right-auto md:bottom-auto md:top-3 md:-translate-x-1/2 z-[200] bg-amber-50 text-amber-900 border border-amber-200 text-xs px-3 py-1.5 rounded-full shadow-sm text-center">
           {loadError}
         </div>
       )}
@@ -848,6 +1254,7 @@ const App: React.FC = () => {
             setEditingAppointment(null);
             setIsAppointmentModalOpen(true);
         }}
+        onQuickAddEvent={() => openCalendarEventModal(dayPanelDate || new Date())}
         onOpenTheme={() => setIsThemePanelOpen(true)}
       />
 
@@ -856,8 +1263,11 @@ const App: React.FC = () => {
         {currentView === 'CALENDAR' ? (
           <Calendar 
             currentDate={currentDate} 
+            summaryReferenceDate={dayPanelDate ?? currentDate}
             onDateChange={setCurrentDate} 
+            onOpenMessages={() => setCurrentView('MESSAGES')}
             appointments={appointments}
+            calendarEvents={calendarEvents}
             customers={customers}
             onCustomerClick={handleEditCustomer}
             onDayClick={handleDaySelect}
@@ -872,11 +1282,15 @@ const App: React.FC = () => {
             onEditCustomer={handleEditCustomer}
             onAddCustomer={handleAddCustomer}
           />
+        ) : currentView === 'MESSAGES' ? (
+          <MessagesView messages={whatsappMessages} />
         ) : (
           <StatsView 
             customers={customers}
             appointments={appointments}
             tasks={tasks}
+            syncingTaskIds={syncingTaskIds}
+            onOpenMessages={() => setCurrentView('MESSAGES')}
             onAddTask={handleAddTask}
             onToggleTask={handleToggleTask}
             onDeleteTask={handleDeleteTask}
@@ -900,7 +1314,7 @@ const App: React.FC = () => {
         <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-white border-l border-gray-200 shadow-2xl z-[160] flex flex-col">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
             <div>
-              <div className="text-xs text-gray-400">תורים ליום</div>
+              <div className="text-xs text-gray-400">יומן ליום</div>
               <div className="text-lg font-bold text-gray-800">
                 {dayPanelDate.toLocaleDateString('he-IL')}
               </div>
@@ -914,6 +1328,32 @@ const App: React.FC = () => {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {calendarEvents
+              .filter(event => {
+                const d = new Date(event.date);
+                d.setHours(0, 0, 0, 0);
+                const target = new Date(dayPanelDate);
+                target.setHours(0, 0, 0, 0);
+                return d.getTime() === target.getTime() && event.showInCalendar;
+              })
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+              .map(event => (
+                <div
+                  key={event.id}
+                  className="w-full text-right p-3 rounded-2xl border border-orange-200 bg-gradient-to-l from-orange-50 to-amber-50 shadow-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-orange-900">{event.title}</span>
+                    <span className="text-xs text-orange-700">
+                      {new Date(event.date).toLocaleTimeString('he-IL', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                  <div className="text-xs text-orange-700 mt-1">אירוע אישי</div>
+                </div>
+              ))}
             {appointments
               .filter(a => {
                 const d = new Date(a.date);
@@ -951,9 +1391,15 @@ const App: React.FC = () => {
               const target = new Date(dayPanelDate);
               target.setHours(0, 0, 0, 0);
               return d.getTime() === target.getTime() && a.status !== AppointmentStatus.CANCELLED;
+            }).length === 0 && calendarEvents.filter(event => {
+              const d = new Date(event.date);
+              d.setHours(0, 0, 0, 0);
+              const target = new Date(dayPanelDate);
+              target.setHours(0, 0, 0, 0);
+              return d.getTime() === target.getTime() && event.showInCalendar;
             }).length === 0 && (
               <div className="text-sm text-gray-400 text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                אין תורים ליום הזה
+                אין תורים או אירועים ליום הזה
               </div>
             )}
           </div>
@@ -986,6 +1432,13 @@ const App: React.FC = () => {
         appointment={editingAppointment}
       />
 
+      <CalendarEventModal
+        isOpen={isCalendarEventModalOpen}
+        initialDate={selectedDateForEvent}
+        onClose={() => setIsCalendarEventModalOpen(false)}
+        onSave={handleSaveCalendarEvent}
+      />
+
       <ThemePanel
         isOpen={isThemePanelOpen}
         onClose={() => setIsThemePanelOpen(false)}
@@ -993,7 +1446,7 @@ const App: React.FC = () => {
 
       <button
         onClick={() => setIsThemePanelOpen(true)}
-        className="md:hidden fixed bottom-20 right-4 z-50 bg-white border border-gray-200 text-gray-700 p-3 rounded-full shadow-lg active:scale-90 transition-transform flex items-center justify-center"
+        className="md:hidden fixed bottom-20 left-4 z-50 bg-white border border-gray-200 text-gray-700 p-3 rounded-full shadow-lg active:scale-90 transition-transform flex items-center justify-center"
         aria-label="עיצוב"
       >
         <Palette className="w-6 h-6 text-blue-600" />

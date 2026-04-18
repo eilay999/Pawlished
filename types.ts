@@ -42,12 +42,35 @@ export interface Task {
   startDate: Date;
 }
 
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: Date;
+  kind: 'EVENT';
+  colorKey: string;
+  showInCalendar: boolean;
+  blocksTime: boolean;
+  notes?: string;
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  phone: string;
+  direction: 'INCOMING' | 'OUTGOING' | 'SYSTEM';
+  body: string;
+  messageType: string;
+  intentKind?: string;
+  needsHuman: boolean;
+  createdAt: Date;
+}
+
 export interface DayCell {
   date: Date;
   isCurrentMonth: boolean;
   isToday: boolean;
   events: Appointment[];
+  specialEvents: CalendarEvent[];
   holiday?: string | null; // Added holiday field
 }
 
-export type ViewType = 'CALENDAR' | 'CUSTOMERS' | 'STATS';
+export type ViewType = 'CALENDAR' | 'CUSTOMERS' | 'MESSAGES' | 'STATS';

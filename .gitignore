@@ -25,3 +25,12 @@ supabase/.temp/
 *.njsproj
 *.sln
 *.sw?
+
+# Local artifacts / dumps
+.vercel_deploy.*
+tmp-*
+tmp-*.png
+tmp-*.html
+*.vsix
+WORK_MEMORY.md
+PLAYER_NOTES.md

@@ -71,3 +71,13 @@ Optional:
 - `OTP_TTL_MIN`
 - `OTP_COOLDOWN_SEC`
 - `OTP_MAX_10MIN`
+
+WhatsApp assistant modes:
+
+- `WHATSAPP_OWNER_PHONES` (comma-separated): phone numbers that are treated as business owners/admins (internal assistant + human reply commands enabled).
+- `WHATSAPP_PUBLIC_CUSTOMER_MODE` (`true` | `false`): when `true`, WhatsApp Cloud API messages from customers use the customer booking flow by default.
+- `WHATSAPP_CUSTOMER_ONLY_BOOKING` (`true` | `false`): when `true` (default), customers get booking + FAQ only, otherwise they can also ask general questions (AI) if configured.
+
+Human reply (owner phone -> customer):
+
+- Send to the bot: `השב ל-9725XXXXXXXX: הטקסט שלך`

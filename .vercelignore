@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.vscode
+.vercel
+*.log
+*.vsix
+WORK_MEMORY.md
+PLAYER_NOTES.md
