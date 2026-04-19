@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, Bot, MessageCircle, User } from 'lucide-react';
+import { AlertCircle, Bot, MessageCircle, Send, User } from 'lucide-react';
 import { WhatsAppMessage } from '../types';
 
 interface MessagesViewProps {
   messages: WhatsAppMessage[];
   isTableMissing?: boolean;
+  onRefresh?: () => void;
 }
 
 type Conversation = {
@@ -59,12 +60,61 @@ const groupMessages = (messages: WhatsAppMessage[]): Conversation[] => {
     .sort((left, right) => right.latest.createdAt.getTime() - left.latest.createdAt.getTime());
 };
 
-export const MessagesView: React.FC<MessagesViewProps> = ({ messages, isTableMissing = false }) => {
+export const MessagesView: React.FC<MessagesViewProps> = ({
+  messages,
+  isTableMissing = false,
+  onRefresh
+}) => {
   const conversations = useMemo(() => groupMessages(messages), [messages]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [draftMessage, setDraftMessage] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const selectedConversation =
     conversations.find((conversation) => conversation.phone === selectedPhone) || conversations[0] || null;
   const humanQueueCount = conversations.filter((conversation) => conversation.needsHuman).length;
+  const canSendToSelected = Boolean(selectedConversation && selectedConversation.phone !== 'unknown');
+
+  const sendMessage = async () => {
+    if (!selectedConversation) return;
+    if (!canSendToSelected) return;
+    const text = draftMessage.trim();
+    if (!text) return;
+    if (isSending) return;
+
+    setIsSending(true);
+    setSendError(null);
+
+    try {
+      const response = await fetch('/api/whatsapp-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: selectedConversation.phone,
+          body: text
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'שליחת הודעה נכשלה.');
+      }
+
+      if (!payload?.ok) {
+        throw new Error(payload?.error || 'שליחת הודעה נכשלה.');
+      }
+
+      setDraftMessage('');
+      setSendError(null);
+      // Supabase realtime usually updates this automatically, but refresh keeps UX snappy.
+      onRefresh?.();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'שליחת הודעה נכשלה.';
+      setSendError(message);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   if (messages.length === 0) {
     return (
@@ -125,14 +175,18 @@ export const MessagesView: React.FC<MessagesViewProps> = ({ messages, isTableMis
           {conversations.map((conversation) => {
             const isSelected = selectedConversation?.phone === conversation.phone;
             return (
-              <button
-                key={conversation.phone}
-                type="button"
-                onClick={() => setSelectedPhone(conversation.phone)}
-                className={`w-full text-right px-4 py-4 border-b border-gray-100 transition-colors ${
-                  isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
-              >
+                <button
+                  key={conversation.phone}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPhone(conversation.phone);
+                    setDraftMessage('');
+                    setSendError(null);
+                  }}
+                  className={`w-full text-right px-4 py-4 border-b border-gray-100 transition-colors ${
+                    isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-bold text-gray-900 truncate">{conversation.phone}</div>
@@ -187,6 +241,51 @@ export const MessagesView: React.FC<MessagesViewProps> = ({ messages, isTableMis
                   </div>
                 );
               })}
+
+              <div className="sticky bottom-0 pt-4 bg-gray-50">
+                <div className="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
+                  <div className="text-xs text-gray-500 mb-2 flex items-center gap-2">
+                    <Send className="w-3.5 h-3.5" />
+                    שליחת הודעה
+                  </div>
+
+                  <textarea
+                    value={draftMessage}
+                    onChange={(event) => setDraftMessage(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendMessage();
+                      }
+                    }}
+                    placeholder="כתוב הודעה…"
+                    rows={3}
+                    disabled={!canSendToSelected || isSending}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-right text-sm leading-relaxed outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 disabled:bg-gray-50"
+                  />
+
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      {sendError && (
+                        <div className="text-xs text-rose-600 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="truncate">{sendError}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void sendMessage()}
+                      disabled={!canSendToSelected || !draftMessage.trim() || isSending}
+                      className="shrink-0 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send className="w-4 h-4" />
+                      {isSending ? 'שולח…' : 'שלח'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </section>

@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { CalendarDays, Clock3, Save, Sparkles, X } from 'lucide-react';
+import { CalendarDays, Clock3, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { CalendarEvent } from '../types';
 
 interface CalendarEventModalProps {
   isOpen: boolean;
   initialDate: Date;
+  calendarEvent?: CalendarEvent | null;
   onClose: () => void;
   onSave: (event: CalendarEvent) => void;
+  onDelete?: (eventId: string) => void;
 }
 
 const formatDateInput = (date: Date) => {
@@ -16,22 +18,40 @@ const formatDateInput = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatTimeInput = (date: Date) => {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
 export const CalendarEventModal: React.FC<CalendarEventModalProps> = ({
   isOpen,
   initialDate,
+  calendarEvent,
   onClose,
-  onSave
+  onSave,
+  onDelete
 }) => {
   const [title, setTitle] = useState('');
   const [dateValue, setDateValue] = useState(formatDateInput(initialDate));
   const [timeValue, setTimeValue] = useState('08:00');
+  const isEditMode = Boolean(calendarEvent);
 
   useEffect(() => {
     if (!isOpen) return;
+
+    if (calendarEvent) {
+      const eventDate = new Date(calendarEvent.date);
+      setTitle(calendarEvent.title);
+      setDateValue(formatDateInput(eventDate));
+      setTimeValue(formatTimeInput(eventDate));
+      return;
+    }
+
     setTitle('');
     setDateValue(formatDateInput(initialDate));
     setTimeValue('08:00');
-  }, [initialDate, isOpen]);
+  }, [calendarEvent, initialDate, isOpen]);
 
   if (!isOpen) return null;
 
@@ -44,14 +64,22 @@ export const CalendarEventModal: React.FC<CalendarEventModalProps> = ({
     const startsAt = new Date(`${dateValue}T${safeTime}:00`);
 
     onSave({
-      id: crypto.randomUUID(),
+      id: calendarEvent?.id ?? crypto.randomUUID(),
       title: title.trim(),
       date: startsAt,
-      kind: 'EVENT',
-      colorKey: 'PERSONAL',
-      showInCalendar: true,
-      blocksTime: false
+      kind: calendarEvent?.kind ?? 'EVENT',
+      colorKey: calendarEvent?.colorKey ?? 'PERSONAL',
+      showInCalendar: calendarEvent?.showInCalendar ?? true,
+      blocksTime: calendarEvent?.blocksTime ?? false,
+      notes: calendarEvent?.notes
     });
+  };
+
+  const handleDelete = () => {
+    if (!calendarEvent || !onDelete) return;
+    const confirmed = window.confirm('למחוק את האירוע הזה?');
+    if (!confirmed) return;
+    onDelete(calendarEvent.id);
   };
 
   return (
@@ -120,6 +148,17 @@ export const CalendarEventModal: React.FC<CalendarEventModalProps> = ({
         </div>
 
         <div className="px-6 pb-6 flex gap-3">
+          {isEditMode && onDelete && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 font-bold text-rose-600 hover:bg-rose-100 transition-colors inline-flex items-center justify-center"
+              title="מחק אירוע"
+              aria-label="מחק אירוע"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

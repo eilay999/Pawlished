@@ -16,6 +16,7 @@ interface CalendarProps {
   onCustomerClick: (customer: Customer) => void;
   onDayClick: (date: Date) => void;
   onDayAddAppointment: (date: Date) => void;
+  onCalendarEventClick: (event: CalendarEvent) => void;
   onAppointmentClick: (appointment: Appointment) => void;
   onAppointmentMove: (appointmentId: string, newDate: Date) => void;
 }
@@ -111,6 +112,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   onCustomerClick: _onCustomerClick,
   onDayClick,
   onDayAddAppointment,
+  onCalendarEventClick,
   onAppointmentClick,
   onAppointmentMove
 }) => {
@@ -491,8 +493,16 @@ export const Calendar: React.FC<CalendarProps> = ({
                 {displaySpecialEvents.map((event) => (
                   <div
                     key={event.id}
-                    className="flex items-center gap-1 h-4 sm:h-[18px] text-[9px] sm:text-[10px] leading-[1.15] px-1 sm:px-1.5 rounded-md truncate border border-orange-200 bg-gradient-to-l from-orange-50 to-amber-50 text-orange-800 font-semibold tracking-[-0.01em]"
+                    onMouseDown={(clickEvent) => {
+                      clickEvent.stopPropagation();
+                    }}
+                    onClick={(clickEvent) => {
+                      clickEvent.stopPropagation();
+                      onCalendarEventClick(event);
+                    }}
+                    className="flex items-center gap-1 h-4 sm:h-[18px] text-[9px] sm:text-[10px] leading-[1.15] px-1 sm:px-1.5 rounded-md truncate border border-orange-200 bg-gradient-to-l from-orange-50 to-amber-50 text-orange-800 font-semibold tracking-[-0.01em] hover:brightness-95 transition cursor-pointer"
                     title={event.title}
+                    aria-label={`עריכת אירוע: ${event.title}`}
                   >
                     <span className="truncate">אירוע: {event.title}</span>
                   </div>

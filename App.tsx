@@ -321,6 +321,7 @@ const App: React.FC = () => {
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [isCalendarEventModalOpen, setIsCalendarEventModalOpen] = useState(false);
   const [selectedDateForEvent, setSelectedDateForEvent] = useState<Date>(new Date());
+  const [editingCalendarEvent, setEditingCalendarEvent] = useState<CalendarEvent | null>(null);
   const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null);
   const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
   const [isAdminOverride, setIsAdminOverride] = useState(() => {
@@ -738,11 +739,11 @@ const App: React.FC = () => {
 
   const persistCloudMutation = (
     fallbackMessage: string,
-    writer: () => Promise<{ error: { message?: string | null; code?: string | null } | null }>,
+    writer: () => PromiseLike<{ error: { message?: string | null; code?: string | null } | null }>,
     refreshAfterSuccess = false
   ) => {
     if (!supabase) return;
-    void writer()
+    void Promise.resolve(writer())
       .then(({ error }) => {
         if (error) {
           console.error('Supabase mutation error', error);
@@ -822,10 +823,17 @@ const App: React.FC = () => {
   };
 
   const openCalendarEventModal = (date = new Date()) => {
+    setEditingCalendarEvent(null);
     setSelectedDateForEvent(date);
     setIsCalendarEventModalOpen(true);
   };
-  
+
+  const handleCalendarEventClick = (calendarEvent: CalendarEvent) => {
+    setEditingCalendarEvent(calendarEvent);
+    setSelectedDateForEvent(new Date(calendarEvent.date));
+    setIsCalendarEventModalOpen(true);
+  };
+   
   const handleAppointmentClick = (appointment: Appointment) => {
     setEditingAppointment(appointment);
     setIsAppointmentModalOpen(true);
@@ -1059,10 +1067,25 @@ const App: React.FC = () => {
       ])
     );
     setIsCalendarEventModalOpen(false);
+    setEditingCalendarEvent(null);
 
     persistCloudMutation(
       'שמירת אירוע בענן נכשלה',
       () => supabase!.from('calendar_events').upsert(mapCalendarEventToDb(savedEvent)),
+      true
+    );
+  };
+
+  const handleDeleteCalendarEvent = (eventId: string) => {
+    if (!ensureCloudWritable()) return;
+
+    setCalendarEvents(prev => prev.filter(event => event.id !== eventId));
+    setIsCalendarEventModalOpen(false);
+    setEditingCalendarEvent(null);
+
+    persistCloudMutation(
+      'מחיקת אירוע בענן נכשלה',
+      () => supabase!.from('calendar_events').delete().eq('id', eventId),
       true
     );
   };
@@ -1103,11 +1126,9 @@ const App: React.FC = () => {
     setTasks(prev => [newTask, ...prev]);
     setTaskSyncing(newTask.id, true);
 
-    void supabase!
-      .from('tasks')
-      .insert(mapTaskToDb(newTask))
-      .select('*')
-      .single()
+    void Promise.resolve(
+      supabase!.from('tasks').insert(mapTaskToDb(newTask)).select('*').single()
+    )
       .then(({ data, error }) => {
         if (error || !data) {
           throw error ?? new Error('Task insert returned no row');
@@ -1139,12 +1160,14 @@ const App: React.FC = () => {
     setTasks(prev => prev.map(t => (t.id === taskId ? updatedTask : t)));
     setTaskSyncing(taskId, true);
 
-    void supabase!
-      .from('tasks')
-      .update({ status: updatedTask.status })
-      .eq('id', updatedTask.id)
-      .select('*')
-      .single()
+    void Promise.resolve(
+      supabase!
+        .from('tasks')
+        .update({ status: updatedTask.status })
+        .eq('id', updatedTask.id)
+        .select('*')
+        .single()
+    )
       .then(({ data, error }) => {
         if (error || !data) {
           throw error ?? new Error('Task update returned no row');
@@ -1172,12 +1195,9 @@ const App: React.FC = () => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
     setTaskSyncing(taskId, true);
 
-    void supabase!
-      .from('tasks')
-      .delete()
-      .eq('id', taskId)
-      .select('id')
-      .single()
+    void Promise.resolve(
+      supabase!.from('tasks').delete().eq('id', taskId).select('id').single()
+    )
       .then(({ data, error }) => {
         if (error || !data) {
           throw error ?? new Error('Task delete returned no row');
@@ -1287,6 +1307,7 @@ const App: React.FC = () => {
             onCustomerClick={handleEditCustomer}
             onDayClick={handleDaySelect}
             onDayAddAppointment={handleDayClick}
+            onCalendarEventClick={handleCalendarEventClick}
             onAppointmentClick={handleAppointmentClick}
             onAppointmentMove={handleMoveAppointment}
           />
@@ -1298,7 +1319,11 @@ const App: React.FC = () => {
             onAddCustomer={handleAddCustomer}
           />
         ) : currentView === 'MESSAGES' ? (
-          <MessagesView messages={whatsappMessages} isTableMissing={whatsappMessagesTableMissing} />
+          <MessagesView
+            messages={whatsappMessages}
+            isTableMissing={whatsappMessagesTableMissing}
+            onRefresh={() => void loadDataFromCloud('manual')}
+          />
         ) : (
           <StatsView 
             customers={customers}
@@ -1353,9 +1378,12 @@ const App: React.FC = () => {
               })
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
               .map(event => (
-                <div
+                <button
+                  type="button"
                   key={event.id}
-                  className="w-full text-right p-3 rounded-2xl border border-orange-200 bg-gradient-to-l from-orange-50 to-amber-50 shadow-sm"
+                  onClick={() => handleCalendarEventClick(event)}
+                  className="w-full text-right p-3 rounded-2xl border border-orange-200 bg-gradient-to-l from-orange-50 to-amber-50 shadow-sm hover:brightness-95 transition cursor-pointer"
+                  aria-label={`עריכת אירוע: ${event.title}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-bold text-orange-900">{event.title}</span>
@@ -1367,7 +1395,7 @@ const App: React.FC = () => {
                     </span>
                   </div>
                   <div className="text-xs text-orange-700 mt-1">אירוע אישי</div>
-                </div>
+                </button>
               ))}
             {appointments
               .filter(a => {
@@ -1450,8 +1478,13 @@ const App: React.FC = () => {
       <CalendarEventModal
         isOpen={isCalendarEventModalOpen}
         initialDate={selectedDateForEvent}
-        onClose={() => setIsCalendarEventModalOpen(false)}
+        calendarEvent={editingCalendarEvent}
+        onClose={() => {
+          setIsCalendarEventModalOpen(false);
+          setEditingCalendarEvent(null);
+        }}
         onSave={handleSaveCalendarEvent}
+        onDelete={handleDeleteCalendarEvent}
       />
 
       <ThemePanel
