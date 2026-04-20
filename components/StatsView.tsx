@@ -101,12 +101,12 @@ export const StatsView: React.FC<StatsViewProps> = ({
   }).join(', ');
 
   const conicStyle = {
-    background: trackedCustomersTotal > 0 ? `conic-gradient(${gradientParts})` : '#f3f4f6',
+    background: trackedCustomersTotal > 0 ? `conic-gradient(${gradientParts})` : '#0f172a',
   };
 
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-y-auto border border-gray-100 custom-scrollbar backdrop-blur-sm">
-      <div className="p-8 pb-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-8 pb-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-slate-950 to-emerald-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
         <h2 className="text-3xl font-bold text-gray-800 tracking-tight">דשבורד ביצועים</h2>
         <p className="text-gray-500 mt-1">תמונת מצב של הכנסות, לקוחות ושימור</p>

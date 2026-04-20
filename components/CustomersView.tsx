@@ -65,7 +65,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
-      <div className="p-6 border-b border-gray-100 flex justify-between items-center gap-4 shrink-0 bg-gradient-to-r from-blue-50 via-white to-emerald-50">
+      <div className="p-6 border-b border-gray-100 flex justify-between items-center gap-4 shrink-0 bg-gradient-to-r from-blue-50 via-slate-950 to-emerald-50">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">לקוחות</h2>
           <p className="text-sm text-gray-500">ניהול כרטיסי לקוחות, מעקב שוטף והפרדה ללקוחות בהמתנה</p>

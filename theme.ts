@@ -9,7 +9,7 @@ const STORAGE_KEY = 'pawlished_theme';
 export const DEFAULT_THEME: ThemeSettings = {
   primary: '#2563eb',
   accent: '#10b981',
-  background: '#f3f4f6'
+  background: '#020617'
 };
 
 const clamp = (value: number) => Math.max(0, Math.min(255, value));
