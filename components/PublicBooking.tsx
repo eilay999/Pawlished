@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, Phone, User, Dog, CheckCircle2 } from 'lucide-react';
 import { Appointment, AppointmentStatus, Customer } from '../types';
+import { APPOINTMENT_DURATION_MINUTES } from '../constants';
 
 type BookingStep = 'PHONE' | 'DETAILS' | 'BOOKING' | 'DONE';
 
@@ -8,12 +9,12 @@ const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמיש
 
 const WEEKLY_SLOTS: Record<number, string[]> = {
   // 0=Sunday ... 6=Saturday
-  0: ['07:00'],
+  0: ['07:00', '08:00'],
   1: ['09:00', '12:00', '15:00'],
   2: ['09:00', '12:00', '15:00'],
   3: ['08:00', '11:00', '14:00'],
-  4: ['07:00'],
-  5: [],
+  4: ['07:00', '08:00'],
+  5: ['07:00', '08:00'],
   6: []
 };
 
@@ -51,6 +52,9 @@ const makeSlotDate = (date: Date, time: string) => {
   return slot;
 };
 
+const toLocalDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 interface PublicBookingProps {
   appointments: Appointment[];
   customers: Customer[];
@@ -80,15 +84,21 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   } | null>(null);
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
 
-  const bookedSlots = useMemo(
-    () =>
-      new Set(
-        appointments
-          .filter(appointment => appointment.status !== AppointmentStatus.CANCELLED)
-          .map(appointment => new Date(appointment.date).getTime())
-      ),
-    [appointments]
-  );
+  const bookedRangesByDate = useMemo(() => {
+    const map = new Map<string, Array<{ start: number; end: number }>>();
+
+    appointments
+      .filter(appointment => appointment.status !== AppointmentStatus.CANCELLED)
+      .forEach((appointment) => {
+        const start = new Date(appointment.date).getTime();
+        if (Number.isNaN(start)) return;
+        const end = start + APPOINTMENT_DURATION_MINUTES * 60 * 1000;
+        const key = toLocalDateKey(new Date(start));
+        map.set(key, [...(map.get(key) || []), { start, end }]);
+      });
+
+    return map;
+  }, [appointments]);
 
   const upcomingDays = useMemo(() => {
     const today = new Date();
@@ -111,7 +121,11 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const isSlotAvailable = (date: Date, time: string) => {
     const slot = makeSlotDate(date, time);
     if (slot.getTime() < Date.now()) return false;
-    return !bookedSlots.has(slot.getTime());
+    const key = toLocalDateKey(slot);
+    const slotStart = slot.getTime();
+    const slotEnd = slotStart + APPOINTMENT_DURATION_MINUTES * 60 * 1000;
+    const booked = bookedRangesByDate.get(key) || [];
+    return !booked.some((range) => slotStart < range.end && slotEnd > range.start);
   };
 
   const handleContinueWithPhone = () => {
@@ -259,7 +273,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black p-4 md:p-8">
       <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <div>

@@ -1271,7 +1271,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-gradient-to-br from-slate-50 via-white to-gray-100 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
+    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-gradient-to-br from-slate-950 via-slate-900 to-black text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
       {cloudStatusBadge}
       {loadError && (
         <div className="fixed left-3 right-3 bottom-[8.75rem] md:left-1/2 md:right-auto md:bottom-auto md:top-3 md:-translate-x-1/2 z-[200] bg-amber-50 text-amber-900 border border-amber-200 text-xs px-3 py-1.5 rounded-full shadow-sm text-center">

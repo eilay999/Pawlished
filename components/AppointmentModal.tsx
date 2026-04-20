@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Calendar, Clock, Scissors, User, CircleDollarSign, Plus, Phone, Dog, History, AlertCircle, PenLine, List, Trash2, AlertTriangle, CheckCircle2, Search } from 'lucide-react';
 import { Customer, Appointment, AppointmentStatus } from '../types';
-import { SERVICE_PRICES } from '../constants';
+import { APPOINTMENT_DURATION_MINUTES, SERVICE_PRICES } from '../constants';
 import { normalizeDigits, normalizePhoneForCompare } from '../utils';
 
 interface AppointmentModalProps {
@@ -20,12 +20,12 @@ interface AppointmentModalProps {
 
 // Pawlished fixed weekly slots (0=Sunday ... 6=Saturday).
 const WEEKLY_SLOTS: Record<number, string[]> = {
-  0: ['07:00'],
+  0: ['07:00', '08:00'],
   1: ['09:00', '12:00', '15:00'],
   2: ['09:00', '12:00', '15:00'],
   3: ['08:00', '11:00', '14:00'],
-  4: ['07:00'],
-  5: [],
+  4: ['07:00', '08:00'],
+  5: ['07:00', '08:00'],
   6: []
 };
 
@@ -98,6 +98,21 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const timeSliderRef = useRef<HTMLDivElement>(null);
 
   const selectedCustomer = customers.find(c => c.id === formData.customerId);
+  const estimatedEndTimeLabel = (() => {
+    const dateMatch = String(formData.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const timeMatch = String(formData.time || '').match(/^(\d{1,2}):(\d{2})$/);
+    if (!dateMatch || !timeMatch) return null;
+    const year = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]);
+    const day = Number(dateMatch[3]);
+    const hours = Number(timeMatch[1]);
+    const minutes = Number(timeMatch[2]);
+
+    const start = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = new Date(start.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000);
+    return end.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  })();
   const formatCustomerOption = (c: Customer) =>
     `${c.name} (${c.petName})${c.lifecycleStatus === 'ON_HOLD' ? ' • בהמתנה' : ''}`;
   const normalizedCustomerSearch = customerSearch.trim().toLowerCase();
@@ -292,10 +307,10 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       Boolean(appointment) && formData.date === originalDateString && formData.time === originalTimeString;
 
     if (!isOriginalSlot) {
-      if (allowedSlotsForDate.length === 0) {
-        setScheduleError('אין תורים ביום הזה. אנחנו עובדים ראשון עד חמישי בבוקר בלבד.');
-        return;
-      }
+       if (allowedSlotsForDate.length === 0) {
+         setScheduleError('אין תורים ביום הזה. אנחנו עובדים ראשון עד שישי.');
+         return;
+       }
 
       if (!allowedSlotsForDate.includes(formData.time)) {
         setScheduleError(`בשביל היום הזה אפשר לקבוע רק בשעות: ${allowedSlotsForDate.join(', ')}.`);
@@ -550,6 +565,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     <div className="text-sm text-gray-400 py-2">אין תורים ביום הזה</div>
                   )}
               </div>
+
+              {estimatedEndTimeLabel && (
+                <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 flex items-center justify-between text-xs text-gray-700">
+                  <span className="font-semibold">סיום משוער (3 שעות)</span>
+                  <span className="font-mono text-gray-900">{estimatedEndTimeLabel}</span>
+                </div>
+              )}
               {scheduleError && (
                 <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />

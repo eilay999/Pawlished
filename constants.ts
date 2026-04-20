@@ -22,6 +22,9 @@ export const SERVICE_PRICES: Record<string, number> = {
     'טיפול נגד פרעושים': 100
 };
 
+// Appointment duration used for UI hints and slot overlap checks (when applicable).
+export const APPOINTMENT_DURATION_MINUTES = 180;
+
 export const CANCELLATION_FEE_AMOUNT = 50;
 export const CANCELLATION_FEE_WINDOW_HOURS = 24;
 

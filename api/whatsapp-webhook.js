@@ -299,7 +299,7 @@ const CUSTOMER_BOOKING_FIELD_LABELS = {
 };
 
 const CUSTOMER_BOOKING_FIELD_QUESTIONS = {
-  date: 'לאיזה יום תרצה לקבוע? אנחנו עובדים ראשון עד חמישי בבוקר בלבד.',
+  date: 'לאיזה יום תרצה לקבוע? אנחנו עובדים ראשון עד שישי.',
   time: 'באיזו שעה נוח לך? אפשר לענות עם שעה כמו 07:00 או 12:00.',
   customerName: 'מה השם המלא שלך?',
   petName: 'מה השם של חיית המחמד?',
@@ -669,7 +669,7 @@ const hydrateCustomerBookingPayload = ({ payload = {}, conversationPhone = '', k
 const buildCustomerTimeQuestionForDate = (dateValue = '') => {
   const slots = getAllowedSlotsForLocalDate(dateValue);
   if (!slots.length) {
-    return 'באיזו שעה נוח לך? אנחנו עובדים ראשון עד חמישי בבוקר בלבד.';
+    return 'באיזו שעה נוח לך? אנחנו עובדים ראשון עד שישי.';
   }
 
   if (slots.length === 1) {
@@ -688,7 +688,7 @@ const applyCustomerScheduleRules = (payload = {}) => {
   if (!allowedSlots.length) {
     return {
       payload: { ...payload, date: '', time: '' },
-      notice: 'ביום שבחרת אנחנו לא עובדים. אנחנו עובדים ראשון עד חמישי בבוקר בלבד.'
+      notice: 'ביום שבחרת אנחנו לא עובדים. אנחנו עובדים ראשון עד שישי.'
     };
   }
 

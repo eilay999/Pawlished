@@ -652,27 +652,27 @@ export const Calendar: React.FC<CalendarProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-gray-200 shadow-sm shrink-0">
-          <button
-            onClick={handleNextMonth}
-            className="p-1.5 hover:bg-slate-50 rounded-xl text-gray-500 hover:text-gray-800 transition-all"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleToday}
-            className="px-2 sm:px-3 py-1 hover:bg-slate-50 text-gray-700 text-sm font-bold rounded-xl transition-all"
-          >
-            היום
-          </button>
-          <button
-            onClick={handlePrevMonth}
-            className="p-1.5 hover:bg-slate-50 rounded-xl text-gray-500 hover:text-gray-800 transition-all"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-gray-200 shadow-sm shrink-0">
+            <button
+              onClick={handlePrevMonth}
+              className="p-1.5 hover:bg-slate-50 rounded-xl text-gray-500 hover:text-gray-800 transition-all"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleToday}
+              className="px-2 sm:px-3 py-1 hover:bg-slate-50 text-gray-700 text-sm font-bold rounded-xl transition-all"
+            >
+              היום
+            </button>
+            <button
+              onClick={handleNextMonth}
+              className="p-1.5 hover:bg-slate-50 rounded-xl text-gray-500 hover:text-gray-800 transition-all"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-      </div>
 
       <div className="hidden md:flex mx-3 mt-1.5 mb-1.5 bg-green-50 text-green-800 text-[11px] border border-green-100 px-3 py-1 rounded-xl items-center justify-between shrink-0">
         <span className="font-bold">סיכום שבועי: {weeklyDogCount}/{weeklyGoal} כלבים</span>

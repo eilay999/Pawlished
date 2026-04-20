@@ -3,18 +3,18 @@ import { createClient } from '@supabase/supabase-js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 const DEFAULT_SERVICE = 'תספורת';
-export const APPOINTMENT_DURATION_MINUTES = 150;
+export const APPOINTMENT_DURATION_MINUTES = 180;
 export const APPOINTMENT_SLOT_INTERVAL_MINUTES = 30;
 
 // Pawlished fixed weekly slots (small dogs only) as provided by the business.
 // Note: JS weekday indexing: 0=Sunday ... 6=Saturday.
 export const WEEKLY_BUSINESS_SLOTS = {
-  0: ['07:00'],
+  0: ['07:00', '08:00'],
   1: ['09:00', '12:00', '15:00'],
   2: ['09:00', '12:00', '15:00'],
   3: ['08:00', '11:00', '14:00'],
-  4: ['07:00'],
-  5: [],
+  4: ['07:00', '08:00'],
+  5: ['07:00', '08:00'],
   6: []
 };
 
@@ -618,7 +618,7 @@ export const createAppointmentRecord = async ({
   const slotLocalDate = buildDayBoundsFromSlot(slotDateIso).localDate;
   const allowedSlots = getAllowedSlotsForLocalDate(slotLocalDate, ISRAEL_TIME_ZONE);
   if (allowedSlots.length === 0) {
-    throw createHttpError(400, 'ביום שבחרת אנחנו לא עובדים. אנחנו עובדים ראשון עד חמישי בבוקר בלבד.');
+    throw createHttpError(400, 'ביום שבחרת אנחנו לא עובדים. אנחנו עובדים ראשון עד שישי.');
   }
 
   const slotLocalTime = toLocalTimeLabel(slotDateIso, ISRAEL_TIME_ZONE);
