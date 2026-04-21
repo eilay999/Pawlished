@@ -83,9 +83,9 @@ export const CalendarEventModal: React.FC<CalendarEventModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[170] bg-slate-950/45 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[170] bg-pink-500/20 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-[28px] border border-orange-200 bg-white shadow-[0_32px_90px_rgba(15,23,42,0.22)] overflow-hidden">
-        <div className="flex items-start justify-between px-6 py-5 bg-gradient-to-l from-orange-950/40 via-slate-950 to-slate-950 border-b border-orange-100">
+        <div className="flex items-start justify-between px-6 py-5 bg-gradient-to-l from-orange-100 via-pink-50 to-rose-100 border-b border-orange-100">
           <div className="text-right">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />

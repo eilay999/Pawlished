@@ -7,10 +7,28 @@ export type ThemeSettings = {
 const STORAGE_KEY = 'pawlished_theme';
 
 export const DEFAULT_THEME: ThemeSettings = {
-  primary: '#2563eb',
+  primary: '#DB2777',
   accent: '#10b981',
-  background: '#020617'
+  background: '#FDF2F8'
 };
+
+const LEGACY_DEFAULT_THEMES: ThemeSettings[] = [
+  {
+    primary: '#2563eb',
+    accent: '#10b981',
+    background: '#f3f4f6'
+  },
+  {
+    primary: '#2563eb',
+    accent: '#10b981',
+    background: '#020617'
+  }
+];
+
+const isThemeMatch = (left: ThemeSettings, right: ThemeSettings) =>
+  normalizeHex(left.primary) === normalizeHex(right.primary) &&
+  normalizeHex(left.accent) === normalizeHex(right.accent) &&
+  normalizeHex(left.background) === normalizeHex(right.background);
 
 const clamp = (value: number) => Math.max(0, Math.min(255, value));
 
@@ -116,11 +134,17 @@ export const loadTheme = (): ThemeSettings => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_THEME;
     const parsed = JSON.parse(raw) as Partial<ThemeSettings>;
-    return {
+    const loaded = {
       primary: parsed.primary || DEFAULT_THEME.primary,
       accent: parsed.accent || DEFAULT_THEME.accent,
       background: parsed.background || DEFAULT_THEME.background
     };
+
+    if (LEGACY_DEFAULT_THEMES.some((legacy) => isThemeMatch(loaded, legacy))) {
+      return DEFAULT_THEME;
+    }
+
+    return loaded;
   } catch {
     return DEFAULT_THEME;
   }

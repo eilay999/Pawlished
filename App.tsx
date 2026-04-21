@@ -1271,7 +1271,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-gradient-to-br from-slate-950 via-slate-900 to-black text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
+    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
       {cloudStatusBadge}
       {loadError && (
         <div className="fixed left-3 right-3 bottom-[8.75rem] md:left-1/2 md:right-auto md:bottom-auto md:top-3 md:-translate-x-1/2 z-[200] bg-amber-50 text-amber-900 border border-amber-200 text-xs px-3 py-1.5 rounded-full shadow-sm text-center">
@@ -1501,7 +1501,7 @@ const App: React.FC = () => {
       </button>
 
       {pendingCheck && (
-        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[150] bg-pink-500/20 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="p-5 border-b border-gray-100 bg-gray-50">
               <h3 className="text-lg font-bold text-gray-800">הלקוח הגיע?</h3>

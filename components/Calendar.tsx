@@ -555,23 +555,23 @@ export const Calendar: React.FC<CalendarProps> = ({
               </div>
 
               {(cell.events.length > 0 || cell.specialEvents.length > 0) && (
-                <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-xl p-3 shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-                  <div className="font-bold border-b border-gray-700 pb-2 mb-2 flex items-center gap-2">
+                <div className="absolute z-50 bottom-full right-1/2 translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-pink-100 text-fuchsia-950 text-xs rounded-xl p-3 shadow-2xl border border-pink-200 pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+                  <div className="font-bold border-b border-pink-200 pb-2 mb-2 flex items-center gap-2">
                     <Clock className="w-3 h-3 text-gray-400" />
                     {cell.date.toLocaleDateString('he-IL')}
                   </div>
                   <div className="space-y-2">
                     {cell.specialEvents.map((event) => (
                       <div key={event.id} className="flex justify-between items-center gap-2">
-                        <span className="text-orange-300 font-mono">
+                        <span className="text-orange-700 font-mono">
                           {event.date.toLocaleTimeString('he-IL', {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
                         </span>
                         <div className="text-right truncate flex-1">
-                          <span className="font-bold block truncate text-orange-100">{event.title}</span>
-                          <span className="text-orange-300 text-[10px] block truncate">אירוע אישי</span>
+                          <span className="font-bold block truncate text-orange-900">{event.title}</span>
+                          <span className="text-orange-700 text-[10px] block truncate">אירוע אישי</span>
                         </div>
                       </div>
                     ))}
@@ -594,7 +594,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                             })}
                           </span>
                           <div className="text-right truncate flex-1">
-                            <span className={`font-bold block truncate ${isCompleted ? 'text-green-300' : 'text-white'}`}>
+                            <span className={`font-bold block truncate ${isCompleted ? 'text-green-700' : 'text-gray-800'}`}>
                               {customer ? customer.name : 'לקוח לא ידוע'}
                               {customer?.petName && (
                                 <span className="text-gray-400 font-normal mr-1">({customer.petName})</span>
@@ -617,7 +617,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div className="calendar-swipe-surface flex-1 min-h-0 min-w-0 bg-white/92 m-0 md:m-2 rounded-none md:rounded-[28px] shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm antialiased [text-rendering:optimizeLegibility]">
-      <div className="px-3 md:px-5 py-2.5 flex items-center justify-between gap-2 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 sticky top-0 z-10 border-b border-gray-100 shrink-0">
+      <div className="px-3 md:px-5 py-2.5 flex items-center justify-between gap-2 bg-gradient-to-r from-pink-100 via-pink-50 to-rose-100 sticky top-0 z-10 border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
           <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-gray-800 capitalize tracking-normal whitespace-nowrap shrink-0">
             {monthName}
@@ -632,7 +632,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
             <button
               onClick={handleAiAnalyze}
-            className="flex items-center gap-1.5 text-xs sm:text-sm text-purple-200 bg-purple-950/40 hover:bg-purple-950/60 border border-purple-900/40 px-2 sm:px-3 py-1.5 rounded-full transition-colors font-medium shrink-0"
+            className="flex items-center gap-1.5 text-xs sm:text-sm text-purple-800 bg-purple-100 hover:bg-purple-200 border border-purple-200 px-2 sm:px-3 py-1.5 rounded-full transition-colors font-medium shrink-0"
               disabled={loadingAi}
             >
             <Sparkles className="w-4 h-4" />
@@ -643,7 +643,7 @@ export const Calendar: React.FC<CalendarProps> = ({
             <button
               type="button"
               onClick={onOpenMessages}
-              className="flex items-center gap-1.5 text-xs sm:text-sm text-emerald-200 bg-emerald-950/40 hover:bg-emerald-950/60 border border-emerald-900/40 px-2 sm:px-3 py-1.5 rounded-full transition-colors font-medium shrink-0"
+              className="flex items-center gap-1.5 text-xs sm:text-sm text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-200 px-2 sm:px-3 py-1.5 rounded-full transition-colors font-medium shrink-0"
               aria-label="WhatsApp messages"
             >
               <MessageCircle className="w-4 h-4" />
@@ -682,13 +682,13 @@ export const Calendar: React.FC<CalendarProps> = ({
       </div>
 
       {aiAnalysis && (
-        <div className="hidden md:flex mx-3 mb-1.5 bg-gradient-to-r from-purple-950/40 via-slate-950 to-slate-950 px-3 py-1 rounded-xl text-purple-100 text-[11px] border border-purple-900/40 items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
+        <div className="hidden md:flex mx-3 mb-1.5 bg-gradient-to-r from-purple-100 via-pink-50 to-rose-100 px-3 py-1 rounded-xl text-purple-950 text-[11px] border border-purple-200 items-start gap-3 shadow-sm animate-in fade-in slide-in-from-top-2 shrink-0">
           <Sparkles className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
           <p className="leading-relaxed font-medium">{aiAnalysis}</p>
         </div>
       )}
 
-      <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-slate-200 px-2 md:px-3 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 shrink-0">
+      <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_0.7fr] md:grid-cols-7 border-b border-slate-200 px-2 md:px-3 bg-gradient-to-r from-pink-100 via-pink-50 to-rose-100 shrink-0">
         {WEEK_DAYS.map((day) => (
           <div
             key={day}
@@ -705,7 +705,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         onTouchMoveCapture={handleTouchMove}
         onTouchEndCapture={handleTouchEnd}
         onTouchCancelCapture={handleTouchCancel}
-        className="flex-1 min-h-0 overflow-hidden bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900"
+        className="flex-1 min-h-0 overflow-hidden bg-gradient-to-b from-pink-50 via-pink-50 to-rose-100"
       >
         <div className="h-full px-1 md:px-2 pb-2 pt-1.5">
           <div className="h-full rounded-[24px] overflow-hidden border border-slate-200 bg-slate-200/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">

@@ -126,7 +126,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
 
   return (
     // High Z-Index to ensure it covers other modals if needed
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-pink-500/20 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}

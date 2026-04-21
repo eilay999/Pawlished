@@ -273,7 +273,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 p-4 md:p-8">
       <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <div>
