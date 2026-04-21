@@ -1114,6 +1114,16 @@ const App: React.FC = () => {
     });
   };
 
+  const handlePublicCustomerCreated = (customer: Customer) => {
+    setCustomers(prev => {
+      const exists = prev.find(c => c.id === customer.id);
+      if (exists) {
+        return prev.map(c => (c.id === customer.id ? customer : c));
+      }
+      return [...prev, customer];
+    });
+  };
+
   const handleAddTask = (title: string, startDate: Date) => {
     if (!ensureCloudWritable()) return;
     const newTask: Task = {
@@ -1264,6 +1274,7 @@ const App: React.FC = () => {
           appointments={appointments}
           customers={customers}
           onBookingCreated={handlePublicBookingCreated}
+          onCustomerCreated={handlePublicCustomerCreated}
           onAdminAccess={handleAdminAccess}
         />
       </>

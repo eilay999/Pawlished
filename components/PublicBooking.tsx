@@ -59,6 +59,7 @@ interface PublicBookingProps {
   appointments: Appointment[];
   customers: Customer[];
   onBookingCreated: (payload: { customer: Customer; appointment: Appointment }) => void;
+  onCustomerCreated?: (customer: Customer) => void;
   onAdminAccess?: (phone: string) => void;
 }
 
@@ -66,9 +67,11 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   appointments,
   customers,
   onBookingCreated,
+  onCustomerCreated,
   onAdminAccess
 }) => {
   const [step, setStep] = useState<BookingStep>('PHONE');
+  const [doneKind, setDoneKind] = useState<'BOOKED' | 'CUSTOMER_CREATED' | null>(null);
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState('');
@@ -83,6 +86,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     time: string;
   } | null>(null);
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [isSavingCustomerCard, setIsSavingCustomerCard] = useState(false);
 
   const bookedRangesByDate = useMemo(() => {
     const map = new Map<string, Array<{ start: number; end: number }>>();
@@ -130,6 +134,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
   const handleContinueWithPhone = () => {
     setError(null);
+    setDoneKind(null);
     const e164 = toE164(phone);
 
     if (!e164) {
@@ -196,6 +201,55 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     setStep('BOOKING');
   };
 
+  const handleSaveCustomerCard = async () => {
+    if (!verifiedPhone) return;
+    if (isSavingCustomerCard) return;
+
+    if (!newCustomer.name.trim() || !newCustomer.petName.trim() || !newCustomer.petType.trim()) {
+      setError('מלא שם, שם כלב וסוג.');
+      return;
+    }
+
+    setError(null);
+    setIsSavingCustomerCard(true);
+
+    try {
+      const response = await fetch('/api/public-booking/create-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: verifiedPhone,
+          customer: {
+            name: newCustomer.name.trim(),
+            petName: newCustomer.petName.trim(),
+            petType: newCustomer.petType.trim()
+          }
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error || 'שמירת כרטיס לקוח נכשלה.');
+        return;
+      }
+
+      const customer: Customer = {
+        ...payload.customer,
+        lastVisit: new Date(payload.customer.lastVisit)
+      };
+
+      onCustomerCreated?.(customer);
+      setExistingCustomer(customer);
+      setDoneKind('CUSTOMER_CREATED');
+      setSelectedSlot(null);
+      setStep('DONE');
+    } catch {
+      setError('שמירת כרטיס לקוח נכשלה. נסה שוב.');
+    } finally {
+      setIsSavingCustomerCard(false);
+    }
+  };
+
   const handleConfirmBooking = async () => {
     if (!selectedSlot) {
       setError('בחר תאריך ושעה.');
@@ -250,6 +304,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
       onBookingCreated({ customer, appointment });
       setExistingCustomer(customer);
+      setDoneKind('BOOKED');
 
       await handleSendConfirmation(
         slotDate.toLocaleDateString('he-IL'),
@@ -351,12 +406,22 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                   />
                 </div>
               </div>
-              <button
-                onClick={handleContinueDetails}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
-              >
-                המשך לקביעת תור
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={handleContinueDetails}
+                  disabled={isSavingCustomerCard}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl py-3 font-medium"
+                >
+                  המשך לקביעת תור
+                </button>
+                <button
+                  onClick={() => void handleSaveCustomerCard()}
+                  disabled={isSavingCustomerCard}
+                  className="w-full bg-white hover:bg-blue-50 disabled:opacity-60 text-blue-700 border border-blue-200 rounded-xl py-3 font-medium"
+                >
+                  {isSavingCustomerCard ? 'שומר...' : 'שמור כרטיס לקוח בלי תור'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -414,10 +479,27 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           {step === 'DONE' && (
             <div className="text-center space-y-3 py-6">
               <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
-              <div className="text-lg font-bold text-gray-800">התור נקבע בהצלחה!</div>
-              {selectedSlot && (
+              <div className="text-lg font-bold text-gray-800">
+                {doneKind === 'CUSTOMER_CREATED' ? 'כרטיס הלקוח נשמר בהצלחה!' : 'התור נקבע בהצלחה!'}
+              </div>
+              {doneKind !== 'CUSTOMER_CREATED' && selectedSlot && (
                 <div className="text-sm text-gray-500">
                   {selectedSlot.date.toLocaleDateString('he-IL')} בשעה {selectedSlot.time}
+                </div>
+              )}
+              {doneKind === 'CUSTOMER_CREATED' && (
+                <div className="space-y-2 pt-3">
+                  <div className="text-sm text-gray-500">אפשר עכשיו לקבוע תור או לחזור באיזה זמן.</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSlot(null);
+                      setStep('BOOKING');
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
+                  >
+                    קביעת תור עכשיו
+                  </button>
                 </div>
               )}
             </div>
