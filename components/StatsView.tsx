@@ -86,7 +86,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
 
   // Chart Segments
   const chartSegments = [
-    { label: 'תור עתידי נקבע', count: scheduledCustomers.length, color: '#10b981', textColor: 'text-emerald-600', bgColor: 'bg-emerald-500' },
+    { label: 'תור עתידי נקבע', count: scheduledCustomers.length, color: '#FACC15', textColor: 'text-emerald-600', bgColor: 'bg-emerald-500' },
     { label: 'תקינים (לא הגיע המועד)', count: okCustomers.length, color: '#e5e7eb', textColor: 'text-gray-500', bgColor: 'bg-gray-200' },
     { label: 'מתקרבים למועד יעד', count: soonCustomers.length, color: '#f97316', textColor: 'text-orange-500', bgColor: 'bg-orange-500' },
     { label: 'באיחור (עבר המועד)', count: lateCustomers.length, color: '#ef4444', textColor: 'text-red-500', bgColor: 'bg-red-500' },
@@ -128,15 +128,15 @@ export const StatsView: React.FC<StatsViewProps> = ({
       <div className="p-8 space-y-8">
         {/* Row 1: Revenue Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white p-6 rounded-2xl shadow-lg shadow-blue-200">
+          <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-fuchsia-950 p-6 rounded-2xl shadow-lg shadow-blue-200">
             <div className="flex justify-between items-start mb-4">
               <div className="bg-white/20 p-2 rounded-lg">
-                <Wallet className="w-6 h-6 text-white" />
+                <Wallet className="w-6 h-6 text-fuchsia-950" />
               </div>
               <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">חודשי</span>
             </div>
             <div className="text-3xl font-bold mb-1">₪{monthlyRevenue.toLocaleString()}</div>
-            <div className="text-blue-100 text-sm">הכנסות החודש</div>
+            <div className="text-fuchsia-900/70 text-sm">הכנסות החודש</div>
           </div>
 
           <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm">

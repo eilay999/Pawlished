@@ -3,35 +3,35 @@
 @tailwind utilities;
 
 :root {
-  --brand-50: #eff6ff;
-  --brand-100: #dbeafe;
-  --brand-200: #bfdbfe;
-  --brand-300: #93c5fd;
-  --brand-500: #3b82f6;
-  --brand-600: #2563eb;
-  --brand-700: #1d4ed8;
+  --brand-50: #FBE5EF;
+  --brand-100: #F7CFE1;
+  --brand-200: #F2B1CE;
+  --brand-300: #ED93BB;
+  --brand-500: #DB2777;
+  --brand-600: #C5236B;
+  --brand-700: #AF1F5F;
 
-  --brand-50-rgb: 239, 246, 255;
-  --brand-100-rgb: 219, 234, 254;
-  --brand-200-rgb: 191, 219, 254;
-  --brand-300-rgb: 147, 197, 253;
-  --brand-500-rgb: 59, 130, 246;
+  --brand-50-rgb: 251, 229, 239;
+  --brand-100-rgb: 247, 207, 225;
+  --brand-200-rgb: 242, 177, 206;
+  --brand-300-rgb: 237, 147, 187;
+  --brand-500-rgb: 219, 39, 119;
 
-  --accent-50: #ecfdf5;
-  --accent-100: #d1fae5;
-  --accent-200: #a7f3d0;
-  --accent-300: #6ee7b7;
-  --accent-500: #10b981;
-  --accent-600: #059669;
-  --accent-700: #047857;
+  --accent-50: #FEF9E3;
+  --accent-100: #FEF4CC;
+  --accent-200: #FDEDAB;
+  --accent-300: #FCE68A;
+  --accent-500: #FACC15;
+  --accent-600: #E1B813;
+  --accent-700: #C8A311;
 
-  --accent-50-rgb: 236, 253, 245;
-  --accent-100-rgb: 209, 250, 229;
-  --accent-200-rgb: 167, 243, 208;
-  --accent-300-rgb: 110, 231, 183;
-  --accent-500-rgb: 16, 185, 129;
-  --accent-600-rgb: 5, 150, 105;
-  --accent-700-rgb: 4, 120, 87;
+  --accent-50-rgb: 254, 249, 227;
+  --accent-100-rgb: 254, 244, 204;
+  --accent-200-rgb: 253, 237, 171;
+  --accent-300-rgb: 252, 230, 138;
+  --accent-500-rgb: 250, 204, 21;
+  --accent-600-rgb: 225, 184, 19;
+  --accent-700-rgb: 200, 163, 17;
 
   --app-bg: #fdf2f8;
 
@@ -129,14 +129,22 @@ body {
 /* Theme overrides for primary (blue) */
 .bg-blue-50 { background-color: rgba(var(--brand-500-rgb), 0.14) !important; }
 .bg-blue-100 { background-color: rgba(var(--brand-500-rgb), 0.22) !important; }
-.bg-blue-600 { background-color: var(--brand-600) !important; }
-.bg-blue-700 { background-color: var(--brand-700) !important; }
+.bg-blue-600 { background-color: rgba(var(--brand-500-rgb), 0.20) !important; }
+.bg-blue-700 { background-color: rgba(var(--brand-500-rgb), 0.28) !important; }
 
 .bg-blue-50\/95 { background-color: rgba(var(--brand-500-rgb), 0.18) !important; }
 .bg-blue-50\/80 { background-color: rgba(var(--brand-500-rgb), 0.16) !important; }
 .bg-blue-50\/60 { background-color: rgba(var(--brand-500-rgb), 0.13) !important; }
 .bg-blue-50\/30 { background-color: rgba(var(--brand-500-rgb), 0.08) !important; }
 
+.bg-blue-600.text-white,
+.bg-blue-700.text-white {
+  color: var(--text-strong) !important;
+}
+
+.hover\:bg-blue-700:hover { background-color: rgba(var(--brand-500-rgb), 0.28) !important; }
+
+.text-blue-100 { color: rgba(var(--brand-500-rgb), 0.55) !important; }
 .text-blue-700 { color: var(--brand-700) !important; }
 .text-blue-600 { color: var(--brand-600) !important; }
 .text-blue-500 { color: var(--brand-500) !important; }
@@ -145,9 +153,12 @@ body {
 .border-blue-100 { border-color: var(--brand-100) !important; }
 .border-blue-200 { border-color: var(--brand-200) !important; }
 .border-blue-300 { border-color: var(--brand-300) !important; }
+.border-blue-500 { border-color: rgba(var(--brand-500-rgb), 0.45) !important; }
+.border-blue-600 { border-color: rgba(var(--brand-500-rgb), 0.55) !important; }
 
 .ring-blue-100 { --tw-ring-color: rgba(var(--brand-100-rgb), 0.9) !important; }
 .ring-blue-200 { --tw-ring-color: rgba(var(--brand-200-rgb), 0.9) !important; }
+.ring-blue-300 { --tw-ring-color: rgba(var(--brand-500-rgb), 0.35) !important; }
 .ring-blue-500 { --tw-ring-color: rgba(var(--brand-500-rgb), 1) !important; }
 
 .focus\:ring-blue-500:focus { --tw-ring-color: rgba(var(--brand-500-rgb), 1) !important; }
@@ -156,8 +167,10 @@ body {
 
 .hover\:bg-blue-50:hover { background-color: rgba(var(--brand-500-rgb), 0.18) !important; }
 .hover\:bg-blue-100:hover { background-color: rgba(var(--brand-500-rgb), 0.28) !important; }
+.hover\:border-blue-200:hover { border-color: var(--brand-200) !important; }
 .hover\:border-blue-300:hover { border-color: var(--brand-300) !important; }
 
+.shadow-blue-100 { --tw-shadow-color: rgba(var(--brand-200-rgb), 0.45) !important; }
 .shadow-blue-200 { --tw-shadow-color: rgba(var(--brand-200-rgb), 0.6) !important; }
 .shadow-blue-300 { --tw-shadow-color: rgba(var(--brand-300-rgb), 0.6) !important; }
 
@@ -166,25 +179,72 @@ body {
   --tw-gradient-stops: rgba(var(--brand-500-rgb), 0.18), var(--tw-gradient-to, rgb(0 0 0 / 0)) !important;
 }
 
+.from-blue-600 {
+  --tw-gradient-from: rgba(var(--brand-500-rgb), 0.22) !important;
+  --tw-gradient-stops: rgba(var(--brand-500-rgb), 0.22), var(--tw-gradient-to, rgb(0 0 0 / 0)) !important;
+}
+
+.to-blue-700 { --tw-gradient-to: rgba(var(--brand-500-rgb), 0.30) !important; }
+
 /* Theme overrides for accent (emerald) */
 .bg-emerald-50 { background-color: rgba(var(--accent-500-rgb), 0.14) !important; }
 .bg-emerald-100 { background-color: rgba(var(--accent-500-rgb), 0.22) !important; }
+.bg-emerald-200 { background-color: var(--accent-200) !important; }
 .bg-emerald-500 { background-color: var(--accent-500) !important; }
-.bg-emerald-600 { background-color: var(--accent-600) !important; }
-.bg-emerald-700 { background-color: var(--accent-700) !important; }
+.bg-emerald-600 { background-color: rgba(var(--accent-500-rgb), 0.22) !important; }
+.bg-emerald-700 { background-color: rgba(var(--accent-500-rgb), 0.32) !important; }
 .bg-emerald-100\/60 { background-color: rgba(var(--accent-500-rgb), 0.16) !important; }
 
-.text-emerald-600 { color: var(--accent-600) !important; }
-.text-emerald-700 { color: var(--accent-700) !important; }
-.text-emerald-600\/80 { color: rgba(var(--accent-600-rgb), 0.8) !important; }
+.bg-emerald-600.text-white,
+.bg-emerald-700.text-white {
+  color: #78350F !important;
+}
+
+.hover\:bg-emerald-200:hover { background-color: var(--accent-200) !important; }
+.hover\:bg-emerald-700:hover { background-color: rgba(var(--accent-500-rgb), 0.32) !important; }
+
+.text-emerald-600 { color: #B45309 !important; }
+.text-emerald-700 { color: #92400E !important; }
+.text-emerald-800 { color: #78350F !important; }
+.text-emerald-600\/80 { color: rgba(180, 83, 9, 0.8) !important; }
 
 .border-emerald-200 { border-color: var(--accent-200) !important; }
 .border-emerald-300 { border-color: var(--accent-300) !important; }
+.hover\:border-emerald-300:hover { border-color: var(--accent-300) !important; }
+
+.shadow-emerald-100 { --tw-shadow-color: rgba(var(--accent-500-rgb), 0.35) !important; }
 
 .to-emerald-50 { --tw-gradient-to: rgba(var(--accent-500-rgb), 0.18) !important; }
 .to-emerald-100\/60 { --tw-gradient-to: rgba(var(--accent-500-rgb), 0.12) !important; }
 
-/* Dark UI overrides for neutral palette */
+/* Map green utilities to accent (pastel yellow) */
+.bg-green-50 { background-color: rgba(var(--accent-500-rgb), 0.14) !important; }
+.bg-green-100 { background-color: rgba(var(--accent-500-rgb), 0.22) !important; }
+.bg-green-500 { background-color: var(--accent-500) !important; }
+.bg-green-600 { background-color: rgba(var(--accent-500-rgb), 0.22) !important; }
+.bg-green-700 { background-color: rgba(var(--accent-500-rgb), 0.32) !important; }
+
+.bg-green-500.text-white,
+.bg-green-600.text-white,
+.bg-green-700.text-white {
+  color: #78350F !important;
+}
+
+.hover\:bg-green-50:hover { background-color: rgba(var(--accent-500-rgb), 0.18) !important; }
+.hover\:bg-green-500:hover { background-color: var(--accent-600) !important; }
+.hover\:bg-green-700:hover { background-color: rgba(var(--accent-500-rgb), 0.32) !important; }
+
+.text-green-500,
+.text-green-600 { color: #B45309 !important; }
+.text-green-700 { color: #92400E !important; }
+.text-green-800 { color: #78350F !important; }
+.hover\:text-green-600:hover { color: #B45309 !important; }
+
+.border-green-100 { border-color: var(--accent-100) !important; }
+.border-green-200 { border-color: var(--accent-200) !important; }
+.border-green-300 { border-color: var(--accent-300) !important; }
+
+/* Neutral palette overrides */
 .bg-white { background-color: var(--surface-1); }
 .bg-white\/90 { background-color: rgba(var(--surface-1-rgb), 0.9); }
 .bg-white\/92 { background-color: rgba(var(--surface-1-rgb), 0.92); }

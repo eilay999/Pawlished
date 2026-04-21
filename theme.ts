@@ -8,7 +8,7 @@ const STORAGE_KEY = 'pawlished_theme';
 
 export const DEFAULT_THEME: ThemeSettings = {
   primary: '#DB2777',
-  accent: '#10b981',
+  accent: '#FACC15',
   background: '#FDF2F8'
 };
 
@@ -22,6 +22,11 @@ const LEGACY_DEFAULT_THEMES: ThemeSettings[] = [
     primary: '#2563eb',
     accent: '#10b981',
     background: '#020617'
+  },
+  {
+    primary: '#DB2777',
+    accent: '#10b981',
+    background: '#FDF2F8'
   }
 ];
 

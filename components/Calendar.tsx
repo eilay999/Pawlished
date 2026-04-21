@@ -436,7 +436,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               onDrop={(event) => handleDrop(event, cell.date)}
               className={`
                 relative bg-white p-1.5 md:p-2 transition-colors cursor-pointer group flex flex-col justify-between min-h-[82px] sm:min-h-[96px] md:min-h-[112px] overflow-hidden
-                ${cell.isToday ? 'bg-blue-50/95 ring-2 ring-inset ring-blue-300 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.15)] z-10' : 'hover:bg-slate-50'}
+                ${cell.isToday ? 'bg-blue-50/95 ring-2 ring-inset ring-blue-300 shadow-[inset_0_0_0_1px_rgba(var(--brand-500-rgb),0.18)] z-10' : 'hover:bg-slate-50'}
                 ${isDragTarget ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''}
               `}
             >
