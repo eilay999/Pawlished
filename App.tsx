@@ -15,6 +15,7 @@ import { ViewType, Appointment, CalendarEvent, Customer, AppointmentStatus, Task
 import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
 import { supabase } from './services/supabaseClient';
 import { applyTheme, loadTheme } from './theme';
+import { normalizePhoneForCompare } from './utils';
 
 type DbCustomer = {
   id: string;
@@ -313,6 +314,7 @@ const App: React.FC = () => {
   // Modal State
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [prefillCustomerPhone, setPrefillCustomerPhone] = useState<string>('');
   
   // Appointment Modal State
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -899,12 +901,14 @@ const App: React.FC = () => {
   };
 
   const handleEditCustomer = (customer: Customer) => {
+    setPrefillCustomerPhone('');
     setEditingCustomer(customer);
     setIsCustomerModalOpen(true);
   };
 
-  const handleAddCustomer = () => {
+  const handleAddCustomer = (phone?: string) => {
     setEditingCustomer(null);
+    setPrefillCustomerPhone(phone ? normalizePhoneForCompare(phone) : '');
     setIsCustomerModalOpen(true);
   };
 
@@ -926,6 +930,7 @@ const App: React.FC = () => {
 
   const handleSaveCustomer = (updatedCustomer: Customer) => {
     if (!ensureCloudWritable()) return;
+    setPrefillCustomerPhone('');
     setCustomers(prev => {
       const exists = prev.find(c => c.id === updatedCustomer.id);
       if (exists) {
@@ -942,6 +947,7 @@ const App: React.FC = () => {
 
   const handleDeleteCustomer = (customerId: string) => {
     if (!ensureCloudWritable()) return;
+    setPrefillCustomerPhone('');
     setCustomers(prev => prev.filter(c => c.id !== customerId));
     setAppointments(prev => prev.filter(a => a.customerId !== customerId));
     setIsCustomerModalOpen(false);
@@ -1330,14 +1336,17 @@ const App: React.FC = () => {
             onAddCustomer={handleAddCustomer}
           />
         ) : currentView === 'MESSAGES' ? (
-          <MessagesView
-            messages={whatsappMessages}
-            isTableMissing={whatsappMessagesTableMissing}
-            onRefresh={() => void loadDataFromCloud('manual')}
-          />
-        ) : (
-          <StatsView 
-            customers={customers}
+        <MessagesView
+          messages={whatsappMessages}
+          customers={customers}
+          isTableMissing={whatsappMessagesTableMissing}
+          onRefresh={() => void loadDataFromCloud('manual')}
+          onAddCustomer={(phone) => handleAddCustomer(phone)}
+          onOpenCustomer={handleEditCustomer}
+        />
+      ) : (
+        <StatsView 
+          customers={customers}
             appointments={appointments}
             tasks={tasks}
             syncingTaskIds={syncingTaskIds}
@@ -1464,7 +1473,11 @@ const App: React.FC = () => {
       <CustomerModal 
         isOpen={isCustomerModalOpen}
         customer={editingCustomer}
-        onClose={() => setIsCustomerModalOpen(false)}
+        prefillPhone={prefillCustomerPhone}
+        onClose={() => {
+          setIsCustomerModalOpen(false);
+          setPrefillCustomerPhone('');
+        }}
         onSave={handleSaveCustomer}
         onDelete={handleDeleteCustomer}
       />

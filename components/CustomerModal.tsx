@@ -7,6 +7,7 @@ import { normalizePhoneForCompare } from '../utils';
 interface CustomerModalProps {
   customer?: Customer | null;
   isOpen: boolean;
+  prefillPhone?: string;
   onClose: () => void;
   onSave: (customer: Customer) => void;
   onDelete?: (customerId: string) => void;
@@ -49,7 +50,7 @@ const LIFECYCLE_OPTIONS: Array<{
   }
 ];
 
-export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, onClose, onSave, onDelete }) => {
+export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, prefillPhone, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Partial<Customer>>({
     name: '',
     phone: '',
@@ -69,10 +70,11 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
         petType: customer.petType || ''
       });
     } else {
+      const normalizedPrefillPhone = prefillPhone ? normalizePhoneForCompare(prefillPhone) : '';
       // Reset for new customer
       setFormData({
         name: '',
-        phone: '',
+        phone: normalizedPrefillPhone,
         petName: '',
         petType: '',
         visitFrequencyWeeks: 4,
@@ -82,7 +84,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
         notes: ''
       });
     }
-  }, [customer, isOpen]);
+  }, [customer, isOpen, prefillPhone]);
 
 
   if (!isOpen) return null;

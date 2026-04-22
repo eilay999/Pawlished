@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, Bot, MessageCircle, Send, User } from 'lucide-react';
-import { WhatsAppMessage } from '../types';
+import { Customer, WhatsAppMessage } from '../types';
+import { normalizePhoneForCompare } from '../utils';
 
 interface MessagesViewProps {
   messages: WhatsAppMessage[];
+  customers: Customer[];
   isTableMissing?: boolean;
   onRefresh?: () => void;
+  onAddCustomer?: (phone: string) => void;
+  onOpenCustomer?: (customer: Customer) => void;
 }
 
 type Conversation = {
@@ -62,16 +66,36 @@ const groupMessages = (messages: WhatsAppMessage[]): Conversation[] => {
 
 export const MessagesView: React.FC<MessagesViewProps> = ({
   messages,
+  customers,
   isTableMissing = false,
-  onRefresh
+  onRefresh,
+  onAddCustomer,
+  onOpenCustomer
 }) => {
   const conversations = useMemo(() => groupMessages(messages), [messages]);
+  const customersByPhone = useMemo(() => {
+    const map = new Map<string, Customer>();
+    customers.forEach(customer => {
+      const normalized = normalizePhoneForCompare(customer.phone);
+      if (!normalized) return;
+      if (!map.has(normalized)) {
+        map.set(normalized, customer);
+      }
+    });
+    return map;
+  }, [customers]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const selectedConversation =
     conversations.find((conversation) => conversation.phone === selectedPhone) || conversations[0] || null;
+  const selectedCustomer = useMemo(() => {
+    if (!selectedConversation) return null;
+    const normalized = normalizePhoneForCompare(selectedConversation.phone);
+    if (!normalized) return null;
+    return customersByPhone.get(normalized) || null;
+  }, [customersByPhone, selectedConversation]);
   const humanQueueCount = conversations.filter((conversation) => conversation.needsHuman).length;
   const canSendToSelected = Boolean(selectedConversation && selectedConversation.phone !== 'unknown');
 
@@ -174,6 +198,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         <aside className="min-h-0 overflow-y-auto border-l border-gray-200 bg-white">
           {conversations.map((conversation) => {
             const isSelected = selectedConversation?.phone === conversation.phone;
+            const normalizedPhone = normalizePhoneForCompare(conversation.phone);
+            const conversationCustomer =
+              normalizedPhone && customersByPhone.has(normalizedPhone)
+                ? customersByPhone.get(normalizedPhone)!
+                : null;
             return (
                 <button
                   key={conversation.phone}
@@ -187,16 +216,27 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                     isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                   }`}
                 >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-bold text-gray-900 truncate">{conversation.phone}</div>
-                    <div className="text-xs text-gray-500 mt-1">{formatTime(conversation.latest.createdAt)}</div>
+                    <div className="font-bold text-gray-900 truncate">
+                      {conversationCustomer ? conversationCustomer.name : conversation.phone}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 truncate">
+                      {conversationCustomer
+                        ? `${conversationCustomer.petName} • ${normalizedPhone}`
+                        : conversation.phone !== 'unknown'
+                          ? 'לא נמצא בלקוחות'
+                          : ''}
+                    </div>
                   </div>
-                  {conversation.needsHuman && (
-                    <span className="shrink-0 text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
-                      צריך מענה
-                    </span>
-                  )}
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <div className="text-xs text-gray-500 whitespace-nowrap">{formatTime(conversation.latest.createdAt)}</div>
+                    {conversation.needsHuman && (
+                      <span className="shrink-0 text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full">
+                        צריך מענה
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-sm text-gray-600 truncate mt-2">{conversation.latest.body}</div>
               </button>
@@ -208,8 +248,42 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           {selectedConversation && (
             <div className="max-w-3xl mx-auto space-y-3">
               <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                <div className="text-xs text-gray-400">שיחה עם</div>
-                <div className="text-lg font-bold text-gray-900">{selectedConversation.phone}</div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-400">שיחה עם</div>
+                    <div className="text-lg font-bold text-gray-900 truncate">
+                      {selectedCustomer ? selectedCustomer.name : selectedConversation.phone}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 truncate">
+                      {selectedCustomer
+                        ? `${selectedCustomer.petName} • ${selectedCustomer.phone}`
+                        : normalizePhoneForCompare(selectedConversation.phone) || selectedConversation.phone}
+                    </div>
+                  </div>
+                  {selectedConversation.phone !== 'unknown' && (
+                    <>
+                      {selectedCustomer ? (
+                        onOpenCustomer ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenCustomer(selectedCustomer)}
+                            className="shrink-0 px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                          >
+                            כרטיס לקוח
+                          </button>
+                        ) : null
+                      ) : onAddCustomer ? (
+                        <button
+                          type="button"
+                          onClick={() => onAddCustomer(normalizePhoneForCompare(selectedConversation.phone) || selectedConversation.phone)}
+                          className="shrink-0 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                        >
+                          הוסף ללקוחות
+                        </button>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
 
               {selectedConversation.messages.map((message) => {
