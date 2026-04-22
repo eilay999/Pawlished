@@ -190,7 +190,7 @@ export const getCustomerFaqReply = (message = '') => {
     return {
       kind: 'customer_faq_hours',
       intentKind: 'customer_faq_hours',
-      text: 'אנחנו עובדים ראשון עד חמישי בבוקר בלבד (אין תורים בערב), ובימי שישי לא עובדים 😊'
+      text: 'אנחנו עובדים ראשון עד שישי בבוקר (אין תורים בערב), ובשבת לא עובדים 😊'
     };
   }
 
@@ -206,7 +206,7 @@ export const getCustomerFaqReply = (message = '') => {
     return {
       kind: 'customer_faq_friday',
       intentKind: 'customer_faq_friday',
-      text: 'לא עובדים בימי שישי 😊'
+      text: 'ביום שישי יש תורים רק בבוקר: 07:00 או 08:00 😊'
     };
   }
 

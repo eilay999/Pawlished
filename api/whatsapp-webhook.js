@@ -484,6 +484,12 @@ const CUSTOMER_ASSISTANT_HELP_TEXT =
   'שלום, כאן העוזר של Pawlished. אנחנו מטפלים בכלבים קטנים בלבד 🐶\n' +
   'אפשר לכתוב לי מתי נוח לך לתור, למשל: "אפשר מחר ב-12?" או "אני רוצה תור ביום שלישי". אם זו פעם ראשונה שלך, אשאל גם שם מלא, שם חיית המחמד וסוג/גזע.';
 
+const CUSTOMER_CLARIFICATION_TEXT =
+  'לא לגמרי הבנתי 🙂\n' +
+  'רצית לקבוע תור? תכתוב יום ושעה (לדוגמה: מחר ב-07:00).\n' +
+  'ואם זו פעם ראשונה אצלנו — תרשום גם שם מלא, שם הכלב וסוג/גזע.\n' +
+  'אם זו שאלה (מחיר/שעות/כתובת) — תכתוב פה ואני עונה.';
+
 const CUSTOMER_HANDOFF_TEXT =
   'קיבלתי את ההודעה 😊 אני מחכה למענה אנושי ואחזור אליך בהקדם.';
 
@@ -533,11 +539,34 @@ const looksLikeCustomerGreeting = (message = '') =>
     normalizeMessageText(message)
   );
 
+const looksLikeCustomerGreetingWithName = (message = '') => {
+  const text = normalizeMessageText(message);
+  if (!text) return false;
+
+  const match = text.match(
+    /^(?:שלום|היי|הי|אהלן|הלן|בוקר טוב|צהריים טובים|ערב טוב|לילה טוב)\s+([^\s]+)[!?.\s]*$/iu
+  );
+  if (!match?.[1]) return false;
+
+  const tail = normalizeMessageText(match[1]);
+  if (!tail) return false;
+  if (/\d/.test(tail)) return false;
+  if (/(?:תור|לקבוע|אשמח|אפשר|מחיר|כמה|שעות|כתובת|איפה|מתי)/u.test(tail)) return false;
+
+  return true;
+};
+
 const looksLikeCustomerBookingSignal = (message = '', analysis = {}) => {
   const text = normalizeMessageText(message);
   if (!text) return false;
   if (analysis.date || analysis.time) return true;
   return /(?:תור|לקבוע|לקבוע תור|פנוי|פנויה|מקום|תספורת|אמבטיה|טיפול|מתי אפשר|אפשר להגיע)/u.test(text);
+};
+
+const looksLikeCustomerWantsHuman = (message = '') => {
+  const text = normalizeMessageText(message);
+  if (!text) return false;
+  return /(?:מענה אנושי|נציג|בן אדם|אדם|מנהל|מנהלת|לדבר עם|שיחה|תתקשר|טלפון|חייג)/u.test(text);
 };
 
 const shouldEscalateCustomerReply = (replyText = '') =>
@@ -708,25 +737,53 @@ const buildCustomerBookingMissingText = ({
   knownCustomer = null,
   scheduleNotice = null
 }) => {
-  const questionsMap = {
-    ...CUSTOMER_BOOKING_FIELD_QUESTIONS,
-    ...(analysis?.date ? { time: buildCustomerTimeQuestionForDate(analysis.date) } : {})
-  };
+  const normalizedFields = missingFields.filter((field) => CUSTOMER_BOOKING_FIELD_LABELS[field]);
+  const missing = new Set(normalizedFields);
 
-  const baseIntro = knownCustomer
-    ? `מצאתי אותך במערכת${knownCustomer.petName ? ` עם ${knownCustomer.petName}` : ''}.`
-    : 'כדי לקבוע תור אני צריך עוד כמה פרטים.';
+  const needsDate = missing.has('date');
+  const needsTime = missing.has('time');
+  const needsCustomerDetails = Boolean(
+    !knownCustomer && (missing.has('customerName') || missing.has('petName') || missing.has('petType'))
+  );
 
-  const intro = scheduleNotice ? joinReplyLines(scheduleNotice, baseIntro) : baseIntro;
+  const lines = [];
+  if (scheduleNotice) lines.push(scheduleNotice);
 
-  return buildReadableMissingReply({
-    intro,
-    analysis,
-    missingFields,
-    labelsMap: CUSTOMER_BOOKING_FIELD_LABELS,
-    questionsMap,
-    example: knownCustomer ? 'לדוגמה: מחר ב-12' : 'לדוגמה: דני כהן, מוקה, פודל'
-  });
+  if (knownCustomer) {
+    lines.push(`מעולה 😊 מצאתי אותך במערכת${knownCustomer.petName ? ` עם ${knownCustomer.petName}` : ''}.`);
+  } else {
+    lines.push('בשמחה 😊');
+  }
+
+  if (needsDate && needsTime) {
+    lines.push('לאיזה יום ושעה נוחים לך לתור?');
+    lines.push('אפשר לענות למשל: מחר ב-07:00.');
+  } else if (needsDate) {
+    lines.push(CUSTOMER_BOOKING_FIELD_QUESTIONS.date);
+    if (analysis.time) {
+      lines.push(`ראיתי שעה ${analysis.time} — רק תוסיף יום/תאריך 🙂`);
+    }
+  } else if (needsTime) {
+    const timeQuestion = analysis?.date
+      ? buildCustomerTimeQuestionForDate(analysis.date)
+      : CUSTOMER_BOOKING_FIELD_QUESTIONS.time;
+    lines.push(timeQuestion);
+  }
+
+  if (needsCustomerDetails) {
+    const details = [];
+    if (missing.has('customerName')) details.push('שם מלא');
+    if (missing.has('petName')) details.push('שם הכלב');
+    if (missing.has('petType')) details.push('סוג/גזע');
+
+    if (details.length > 0) {
+      lines.push(`ואם זו פעם ראשונה אצלנו — תרשום גם ${details.join(', ')} (אפשר הכל בהודעה אחת).`);
+    }
+  }
+
+  lines.push(knownCustomer ? 'לדוגמה: מחר ב-12' : 'לדוגמה: דניאלה, טופי, מלטז, מחר 07:00');
+
+  return joinReplyLines(...lines);
 };
 
 const determineAppointmentRecoveryFields = (reason = '', payload = {}) => {
@@ -1409,7 +1466,13 @@ const handlePublicCustomerMessage = async ({ req, res, incoming, conversationPho
     : null;
 
   const helpQuery = parseAssistantHelpQuery(incoming.text);
-  if (helpQuery || looksLikeCustomerGreeting(incoming.text)) {
+  const hasActiveBookingContext = Boolean(
+    conversationContext?.kind === APPOINTMENT_CONTEXT_KIND ||
+      conversationContext?.kind === APPOINTMENT_CONFIRMATION_CONTEXT_KIND
+  );
+  const isGreeting = Boolean(helpQuery) || looksLikeCustomerGreeting(incoming.text) || looksLikeCustomerGreetingWithName(incoming.text);
+
+  if (isGreeting && !hasActiveBookingContext) {
     await clearWhatsAppContext(conversationPhone);
     const reply = await sendReplySafely(conversationPhone, CUSTOMER_ASSISTANT_HELP_TEXT, {
       intentKind: 'customer_help'
@@ -1682,8 +1745,23 @@ const handlePublicCustomerMessage = async ({ req, res, incoming, conversationPho
   }
 
   if (String(process.env.WHATSAPP_CUSTOMER_ONLY_BOOKING || '').toLowerCase() !== 'false') {
-    await sendCustomerHandoff(res, conversationPhone, incoming.text, {
-      reason: 'Customer-only booking mode: no intent matched'
+    if (looksLikeCustomerWantsHuman(incoming.text)) {
+      await sendCustomerHandoff(res, conversationPhone, incoming.text, {
+        reason: 'Customer requested human support'
+      });
+      return;
+    }
+
+    const reply = await sendReplySafely(conversationPhone, CUSTOMER_CLARIFICATION_TEXT, {
+      intentKind: 'customer_clarify'
+    });
+
+    res.status(200).json({
+      ok: true,
+      accepted: true,
+      kind: 'customer_clarify',
+      text: CUSTOMER_CLARIFICATION_TEXT,
+      reply
     });
     return;
   }
@@ -1723,8 +1801,23 @@ const handlePublicCustomerMessage = async ({ req, res, incoming, conversationPho
     }
   }
 
-  await sendCustomerHandoff(res, conversationPhone, incoming.text, {
-    reason: 'No customer intent matched'
+  if (looksLikeCustomerWantsHuman(incoming.text)) {
+    await sendCustomerHandoff(res, conversationPhone, incoming.text, {
+      reason: 'Customer requested human support'
+    });
+    return;
+  }
+
+  const reply = await sendReplySafely(conversationPhone, CUSTOMER_CLARIFICATION_TEXT, {
+    intentKind: 'customer_clarify'
+  });
+
+  res.status(200).json({
+    ok: true,
+    accepted: true,
+    kind: 'customer_clarify',
+    text: CUSTOMER_CLARIFICATION_TEXT,
+    reply
   });
 };
 
