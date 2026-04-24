@@ -319,6 +319,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
           setSelectedCustomerForAppt(null);
         }}
         customers={customers}
+        appointments={appointments}
         initialDate={selectedCustomerForAppt?.dueDate}
         preSelectedCustomerId={selectedCustomerForAppt?.customer.id}
         onCreateNewCustomer={onCreateNewCustomer}

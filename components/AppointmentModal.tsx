@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, Scissors, User, CircleDollarSign, Plus, Phone, Dog, History, AlertCircle, PenLine, List, Trash2, AlertTriangle, CheckCircle2, Search } from 'lucide-react';
 import { Customer, Appointment, AppointmentStatus } from '../types';
 import { APPOINTMENT_DURATION_MINUTES, SERVICE_PRICES } from '../constants';
@@ -13,57 +13,11 @@ interface AppointmentModalProps {
   onDelete?: (appointmentId: string) => void;
   initialDate?: Date;
   customers: Customer[];
+  appointments: Appointment[];
   preSelectedCustomerId?: string;
   onCreateNewCustomer: () => void;
   appointment?: Appointment | null;
 }
-
-// Pawlished fixed weekly slots (0=Sunday ... 6=Saturday).
-const WEEKLY_SLOTS: Record<number, string[]> = {
-  0: ['07:00', '08:00'],
-  1: ['09:00', '12:00', '15:00'],
-  2: ['09:00', '12:00', '15:00'],
-  3: ['08:00', '11:00', '14:00'],
-  4: ['07:00', '08:00'],
-  5: ['07:00', '08:00'],
-  6: []
-};
-
-const getAllowedSlotsForDateString = (dateValue: string) => {
-  const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return [];
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const localDate = new Date(year, month - 1, day, 12, 0, 0);
-  return WEEKLY_SLOTS[localDate.getDay()] || [];
-};
-
-const toDateString = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const resolveNextWorkingDateString = (dateValue: string) => {
-  const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return dateValue;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const cursor = new Date(year, month - 1, day, 12, 0, 0);
-
-  for (let index = 0; index < 7; index += 1) {
-    const dateString = toDateString(cursor);
-    if (getAllowedSlotsForDateString(dateString).length > 0) {
-      return dateString;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return dateValue;
-};
 
 export const AppointmentModal: React.FC<AppointmentModalProps> = ({ 
   isOpen, 
@@ -73,6 +27,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   onDelete,
   initialDate, 
   customers,
+  appointments,
   preSelectedCustomerId,
   onCreateNewCustomer,
   appointment
@@ -94,8 +49,6 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [isCustomService, setIsCustomService] = useState(false);
   const [showError, setShowError] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  
-  const timeSliderRef = useRef<HTMLDivElement>(null);
 
   const selectedCustomer = customers.find(c => c.id === formData.customerId);
   const estimatedEndTimeLabel = (() => {
@@ -139,15 +92,37 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     return `${year}-${month}-${day}`;
   };
 
-  // Helper to get next 30 min interval
-  const getSmartDefaultTime = () => {
-    const now = new Date();
-    now.setMinutes(Math.ceil(now.getMinutes() / 30) * 30);
-    now.setSeconds(0);
-    // If rounded to next hour and it's 00 min, fine.
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    return `${h}:${m}`;
+  const buildRangeForDateTime = (dateValue: string, timeValue: string) => {
+    const dateMatch = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const timeMatch = String(timeValue || '').match(/^(\d{1,2}):(\d{2})$/);
+    if (!dateMatch || !timeMatch) return null;
+
+    const year = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]);
+    const day = Number(dateMatch[3]);
+    const hours = Number(timeMatch[1]);
+    const minutes = Number(timeMatch[2]);
+
+    const start = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    if (Number.isNaN(start.getTime())) return null;
+    const end = new Date(start.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000);
+    return { start, end };
+  };
+
+  const findScheduleConflict = (range: { start: Date; end: Date }) => {
+    const editedAppointmentId = appointment?.id;
+    return (
+      appointments
+        .filter(a => a.status !== AppointmentStatus.CANCELLED)
+        .filter(a => (editedAppointmentId ? a.id !== editedAppointmentId : true))
+        .map(a => ({
+          appointment: a,
+          start: new Date(a.date),
+          end: new Date(new Date(a.date).getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000)
+        }))
+        .find(other => range.start.getTime() < other.end.getTime() && range.end.getTime() > other.start.getTime()) ||
+      null
+    );
   };
 
   useEffect(() => {
@@ -178,14 +153,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         setIsCustomService(false);
 
         const initialDateValue = initialDate ? toInputDate(initialDate) : toInputDate(new Date());
-        const resolvedDate = resolveNextWorkingDateString(initialDateValue);
-        const allowedSlots = getAllowedSlotsForDateString(resolvedDate);
-        const defaultTime = allowedSlots[0] || '07:00';
 
         setFormData({
             customerId: preSelectedCustomerId || '',
-            date: resolvedDate,
-            time: defaultTime,
+            date: initialDateValue,
+            time: '07:00',
             service: 'תספורת מלאה',
             price: SERVICE_PRICES['תספורת מלאה'] || 0,
             status: AppointmentStatus.SCHEDULED,
@@ -206,18 +178,32 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setShowError(false);
       setScheduleError(null);
       setIsCustomerMenuOpen(false);
-      
-      // Scroll to selected time in slider after render
-      setTimeout(() => {
-        if (timeSliderRef.current) {
-            const selectedBtn = timeSliderRef.current.querySelector('[data-selected="true"]');
-            if (selectedBtn) {
-                selectedBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-            }
-        }
-      }, 100);
     }
   }, [isOpen, initialDate, preSelectedCustomerId, appointment]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!formData.date || !formData.time) {
+      setScheduleError(null);
+      return;
+    }
+
+    const range = buildRangeForDateTime(formData.date, formData.time);
+    if (!range) {
+      setScheduleError(null);
+      return;
+    }
+
+    const conflict = findScheduleConflict(range);
+    if (!conflict) {
+      setScheduleError(null);
+      return;
+    }
+
+    const startLabel = conflict.start.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    const endLabel = conflict.end.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    setScheduleError(`השעה תפוסה (יש תור מ-${startLabel} עד ${endLabel}). בחר שעה אחרת.`);
+  }, [isOpen, formData.date, formData.time, appointments, appointment?.id]);
 
   useEffect(() => {
     if (!selectedCustomer) {
@@ -296,31 +282,20 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
     if (!formData.date || !formData.time) return;
 
-    const allowedSlotsForDate = getAllowedSlotsForDateString(formData.date);
-    const originalDateString = appointment ? toInputDate(new Date(appointment.date)) : '';
-    const originalTimeString = appointment
-      ? `${String(new Date(appointment.date).getHours()).padStart(2, '0')}:${String(
-          new Date(appointment.date).getMinutes()
-        ).padStart(2, '0')}`
-      : '';
-    const isOriginalSlot =
-      Boolean(appointment) && formData.date === originalDateString && formData.time === originalTimeString;
-
-    if (!isOriginalSlot) {
-       if (allowedSlotsForDate.length === 0) {
-         setScheduleError('אין תורים ביום הזה. אנחנו עובדים ראשון עד שישי.');
-         return;
-       }
-
-      if (!allowedSlotsForDate.includes(formData.time)) {
-        setScheduleError(`בשביל היום הזה אפשר לקבוע רק בשעות: ${allowedSlotsForDate.join(', ')}.`);
-        return;
-      }
-    }
-
     const [year, month, day] = formData.date.split('-').map(Number);
     const [hours, minutes] = formData.time.split(':').map(Number);
     const appointmentDate = new Date(year, month - 1, day, hours, minutes);
+
+    const conflict = findScheduleConflict({
+      start: appointmentDate,
+      end: new Date(appointmentDate.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000)
+    });
+    if (conflict) {
+      const startLabel = conflict.start.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+      const endLabel = conflict.end.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+      setScheduleError(`השעה תפוסה (יש תור מ-${startLabel} עד ${endLabel}). בחר שעה אחרת.`);
+      return;
+    }
 
     const newAppointment: Appointment = {
       id: appointment?.id || Math.random().toString(36).substr(2, 9),
@@ -342,12 +317,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     }
   };
 
-  const isEditMode = !!appointment;
-  const allowedTimeSlotsForDate = formData.date ? getAllowedSlotsForDateString(formData.date) : [];
-  const timeSlotOptions =
-    isEditMode && formData.time && !allowedTimeSlotsForDate.includes(formData.time)
-      ? [formData.time, ...allowedTimeSlotsForDate].filter(Boolean).sort()
-      : allowedTimeSlotsForDate;
+  const isEditMode = Boolean(appointment);
 
   const STATUS_LABELS: Record<string, string> = {
       [AppointmentStatus.SCHEDULED]: 'נקבע',
@@ -520,50 +490,26 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 value={formData.date}
                 onChange={e => {
                   const nextDate = e.target.value;
-                  const allowedSlots = getAllowedSlotsForDateString(nextDate);
-                  setFormData(previous => ({
-                    ...previous,
-                    date: nextDate,
-                    time: allowedSlots.includes(previous.time) ? previous.time : allowedSlots[0] || ''
-                  }));
-                  setScheduleError(null);
+                  setFormData(previous => ({ ...previous, date: nextDate }));
                 }}
               />
             </div>
             
-            {/* Time Slider */}
+            {/* Time */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">שעה <span className="text-red-500">*</span></label>
-              <div 
-                ref={timeSliderRef}
-                className="flex overflow-x-auto gap-2 pb-2 -mx-1 px-1 custom-scrollbar snap-x"
-                style={{ scrollBehavior: 'smooth' }}
-              >
-                  {timeSlotOptions.map((slot) => {
-                      const isSelected = formData.time === slot;
-                      return (
-                        <button
-                            key={slot}
-                            type="button"
-                            data-selected={isSelected}
-                            onClick={() => {
-                              setFormData({ ...formData, time: slot });
-                              setScheduleError(null);
-                            }}
-                            className={`
-                                flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold border transition-all snap-center
-                                ${isSelected 
-                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' 
-                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:bg-blue-50'}
-                            `}
-                        >
-                            {slot}
-                        </button>
-                      );
-                  })}
-                  {timeSlotOptions.length === 0 && (
-                    <div className="text-sm text-gray-400 py-2">אין תורים ביום הזה</div>
-                  )}
+              <div className="relative">
+                <Clock className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
+                <input
+                  type="time"
+                  step={60 * 60}
+                  required
+                  className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm font-bold"
+                  value={formData.time}
+                  onChange={(e) => {
+                    setFormData(previous => ({ ...previous, time: e.target.value }));
+                  }}
+                />
               </div>
 
               {estimatedEndTimeLabel && (

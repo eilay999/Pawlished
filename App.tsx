@@ -1494,6 +1494,7 @@ const App: React.FC = () => {
         onDelete={handleDeleteAppointment}
         initialDate={selectedDateForAppointment}
         customers={customers}
+        appointments={appointments}
         preSelectedCustomerId={preSelectedCustomerId}
         onCreateNewCustomer={handleAddCustomer}
         appointment={editingAppointment}
