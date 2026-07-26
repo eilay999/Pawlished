@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { Palette, X } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { NotificationsPanel } from './components/NotificationsPanel';
@@ -11,6 +12,7 @@ import { StatsView } from './components/StatsView';
 import { MessagesView } from './components/MessagesView';
 import { PublicBooking } from './components/PublicBooking';
 import { ThemePanel } from './components/ThemePanel';
+import { LoginView } from './components/LoginView';
 import { ViewType, Appointment, CalendarEvent, Customer, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
 import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
 import { supabase } from './services/supabaseClient';
@@ -241,11 +243,8 @@ const whatsappMessagesSignature = (list: WhatsAppMessage[]) =>
 
 const formatSupabaseError = (
   fallback: string,
-  error?: { message?: string | null; code?: string | null } | null
-) => {
-  const details = error?.message ? error.message : '';
-  return details ? `${fallback}: ${details}` : fallback;
-};
+  _error?: { message?: string | null; code?: string | null } | null
+) => fallback;
 
 type CloudSyncStatus = 'connecting' | 'online' | 'syncing' | 'offline' | 'error';
 type CloudLoadSource = 'initial' | 'manual' | 'realtime' | 'auto' | 'reconnect';
@@ -274,7 +273,7 @@ const CLOUD_STATUS_UI: Record<CloudSyncStatus, { label: string; className: strin
 };
 
 const AUTO_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
-const CLOUD_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000];
+const CLOUD_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
 
 const isBrowserOffline = () =>
   typeof navigator !== 'undefined' && navigator.onLine === false;
@@ -326,13 +325,10 @@ const App: React.FC = () => {
   const [editingCalendarEvent, setEditingCalendarEvent] = useState<CalendarEvent | null>(null);
   const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null);
   const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
-  const [isAdminOverride, setIsAdminOverride] = useState(() => {
-    try {
-      return localStorage.getItem('pawlished_admin') === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [authStatus, setAuthStatus] = useState<
+    'checking' | 'signed_out' | 'unauthorized' | 'authorized'
+  >('checking');
+  const [adminEmail, setAdminEmail] = useState('');
   const localMutationSuppressUntilRef = useRef(0);
   const realtimeRefreshTimerRef = useRef<number | null>(null);
   const realtimeReconnectTimerRef = useRef<number | null>(null);
@@ -344,25 +340,62 @@ const App: React.FC = () => {
   const calendarEventsRef = useRef<CalendarEvent[]>([]);
   const tasksRef = useRef<Task[]>([]);
   const whatsappMessagesRef = useRef<WhatsAppMessage[]>([]);
-  const { isPublicEntry, isForcedPublic } = useMemo(() => {
+  const isPublicBooking = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    const forced = path.includes('booking');
-    return {
-      isForcedPublic: forced,
-      isPublicEntry:
-        forced ||
-        params.get('booking') === '1' ||
-        params.get('public') === '1' ||
-        hash.includes('booking')
-    };
+    return (
+      path.includes('booking') ||
+      params.get('booking') === '1' ||
+      params.get('public') === '1' ||
+      hash.includes('booking')
+    );
   }, []);
-  const isPublicBooking = isPublicEntry && (!isAdminOverride || isForcedPublic);
 
   useEffect(() => {
     applyTheme(loadTheme());
   }, []);
+
+  useEffect(() => {
+    if (isPublicBooking) return;
+    if (!supabase) {
+      setAuthStatus('signed_out');
+      return;
+    }
+
+    let active = true;
+    const verifySession = async (session: Session | null) => {
+      if (!active) return;
+      if (!session) {
+        setAdminEmail('');
+        setAuthStatus('signed_out');
+        setCustomers([]);
+        setAppointments([]);
+        setCalendarEvents([]);
+        setTasks([]);
+        setWhatsAppMessages([]);
+        return;
+      }
+
+      setAuthStatus('checking');
+      const { data, error } = await supabase.rpc('is_app_admin');
+      if (!active) return;
+      setAdminEmail(session.user.email || '');
+      setAuthStatus(!error && data === true ? 'authorized' : 'unauthorized');
+    };
+
+    void supabase.auth.getSession().then(({ data }) => verifySession(data.session));
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => void verifySession(session), 0);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [isPublicBooking]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -393,6 +426,9 @@ const App: React.FC = () => {
 
   const loadDataFromCloud = useCallback(
     async (source: CloudLoadSource = 'manual') => {
+    if (isPublicBooking || authStatus !== 'authorized') {
+      return false;
+    }
     if ((source === 'realtime' || source === 'auto') && Date.now() < localMutationSuppressUntilRef.current) {
       return true;
     }
@@ -522,23 +558,23 @@ const App: React.FC = () => {
     setLoadError(null);
     return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       console.error('Supabase load exception', error);
       setCloudStatus(isBrowserOffline() ? 'offline' : 'error');
-      setLoadError(`\u05D8\u05E2\u05D9\u05E0\u05EA \u05D4\u05D9\u05D5\u05DE\u05DF \u05DE\u05D4\u05E2\u05E0\u05DF \u05E0\u05DB\u05E9\u05DC\u05D4: ${message}`);
+      setLoadError('טעינת המידע נכשלה. בדוק את החיבור ונסה שוב.');
       return false;
     } finally {
       cloudLoadInFlightRef.current = false;
     }
-  }, []);
+  }, [authStatus, isPublicBooking]);
 
   useEffect(() => {
+    if (authStatus !== 'authorized' || isPublicBooking) return;
     setCloudStatus(supabase && !isBrowserOffline() ? 'connecting' : 'offline');
     void loadDataFromCloud('initial');
-  }, [loadDataFromCloud]);
+  }, [authStatus, isPublicBooking, loadDataFromCloud]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || authStatus !== 'authorized' || isPublicBooking) return;
 
     const clearRealtimeReconnectTimer = () => {
       if (realtimeReconnectTimerRef.current) {
@@ -554,7 +590,7 @@ const App: React.FC = () => {
         realtimeReconnectTimerRef.current = null;
         setRealtimeReconnectKey(key => key + 1);
         void loadDataFromCloud('reconnect');
-      }, 3_000);
+      }, 30_000);
     };
 
     const scheduleRefresh = () => {
@@ -608,7 +644,7 @@ const App: React.FC = () => {
 
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setCloudStatus(isBrowserOffline() ? 'offline' : 'error');
-          setLoadError('\u05D7\u05D9\u05D1\u05D5\u05E8 Realtime \u05D1\u05E2\u05E0\u05DF \u05E0\u05D5\u05EA\u05E7. \u05DE\u05E0\u05E1\u05D4 \u05DC\u05D4\u05EA\u05D7\u05D1\u05E8 \u05DE\u05D7\u05D3\u05E9 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA.');
+          setLoadError('החיבור לענן נותק. ננסה להתחבר מחדש בעוד כחצי דקה.');
           scheduleRealtimeReconnect();
         }
       });
@@ -620,10 +656,10 @@ const App: React.FC = () => {
       clearRealtimeReconnectTimer();
       void supabase.removeChannel(channel);
     };
-  }, [loadDataFromCloud, realtimeReconnectKey]);
+  }, [authStatus, isPublicBooking, loadDataFromCloud, realtimeReconnectKey]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || authStatus !== 'authorized' || isPublicBooking) return;
 
     const runAutoRefresh = () => {
       if (document.visibilityState !== 'visible') return;
@@ -643,10 +679,10 @@ const App: React.FC = () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [loadDataFromCloud]);
+  }, [authStatus, isPublicBooking, loadDataFromCloud]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || authStatus !== 'authorized' || isPublicBooking) return;
 
     const handleOffline = () => {
       setCloudStatus('offline');
@@ -671,10 +707,10 @@ const App: React.FC = () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, [loadDataFromCloud]);
+  }, [authStatus, isPublicBooking, loadDataFromCloud]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || authStatus !== 'authorized' || isPublicBooking) return;
 
     if (cloudStatus !== 'error') {
       cloudRetryAttemptRef.current = 0;
@@ -714,7 +750,7 @@ const App: React.FC = () => {
         cloudRetryTimerRef.current = null;
       }
     };
-  }, [cloudStatus, loadDataFromCloud]);
+  }, [authStatus, cloudStatus, isPublicBooking, loadDataFromCloud]);
 
   useEffect(() => {
     if (pendingCheck) return;
@@ -762,10 +798,9 @@ const App: React.FC = () => {
         }
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
         console.error('Supabase mutation exception', error);
         setCloudStatus('error');
-        setLoadError(`${fallbackMessage}: ${message}`);
+        setLoadError(fallbackMessage);
       });
   };
 
@@ -1096,40 +1131,6 @@ const App: React.FC = () => {
     );
   };
 
-  const handlePublicBookingCreated = ({
-    customer,
-    appointment
-  }: {
-    customer: Customer;
-    appointment: Appointment;
-  }) => {
-    setCustomers(prev => {
-      const exists = prev.find(c => c.id === customer.id);
-      if (exists) {
-        return prev.map(c => (c.id === customer.id ? customer : c));
-      }
-      return [...prev, customer];
-    });
-
-    setAppointments(prev => {
-      const exists = prev.find(a => a.id === appointment.id);
-      if (exists) {
-        return prev.map(a => (a.id === appointment.id ? appointment : a));
-      }
-      return [...prev, appointment];
-    });
-  };
-
-  const handlePublicCustomerCreated = (customer: Customer) => {
-    setCustomers(prev => {
-      const exists = prev.find(c => c.id === customer.id);
-      if (exists) {
-        return prev.map(c => (c.id === customer.id ? customer : c));
-      }
-      return [...prev, customer];
-    });
-  };
-
   const handleAddTask = (title: string, startDate: Date) => {
     if (!ensureCloudWritable()) return;
     const newTask: Task = {
@@ -1239,17 +1240,6 @@ const App: React.FC = () => {
       });
   };
 
-  const handleAdminAccess = (phone: string) => {
-    try {
-      localStorage.setItem('pawlished_admin', '1');
-      localStorage.setItem('pawlished_admin_phone', phone);
-    } catch {
-      // ignore storage errors
-    }
-    setIsAdminOverride(true);
-    setCurrentView('CALENDAR');
-  };
-
   const cloudStatusBadge = (
     <button
       type="button"
@@ -1273,18 +1263,19 @@ const App: React.FC = () => {
   );
 
   if (isPublicBooking) {
+    return <PublicBooking />;
+  }
+
+  if (authStatus === 'checking') {
     return (
-      <>
-        {cloudStatusBadge}
-        <PublicBooking
-          appointments={appointments}
-          customers={customers}
-          onBookingCreated={handlePublicBookingCreated}
-          onCustomerCreated={handlePublicCustomerCreated}
-          onAdminAccess={handleAdminAccess}
-        />
-      </>
+      <div className="min-h-[100dvh] bg-pink-50 flex items-center justify-center text-pink-700">
+        בודק הרשאות…
+      </div>
     );
+  }
+
+  if (authStatus !== 'authorized') {
+    return <LoginView accessDenied={authStatus === 'unauthorized'} />;
   }
 
   return (
@@ -1300,6 +1291,8 @@ const App: React.FC = () => {
       <Sidebar 
         currentView={currentView} 
         onChangeView={setCurrentView} 
+        adminEmail={adminEmail}
+        onSignOut={() => void supabase?.auth.signOut()}
         onQuickAdd={() => {
             setSelectedDateForAppointment(new Date());
             setPreSelectedCustomerId(undefined);

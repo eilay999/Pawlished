@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { createBookingToken } from './_lib/bookingAuth.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey =
@@ -16,7 +17,7 @@ const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
 
-const otpSecret = process.env.OTP_SECRET || 'change_me';
+const otpSecret = String(process.env.OTP_SECRET || '').trim();
 const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
 const otpMaxPer10Min = Number(process.env.OTP_MAX_10MIN || 5);
@@ -147,6 +148,10 @@ export default async function handler(req, res) {
       res.status(500).json({ error: 'Supabase service role not configured' });
       return;
     }
+    if (otpSecret.length < 24) {
+      res.status(500).json({ error: 'OTP service is not configured safely' });
+      return;
+    }
 
     if (action === 'send') {
       const channel = resolveChannel();
@@ -248,7 +253,10 @@ export default async function handler(req, res) {
       }
 
       await supabase.from('wa_otp').update({ used_at: new Date().toISOString() }).eq('id', data.id);
-      res.status(200).json({ ok: true });
+      res.status(200).json({
+        ok: true,
+        token: createBookingToken(waPhone)
+      });
       return;
     }
 

@@ -157,6 +157,7 @@ export default async function handler(req, res) {
       res.status(400).json({ error: 'Missing phone/date/time' });
       return;
     }
+    requireBookingToken(req, phone);
 
     const channel = resolveChannel();
 
@@ -220,6 +221,10 @@ export default async function handler(req, res) {
       ...(shouldRequestManagerApproval ? { managerApproval } : {})
     });
   } catch (err) {
-    res.status(500).json({ error: err?.message || 'Server error' });
+    const statusCode = Number(err?.statusCode || 500);
+    res.status(statusCode).json({
+      error: statusCode === 401 ? 'Phone verification required' : 'Server error'
+    });
   }
 }
+import { requireBookingToken } from './_lib/bookingAuth.js';

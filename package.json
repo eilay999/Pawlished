@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.js",
     "preview": "vite preview",
     "ops:status": "node scripts/control.mjs status",
     "vercel:pull": "node scripts/control.mjs vercel:pull production",

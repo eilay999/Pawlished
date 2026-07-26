@@ -8,10 +8,8 @@ const getGeminiApiKeys = () =>
   Array.from(
     new Set(
       [
-        process.env.VITE_GEMINI_API_KEY,
         process.env.GEMINI_API_KEY,
-        process.env.API_KEY,
-        process.env.VITE_API_KEY
+        process.env.API_KEY
       ]
         .map((value) => String(value || '').trim())
         .filter(Boolean)
@@ -162,7 +160,7 @@ const generateAiReply = async ({ text, memories, learningEvents }) => {
   if (!apiKeys.length) return buildSmartFallbackReply(text) || buildFallbackReply();
 
   const current = formatIsraelDateTimeParts();
-  const model = (process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash').trim();
+  const model = (process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
   const prompt = `
 You are the WhatsApp assistant for Pawlished, a dog grooming business in Israel.
 Answer in Hebrew, naturally and briefly.

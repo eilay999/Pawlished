@@ -1,4 +1,9 @@
-import { createAppointmentRecord, toApiError } from '../_lib/appointments.js';
+import {
+  buildSlotDateFromLocal,
+  createAppointmentRecord,
+  toApiError
+} from '../_lib/appointments.js';
+import { requireBookingToken } from '../_lib/bookingAuth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -10,8 +15,8 @@ export default async function handler(req, res) {
   try {
     const {
       phone,
-      slotDate,
-      existingCustomerId,
+      date,
+      time,
       customer,
       service,
       notes,
@@ -19,10 +24,11 @@ export default async function handler(req, res) {
       visitFrequencyWeeks
     } = req.body || {};
 
+    requireBookingToken(req, phone);
+
     const result = await createAppointmentRecord({
       phone,
-      slotDate,
-      existingCustomerId,
+      slotDate: buildSlotDateFromLocal(date, time),
       customer,
       customerName: customer?.name,
       service,

@@ -1,510 +1,443 @@
-import React, { useMemo, useState } from 'react';
-import { Calendar, Phone, User, Dog, CheckCircle2 } from 'lucide-react';
-import { Appointment, AppointmentStatus, Customer } from '../types';
-import { APPOINTMENT_DURATION_MINUTES } from '../constants';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Dog,
+  LockKeyhole,
+  Phone,
+  Scissors,
+  ShieldCheck,
+  User
+} from 'lucide-react';
 
-type BookingStep = 'PHONE' | 'DETAILS' | 'BOOKING' | 'DONE';
+type BookingStep = 'PHONE' | 'OTP' | 'DETAILS' | 'BOOKING' | 'DONE';
 
-const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+type AvailabilityDay = {
+  date: string;
+  slots: string[];
+};
 
-const WEEKLY_SLOTS: Record<number, string[]> = {
-  // 0=Sunday ... 6=Saturday
-  0: ['07:00', '08:00'],
-  1: ['09:00', '12:00', '15:00'],
-  2: ['09:00', '12:00', '15:00'],
-  3: ['08:00', '11:00', '14:00'],
-  4: ['07:00', '08:00'],
-  5: ['07:00', '08:00'],
-  6: []
+type ExistingCustomer = {
+  id: string;
+  name: string;
+  petName: string;
+  petType: string;
 };
 
 const normalizeDigits = (value: string) => value.replace(/\D/g, '');
 
-const normalizePhoneForCompare = (value: string) => {
-  const digits = normalizeDigits(value);
-  if (digits.startsWith('972')) {
-    return `0${digits.slice(3)}`;
-  }
-  return digits;
-};
-
 const toE164 = (value: string) => {
   const digits = normalizeDigits(value);
-  if (!digits) return '';
-  if (digits.startsWith('0')) {
-    return `+972${digits.slice(1)}`;
-  }
-  if (digits.startsWith('972')) {
-    return `+${digits}`;
-  }
-  if (value.trim().startsWith('+')) {
-    return value.trim();
-  }
-  return `+${digits}`;
+  if (digits.startsWith('0')) return `+972${digits.slice(1)}`;
+  if (digits.startsWith('972')) return `+${digits}`;
+  return value.trim().startsWith('+') ? value.trim() : `+${digits}`;
 };
 
-const ADMIN_PHONES = ['0543131544', '0527075624'].map(normalizePhoneForCompare);
-
-const makeSlotDate = (date: Date, time: string) => {
-  const [hours, minutes] = time.split(':').map(Number);
-  const slot = new Date(date);
-  slot.setHours(hours, minutes, 0, 0);
-  return slot;
-};
-
-const toLocalDateKey = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
-interface PublicBookingProps {
-  appointments: Appointment[];
-  customers: Customer[];
-  onBookingCreated: (payload: { customer: Customer; appointment: Appointment }) => void;
-  onCustomerCreated?: (customer: Customer) => void;
-  onAdminAccess?: (phone: string) => void;
-}
-
-export const PublicBooking: React.FC<PublicBookingProps> = ({
-  appointments,
-  customers,
-  onBookingCreated,
-  onCustomerCreated,
-  onAdminAccess
-}) => {
-  const [step, setStep] = useState<BookingStep>('PHONE');
-  const [doneKind, setDoneKind] = useState<'BOOKED' | 'CUSTOMER_CREATED' | null>(null);
-  const [phone, setPhone] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [verifiedPhone, setVerifiedPhone] = useState('');
-  const [existingCustomer, setExistingCustomer] = useState<Customer | null>(null);
-  const [newCustomer, setNewCustomer] = useState({
-    name: '',
-    petName: '',
-    petType: ''
+const formatDate = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('he-IL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
   });
-  const [selectedSlot, setSelectedSlot] = useState<{
-    date: Date;
-    time: string;
-  } | null>(null);
-  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
-  const [isSavingCustomerCard, setIsSavingCustomerCard] = useState(false);
+};
 
-  const bookedRangesByDate = useMemo(() => {
-    const map = new Map<string, Array<{ start: number; end: number }>>();
+const authHeaders = (token: string) => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${token}`
+});
 
-    appointments
-      .filter(appointment => appointment.status !== AppointmentStatus.CANCELLED)
-      .forEach((appointment) => {
-        const start = new Date(appointment.date).getTime();
-        if (Number.isNaN(start)) return;
-        const end = start + APPOINTMENT_DURATION_MINUTES * 60 * 1000;
-        const key = toLocalDateKey(new Date(start));
-        map.set(key, [...(map.get(key) || []), { start, end }]);
+export const PublicBooking: React.FC = () => {
+  const [step, setStep] = useState<BookingStep>('PHONE');
+  const [phone, setPhone] = useState('');
+  const [verifiedPhone, setVerifiedPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [bookingToken, setBookingToken] = useState('');
+  const [existingCustomer, setExistingCustomer] = useState<ExistingCustomer | null>(null);
+  const [newCustomer, setNewCustomer] = useState({ name: '', petName: '', petType: '' });
+  const [availability, setAvailability] = useState<AvailabilityDay[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<{ date: string; time: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/public-booking/availability')
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'availability');
+        if (active) setAvailability(payload.days || []);
+      })
+      .catch(() => {
+        if (active) setError('לא הצלחנו לטעון שעות פנויות. נסה לרענן את העמוד.');
+      })
+      .finally(() => {
+        if (active) setAvailabilityLoading(false);
       });
-
-    return map;
-  }, [appointments]);
-
-  const upcomingDays = useMemo(() => {
-    const today = new Date();
-    const days: Array<{ date: Date; times: string[] }> = [];
-
-    for (let index = 0; index < 14; index += 1) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + index);
-      date.setHours(0, 0, 0, 0);
-
-      const times = WEEKLY_SLOTS[date.getDay()] || [];
-      if (times.length > 0) {
-        days.push({ date, times });
-      }
-    }
-
-    return days;
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const isSlotAvailable = (date: Date, time: string) => {
-    const slot = makeSlotDate(date, time);
-    if (slot.getTime() < Date.now()) return false;
-    const key = toLocalDateKey(slot);
-    const slotStart = slot.getTime();
-    const slotEnd = slotStart + APPOINTMENT_DURATION_MINUTES * 60 * 1000;
-    const booked = bookedRangesByDate.get(key) || [];
-    return !booked.some((range) => slotStart < range.end && slotEnd > range.start);
-  };
+  const availableDays = useMemo(
+    () => availability.filter((day) => day.slots.length > 0),
+    [availability]
+  );
 
-  const handleContinueWithPhone = () => {
-    setError(null);
-    setDoneKind(null);
-    const e164 = toE164(phone);
-
-    if (!e164) {
+  const sendOtp = async () => {
+    const digits = normalizeDigits(phone);
+    if (digits.length < 9 || digits.length > 12) {
       setError('הזן מספר טלפון תקין.');
       return;
     }
 
-    setVerifiedPhone(e164);
-    const normalized = normalizePhoneForCompare(e164);
-
-    if (ADMIN_PHONES.includes(normalized)) {
-      onAdminAccess?.(normalized);
-      return;
+    const normalizedPhone = toE164(phone);
+    setIsBusy(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/whatsapp-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', phone: normalizedPhone })
+      });
+      if (!response.ok) {
+        throw new Error('otp');
+      }
+      setVerifiedPhone(normalizedPhone);
+      setStep('OTP');
+    } catch {
+      setError('שליחת קוד האימות נכשלה. נסה שוב בעוד דקה.');
+    } finally {
+      setIsBusy(false);
     }
-
-    const existing =
-      customers.find(customer => normalizePhoneForCompare(customer.phone) === normalized) || null;
-
-    setExistingCustomer(existing);
-    if (existing) {
-      setStep('BOOKING');
-      return;
-    }
-
-    setStep('DETAILS');
   };
 
-  const handleSendConfirmation = async (
-    dateLabel: string,
-    timeLabel: string,
-    managerApproval?: {
-      requested: boolean;
-      customerName?: string;
-      petName?: string;
-      customerPhone?: string;
+  const verifyOtp = async () => {
+    if (!/^\d{6}$/.test(normalizeDigits(otpCode))) {
+      setError('הזן את קוד האימות בן 6 הספרות.');
+      return;
     }
-  ) => {
+
+    setIsBusy(true);
+    setError(null);
     try {
-      await fetch('/api/whatsapp-confirm', {
+      const verifyResponse = await fetch('/api/whatsapp-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'verify',
           phone: verifiedPhone,
-          date: dateLabel,
-          time: timeLabel,
-          requestManagerApproval: managerApproval?.requested ?? false,
-          customerName: managerApproval?.customerName,
-          petName: managerApproval?.petName,
-          customerPhone: managerApproval?.customerPhone
+          code: normalizeDigits(otpCode)
         })
       });
+      const verifyPayload = await verifyResponse.json().catch(() => ({}));
+      if (!verifyResponse.ok || !verifyPayload.token) throw new Error('verify');
+
+      const token = String(verifyPayload.token);
+      setBookingToken(token);
+      const lookupResponse = await fetch('/api/public-booking/lookup', {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ phone: verifiedPhone })
+      });
+      const lookupPayload = await lookupResponse.json().catch(() => ({}));
+      if (!lookupResponse.ok) throw new Error('lookup');
+
+      setExistingCustomer(lookupPayload.customer || null);
+      setStep(lookupPayload.customer ? 'BOOKING' : 'DETAILS');
     } catch {
-      // ignore confirmation errors
+      setError('הקוד אינו נכון או שפג תוקפו.');
+    } finally {
+      setIsBusy(false);
     }
   };
 
-  const handleContinueDetails = () => {
+  const continueWithDetails = () => {
     if (!newCustomer.name.trim() || !newCustomer.petName.trim() || !newCustomer.petType.trim()) {
-      setError('מלא שם, שם כלב וסוג.');
+      setError('מלא שם, שם הכלב וסוג הכלב.');
       return;
     }
-
     setError(null);
     setStep('BOOKING');
   };
 
-  const handleSaveCustomerCard = async () => {
-    if (!verifiedPhone) return;
-    if (isSavingCustomerCard) return;
-
-    if (!newCustomer.name.trim() || !newCustomer.petName.trim() || !newCustomer.petType.trim()) {
-      setError('מלא שם, שם כלב וסוג.');
-      return;
-    }
-
-    setError(null);
-    setIsSavingCustomerCard(true);
-
-    try {
-      const response = await fetch('/api/public-booking/create-customer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: verifiedPhone,
-          customer: {
-            name: newCustomer.name.trim(),
-            petName: newCustomer.petName.trim(),
-            petType: newCustomer.petType.trim()
-          }
-        })
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(payload.error || 'שמירת כרטיס לקוח נכשלה.');
-        return;
-      }
-
-      const customer: Customer = {
-        ...payload.customer,
-        lastVisit: new Date(payload.customer.lastVisit)
-      };
-
-      onCustomerCreated?.(customer);
-      setExistingCustomer(customer);
-      setDoneKind('CUSTOMER_CREATED');
-      setSelectedSlot(null);
-      setStep('DONE');
-    } catch {
-      setError('שמירת כרטיס לקוח נכשלה. נסה שוב.');
-    } finally {
-      setIsSavingCustomerCard(false);
-    }
+  const sendConfirmation = async (date: string, time: string) => {
+    await fetch('/api/whatsapp-confirm', {
+      method: 'POST',
+      headers: authHeaders(bookingToken),
+      body: JSON.stringify({
+        phone: verifiedPhone,
+        date: formatDate(date),
+        time,
+        requestManagerApproval: !existingCustomer,
+        customerName: existingCustomer?.name || newCustomer.name,
+        petName: existingCustomer?.petName || newCustomer.petName,
+        customerPhone: verifiedPhone
+      })
+    }).catch(() => undefined);
   };
 
-  const handleConfirmBooking = async () => {
-    if (!selectedSlot) {
+  const confirmBooking = async () => {
+    if (!selectedSlot || !bookingToken) {
       setError('בחר תאריך ושעה.');
       return;
     }
 
-    if (!isSlotAvailable(selectedSlot.date, selectedSlot.time)) {
-      setError('השעה כבר נתפסה. בחר שעה אחרת.');
-      return;
-    }
-
-    const slotDate = makeSlotDate(selectedSlot.date, selectedSlot.time);
+    setIsBusy(true);
     setError(null);
-    setIsSubmittingBooking(true);
-
     try {
       const response = await fetch('/api/public-booking/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(bookingToken),
         body: JSON.stringify({
           phone: verifiedPhone,
-          slotDate: slotDate.toISOString(),
-          existingCustomerId: existingCustomer?.id,
+          date: selectedSlot.date,
+          time: selectedSlot.time,
           customer: existingCustomer
             ? undefined
             : {
                 name: newCustomer.name.trim(),
-                phone: normalizePhoneForCompare(verifiedPhone),
+                phone: verifiedPhone,
                 petName: newCustomer.petName.trim(),
                 petType: newCustomer.petType.trim()
               },
-          service: 'תור לקוח',
+          service: 'תספורת מלאה לכלב קטן',
           notes: ''
         })
       });
-
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(payload.error || 'יצירת התור נכשלה.');
-        return;
+        throw new Error(payload.error || 'booking');
       }
 
-      const customer: Customer = {
-        ...payload.customer,
-        lastVisit: new Date(payload.customer.lastVisit)
-      };
-
-      const appointment: Appointment = {
-        ...payload.appointment,
-        date: new Date(payload.appointment.date)
-      };
-
-      onBookingCreated({ customer, appointment });
-      setExistingCustomer(customer);
-      setDoneKind('BOOKED');
-
-      await handleSendConfirmation(
-        slotDate.toLocaleDateString('he-IL'),
-        selectedSlot.time,
-        payload.createdCustomer
-          ? {
-              requested: true,
-              customerName: customer.name,
-              petName: customer.petName,
-              customerPhone: customer.phone
-            }
-          : undefined
-      );
-
+      await sendConfirmation(selectedSlot.date, selectedSlot.time);
       setStep('DONE');
-    } catch {
-      setError('יצירת התור נכשלה. נסה שוב.');
+    } catch (bookingError) {
+      const message =
+        bookingError instanceof Error && bookingError.message.includes('תפוסה')
+          ? bookingError.message
+          : 'יצירת התור נכשלה. ייתכן שהשעה נתפסה—בחר שעה אחרת.';
+      setError(message);
+      setAvailability((days) =>
+        days.map((day) =>
+          day.date === selectedSlot.date
+            ? { ...day, slots: day.slots.filter((time) => time !== selectedSlot.time) }
+            : day
+        )
+      );
+      setSelectedSlot(null);
     } finally {
-      setIsSubmittingBooking(false);
+      setIsBusy(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 p-4 md:p-8">
-      <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">קביעת תור</h1>
-            <p className="text-sm text-gray-500">אפשר לקבוע עד שבועיים קדימה</p>
+    <div className="min-h-[100dvh] bg-gradient-to-br from-pink-50 via-white to-amber-50 p-4 md:p-8">
+      <div className="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-pink-100 bg-white shadow-xl">
+        <header className="border-b border-pink-100 bg-white px-6 py-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-pink-700">
+                <Scissors className="h-6 w-6" />
+                <span className="text-2xl font-bold">Pawlished</span>
+              </div>
+              <h1 className="mt-3 text-2xl font-bold text-gray-900">קביעת תור אונליין</h1>
+              <p className="mt-1 text-sm text-gray-500">מספרת בוטיק לכלבים קטנים בראשון לציון</p>
+            </div>
+            <div className="hidden rounded-2xl bg-pink-50 p-3 text-pink-700 sm:block">
+              <Dog className="h-8 w-8" />
+            </div>
           </div>
-          <Calendar className="w-6 h-6 text-blue-600" />
-        </div>
+          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            <ShieldCheck className="h-4 w-4" />
+            הפרטים שלך מוגנים ומשמשים לקביעת התור בלבד
+          </div>
+        </header>
 
         {error && (
-          <div className="mx-6 mt-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-sm px-4 py-3">
+          <div className="mx-6 mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
           </div>
         )}
 
-        <div className="p-6 space-y-6">
+        <main className="space-y-6 p-6">
           {step === 'PHONE' && (
-            <div className="space-y-3">
-              <label className="text-sm text-gray-600 flex items-center gap-2">
-                <Phone className="w-4 h-4" /> מספר טלפון
-              </label>
+            <section className="space-y-4">
+              <div>
+                <label htmlFor="booking-phone" className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <Phone className="h-4 w-4" />
+                  מספר טלפון
+                </label>
+                <input
+                  id="booking-phone"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="050-1234567"
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-pink-300 focus:ring-4 focus:ring-pink-100"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void sendOtp()}
+                disabled={isBusy}
+                className="w-full rounded-2xl bg-pink-600 py-3 font-bold text-white hover:bg-pink-700 disabled:opacity-50"
+              >
+                {isBusy ? 'שולח קוד…' : 'שלחו לי קוד אימות'}
+              </button>
+            </section>
+          )}
+
+          {step === 'OTP' && (
+            <section className="space-y-4">
+              <div className="text-center">
+                <LockKeyhole className="mx-auto h-9 w-9 text-pink-600" />
+                <h2 className="mt-2 text-xl font-bold text-gray-900">אימות מספר הטלפון</h2>
+                <p className="mt-1 text-sm text-gray-500">שלחנו קוד בן 6 ספרות ל־{verifiedPhone}</p>
+              </div>
               <input
-                value={phone}
-                onChange={event => setPhone(event.target.value)}
-                placeholder='לדוגמה: 050-1234567'
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={otpCode}
+                onChange={(event) => setOtpCode(event.target.value)}
+                aria-label="קוד אימות"
+                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-center text-2xl tracking-[0.35em] outline-none focus:border-pink-300 focus:ring-4 focus:ring-pink-100"
               />
               <button
-                onClick={handleContinueWithPhone}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
+                type="button"
+                onClick={() => void verifyOtp()}
+                disabled={isBusy}
+                className="w-full rounded-2xl bg-pink-600 py-3 font-bold text-white hover:bg-pink-700 disabled:opacity-50"
               >
-                המשך
+                {isBusy ? 'מאמת…' : 'אימות והמשך'}
               </button>
-            </div>
+            </section>
           )}
 
           {step === 'DETAILS' && (
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600">לקוח חדש - מלא פרטים</div>
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <User className="w-4 h-4" /> שם מלא
-                  </label>
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">נעים להכיר</h2>
+                <p className="mt-1 text-sm text-gray-500">כמה פרטים קצרים עליך ועל הכלב</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm text-gray-600">
+                  <span className="mb-1 flex items-center gap-2"><User className="h-4 w-4" />שם מלא</span>
                   <input
                     value={newCustomer.name}
-                    onChange={event =>
-                      setNewCustomer(previous => ({ ...previous, name: event.target.value }))
-                    }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                    onChange={(event) => setNewCustomer((value) => ({ ...value, name: event.target.value }))}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-pink-300"
                   />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <Dog className="w-4 h-4" /> שם הכלב
-                  </label>
+                </label>
+                <label className="text-sm text-gray-600">
+                  <span className="mb-1 flex items-center gap-2"><Dog className="h-4 w-4" />שם הכלב</span>
                   <input
                     value={newCustomer.petName}
-                    onChange={event =>
-                      setNewCustomer(previous => ({ ...previous, petName: event.target.value }))
-                    }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                    onChange={(event) => setNewCustomer((value) => ({ ...value, petName: event.target.value }))}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-pink-300"
                   />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
-                    סוג הכלב
-                  </label>
+                </label>
+                <label className="text-sm text-gray-600 sm:col-span-2">
+                  <span className="mb-1 block">גזע / סוג הכלב</span>
                   <input
                     value={newCustomer.petType}
-                    onChange={event =>
-                      setNewCustomer(previous => ({ ...previous, petType: event.target.value }))
-                    }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                    onChange={(event) => setNewCustomer((value) => ({ ...value, petType: event.target.value }))}
+                    placeholder="לדוגמה: פודל טוי"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-pink-300"
                   />
-                </div>
+                </label>
               </div>
-              <div className="space-y-2">
-                <button
-                  onClick={handleContinueDetails}
-                  disabled={isSavingCustomerCard}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl py-3 font-medium"
-                >
-                  המשך לקביעת תור
-                </button>
-                <button
-                  onClick={() => void handleSaveCustomerCard()}
-                  disabled={isSavingCustomerCard}
-                  className="w-full bg-white hover:bg-blue-50 disabled:opacity-60 text-blue-700 border border-blue-200 rounded-xl py-3 font-medium"
-                >
-                  {isSavingCustomerCard ? 'שומר...' : 'שמור כרטיס לקוח בלי תור'}
-                </button>
-              </div>
-            </div>
+              <button
+                type="button"
+                onClick={continueWithDetails}
+                className="w-full rounded-2xl bg-pink-600 py-3 font-bold text-white hover:bg-pink-700"
+              >
+                המשך לבחירת תור
+              </button>
+            </section>
           )}
 
           {step === 'BOOKING' && (
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600">בחר תאריך ושעה (עד שבועיים קדימה)</div>
-              <div className="space-y-3">
-                {upcomingDays.map(day => (
-                  <div key={day.date.toISOString()} className="border border-gray-100 rounded-2xl p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-semibold text-gray-800">
-                        {DAY_NAMES[day.date.getDay()]} - {day.date.toLocaleDateString('he-IL')}
-                      </div>
-                      <div className="text-xs text-gray-400">{day.times.length} תורים אפשריים</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {day.times.map(time => {
-                        const available = isSlotAvailable(day.date, time);
-                        const isSelected =
-                          Boolean(selectedSlot) &&
-                          selectedSlot!.time === time &&
-                          selectedSlot!.date.getTime() === day.date.getTime();
+            <section className="space-y-5">
+              {existingCustomer && (
+                <div className="rounded-2xl border border-pink-100 bg-pink-50 p-4">
+                  <div className="font-bold text-gray-900">כיף לראות אותך שוב, {existingCustomer.name}</div>
+                  <div className="mt-1 text-sm text-gray-600">התור יהיה עבור {existingCustomer.petName}</div>
+                </div>
+              )}
 
-                        return (
-                          <button
-                            key={time}
-                            disabled={!available || isSubmittingBooking}
-                            onClick={() => setSelectedSlot({ date: day.date, time })}
-                            className={`px-3 py-2 rounded-xl text-sm border transition ${
-                              isSelected
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : available
-                                  ? 'border-blue-100 text-blue-700 hover:bg-blue-50'
-                                  : 'border-gray-100 text-gray-300 cursor-not-allowed'
-                            }`}
-                          >
-                            {time}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <h2 className="flex items-center gap-2 text-xl font-bold text-gray-900">
+                  <CalendarDays className="h-5 w-5 text-pink-600" />
+                  בחירת תאריך ושעה
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">מוצגות רק שעות פנויות</p>
               </div>
+
+              {availabilityLoading ? (
+                <div className="rounded-2xl bg-gray-50 py-8 text-center text-sm text-gray-500">טוען שעות פנויות…</div>
+              ) : availableDays.length === 0 ? (
+                <div className="rounded-2xl bg-amber-50 py-8 text-center text-sm text-amber-800">
+                  אין כרגע שעות פנויות בשבועיים הקרובים. אפשר ליצור קשר ב‑WhatsApp.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {availableDays.map((day) => (
+                    <div key={day.date} className="rounded-2xl border border-gray-200 p-4">
+                      <div className="font-bold text-gray-900">{formatDate(day.date)}</div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {day.slots.map((time) => {
+                          const selected = selectedSlot?.date === day.date && selectedSlot.time === time;
+                          return (
+                            <button
+                              type="button"
+                              key={time}
+                              onClick={() => setSelectedSlot({ date: day.date, time })}
+                              className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                                selected
+                                  ? 'border-pink-600 bg-pink-600 text-white'
+                                  : 'border-gray-200 bg-white text-gray-700 hover:border-pink-300 hover:bg-pink-50'
+                              }`}
+                            >
+                              <Clock3 className="h-4 w-4" />
+                              {time}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <button
-                onClick={handleConfirmBooking}
-                disabled={isSubmittingBooking}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl py-3 font-medium"
+                type="button"
+                onClick={() => void confirmBooking()}
+                disabled={!selectedSlot || isBusy}
+                className="w-full rounded-2xl bg-pink-600 py-3 font-bold text-white hover:bg-pink-700 disabled:opacity-50"
               >
-                {isSubmittingBooking ? 'שומר...' : 'אישור תור'}
+                {isBusy ? 'קובע את התור…' : 'אישור וקביעת התור'}
               </button>
-            </div>
+            </section>
           )}
 
           {step === 'DONE' && (
-            <div className="text-center space-y-3 py-6">
-              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
-              <div className="text-lg font-bold text-gray-800">
-                {doneKind === 'CUSTOMER_CREATED' ? 'כרטיס הלקוח נשמר בהצלחה!' : 'התור נקבע בהצלחה!'}
-              </div>
-              {doneKind !== 'CUSTOMER_CREATED' && selectedSlot && (
-                <div className="text-sm text-gray-500">
-                  {selectedSlot.date.toLocaleDateString('he-IL')} בשעה {selectedSlot.time}
-                </div>
+            <section className="py-8 text-center">
+              <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
+              <h2 className="mt-4 text-2xl font-bold text-gray-900">התור נקבע בהצלחה</h2>
+              {selectedSlot && (
+                <p className="mt-2 text-gray-600">
+                  {formatDate(selectedSlot.date)} בשעה {selectedSlot.time}
+                </p>
               )}
-              {doneKind === 'CUSTOMER_CREATED' && (
-                <div className="space-y-2 pt-3">
-                  <div className="text-sm text-gray-500">אפשר עכשיו לקבוע תור או לחזור באיזה זמן.</div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSlot(null);
-                      setStep('BOOKING');
-                    }}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
-                  >
-                    קביעת תור עכשיו
-                  </button>
-                </div>
-              )}
-            </div>
+              <p className="mt-2 text-sm text-gray-500">אישור נשלח אליך בהודעה</p>
+            </section>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );

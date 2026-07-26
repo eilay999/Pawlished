@@ -1,0 +1,19 @@
+{
+  "name": "Pawlished CRM",
+  "short_name": "Pawlished",
+  "description": "ניהול לקוחות, תורים והודעות עבור Pawlished",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF7FB",
+  "theme_color": "#DB2777",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

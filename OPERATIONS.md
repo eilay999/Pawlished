@@ -46,9 +46,10 @@ npm run supabase:types
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
-- `VITE_GEMINI_API_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY` (server-side only)
+- `GEMINI_MODEL` (optional; defaults to `gemini-2.5-flash`)
 - `OTP_SECRET`
 - `MESSAGING_CHANNEL` (`auto` | `sms` | `whatsapp`)
 
@@ -71,6 +72,17 @@ Optional:
 - `OTP_TTL_MIN`
 - `OTP_COOLDOWN_SEC`
 - `OTP_MAX_10MIN`
+
+## 6) Admin access and security migration
+
+Before deploying the secured CRM:
+
+1. Create the manager account in Supabase Authentication.
+2. Run all migrations.
+3. Add the manager's Auth UUID to `public.app_admins`.
+4. Disable public email sign-ups.
+5. Confirm that `/` shows the login screen and `/booking` remains public.
+6. Rotate any Gemini key that was previously stored as `VITE_GEMINI_API_KEY`.
 
 WhatsApp assistant modes:
 

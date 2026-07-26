@@ -1,73 +1,33 @@
-import { GoogleGenAI } from '@google/genai';
-import { Appointment, Customer } from '../types';
+import { supabase } from './supabaseClient';
 
-const getAiClient = () => {
-  const nodeEnv = typeof process !== 'undefined' ? process.env : undefined;
-  const apiKey =
-    import.meta.env.VITE_GEMINI_API_KEY ||
-    import.meta.env.VITE_API_KEY ||
-    nodeEnv?.GEMINI_API_KEY ||
-    nodeEnv?.API_KEY;
+const toLocalDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
 
-  if (!apiKey) {
-    console.error('API Key not found in environment variables');
-    return null;
-  }
-
-  return new GoogleGenAI({ apiKey });
-};
-
-export const analyzeSchedule = async (
-  date: Date,
-  appointments: Appointment[],
-  customers: Customer[]
-): Promise<string> => {
-  const ai = getAiClient();
-  if (!ai) return 'שירות ה-AI לא זמין.';
-
-  const daysAppointments = appointments.filter(
-    app =>
-      app.date.getDate() === date.getDate() &&
-      app.date.getMonth() === date.getMonth() &&
-      app.date.getFullYear() === date.getFullYear()
-  );
-
-  const formattedData = daysAppointments
-    .map(app => {
-      const customer = customers.find(c => c.id === app.customerId);
-      const time = app.date.toLocaleTimeString('he-IL', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      const petName = customer?.petName ?? 'pet';
-      const customerName = customer?.name ?? 'customer';
-      return `- ${time}: ${app.service} for ${petName} (${customerName})`;
-    })
-    .join('\n');
-
-  const prompt = `
-Analyze the pet grooming schedule for the selected date.
-Here are the appointments (${date.toLocaleDateString('he-IL')}):
-${formattedData || 'No appointments scheduled for this date.'}
-
-Provide 3 concise, practical insights.
-  `;
-
+export const analyzeSchedule = async (date: Date): Promise<string> => {
   try {
-    const nodeEnv = typeof process !== 'undefined' ? process.env : undefined;
-    const model =
-      import.meta.env.VITE_GEMINI_MODEL ||
-      nodeEnv?.GEMINI_MODEL ||
-      'gemini-1.5-flash';
+    const { data } = (await supabase?.auth.getSession()) || { data: { session: null } };
+    const token = data.session?.access_token;
+    if (!token) return 'יש להתחבר מחדש כדי להפעיל את הניתוח.';
 
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
+    const response = await fetch('/api/analyze-schedule', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ date: toLocalDateKey(date) })
     });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return payload.error === 'AI service unavailable'
+        ? 'שירות הניתוח עדיין לא הוגדר.'
+        : 'לא ניתן לנתח את הלו״ז כרגע.';
+    }
 
-    return response.text || 'No response received.';
-  } catch (error) {
-    console.error('Gemini API Error:', error);
-    return 'לא ניתן לנתח את הלו"ז. נסה שוב בעוד רגע.';
+    return payload.analysis || 'אין המלצות כרגע.';
+  } catch {
+    return 'לא ניתן לנתח את הלו״ז. נסה שוב בעוד רגע.';
   }
 };

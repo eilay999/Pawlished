@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AlertCircle, Bot, MessageCircle, Send, User } from 'lucide-react';
 import { Customer, WhatsAppMessage } from '../types';
 import { normalizePhoneForCompare } from '../utils';
+import { supabase } from '../services/supabaseClient';
 
 interface MessagesViewProps {
   messages: WhatsAppMessage[];
@@ -110,9 +111,17 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     setSendError(null);
 
     try {
+      const { data } = (await supabase?.auth.getSession()) || { data: { session: null } };
+      const token = data.session?.access_token;
+      if (!token) {
+        throw new Error('יש להתחבר מחדש לפני שליחת הודעה.');
+      }
       const response = await fetch('/api/whatsapp-send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify({
           phone: selectedConversation.phone,
           body: text
