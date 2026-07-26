@@ -55,16 +55,10 @@ const buildReminderText = (reminder) => {
 };
 
 const isAuthorized = (req) => {
-  if (!cronSecret) {
-    return true;
-  }
+  if (!cronSecret) return false;
 
   const authHeader = String(req.headers.authorization || '');
-  if (authHeader === `Bearer ${cronSecret}`) {
-    return true;
-  }
-
-  return req.headers['x-vercel-cron'] === '1';
+  return authHeader === `Bearer ${cronSecret}`;
 };
 
 export default async function handler(req, res) {

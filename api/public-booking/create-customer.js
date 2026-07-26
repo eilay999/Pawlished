@@ -1,4 +1,5 @@
 import { createCustomerFromStructuredInput, toApiError } from '../_lib/appointments.js';
+import { requireBookingToken } from '../_lib/bookingAuth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -9,6 +10,7 @@ export default async function handler(req, res) {
 
   try {
     const { phone, customer } = req.body || {};
+    requireBookingToken(req, phone);
 
     const result = await createCustomerFromStructuredInput({
       customerName: customer?.name,
@@ -29,4 +31,3 @@ export default async function handler(req, res) {
     });
   }
 }
-

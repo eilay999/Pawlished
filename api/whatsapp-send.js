@@ -1,4 +1,5 @@
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
+import { requireAdmin, toAdminApiError } from './_lib/adminAuth.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -50,6 +51,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    await requireAdmin(req);
     const { phone, body } = req.body || {};
 
     if (!phone || !body) {
@@ -91,6 +93,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ ok: true, sent: true, logged: Boolean(logged) });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err?.message || 'Server error' });
+    const apiError = toAdminApiError(err);
+    res.status(apiError.statusCode).json({ ok: false, error: apiError.message });
   }
 }

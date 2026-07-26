@@ -339,7 +339,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const handleAiAnalyze = async () => {
     setLoadingAi(true);
-    const result = await analyzeSchedule(displayDate, appointments, customers);
+    const result = await analyzeSchedule(displayDate);
     setAiAnalysis(result);
     setLoadingAi(false);
   };

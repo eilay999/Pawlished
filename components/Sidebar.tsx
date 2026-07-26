@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Calendar,
   CalendarDays,
+  LogOut,
   MessageCircle,
   Palette,
   Plus,
@@ -17,6 +18,8 @@ interface SidebarProps {
   onQuickAdd: () => void;
   onQuickAddEvent: () => void;
   onOpenTheme?: () => void;
+  adminEmail?: string;
+  onSignOut?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -24,7 +27,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onChangeView,
   onQuickAdd,
   onQuickAddEvent,
-  onOpenTheme
+  onOpenTheme,
+  adminEmail,
+  onSignOut
 }) => {
   const navItems = [
     { id: 'CALENDAR' as ViewType, label: 'יומן', icon: Calendar },
@@ -38,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="hidden md:flex w-64 bg-white h-screen flex-col shadow-lg z-10 border-l border-gray-100 shrink-0">
         <div className="h-24 flex items-center justify-center border-b border-gray-100 bg-white">
           <div className="flex items-center gap-2 text-2xl font-bold text-gray-800">
-            <span>פוליש</span>
+            <span>Pawlished</span>
             <Scissors className="w-6 h-6 text-blue-600 transform -scale-x-100" />
           </div>
         </div>
@@ -91,6 +96,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>עיצוב</span>
             </button>
           )}
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              className="w-full bg-white border border-gray-200 text-gray-700 font-medium py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+              title={adminEmail || 'יציאה'}
+            >
+              <LogOut className="w-5 h-5 text-gray-500" />
+              <span>יציאה</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -135,6 +150,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Plus className="w-7 h-7" />
         </button>
       </div>
+
+      {onSignOut && (
+        <button
+          onClick={onSignOut}
+          className="md:hidden fixed top-3 left-3 z-50 bg-white border border-gray-200 text-gray-600 p-2.5 rounded-full shadow-lg"
+          aria-label="יציאה מהמערכת"
+          title={adminEmail || 'יציאה'}
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
+      )}
     </>
   );
 };
