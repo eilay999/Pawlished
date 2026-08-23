@@ -1,4 +1,5 @@
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
+import { requireAdminSession } from './_lib/adminAuth.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -43,6 +44,7 @@ const sendWhatsAppText = async (to, bodyText) => {
 };
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -50,6 +52,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    requireAdminSession(req);
     const { phone, body } = req.body || {};
 
     if (!phone || !body) {

@@ -1,6 +1,8 @@
 import { createCustomerFromStructuredInput, toApiError } from '../_lib/appointments.js';
+import { requireOtpSession } from '../_lib/otpSession.js';
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -8,11 +10,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { phone, customer } = req.body || {};
+    const otpSession = requireOtpSession(req);
+    const { customer } = req.body || {};
 
     const result = await createCustomerFromStructuredInput({
       customerName: customer?.name,
-      phone,
+      phone: otpSession.phone,
       petName: customer?.petName,
       petType: customer?.petType
     });
@@ -29,4 +32,3 @@ export default async function handler(req, res) {
     });
   }
 }
-

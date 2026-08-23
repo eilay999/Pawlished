@@ -41,16 +41,22 @@ npm run supabase:types
 
 - SQL migrations are in `supabase/migrations/`.
 - Current baseline schema is in `supabase/migrations/20260216170000_core_schema.sql`.
+- Business schedule is stored in `public.business_schedule` (seeded by `supabase/migrations/20260505100000_add_business_schedule.sql`).
+- `supabase/migrations/20260504120000_lock_down_public_access.sql` revokes direct `anon/authenticated` access (admin + booking should use `/api/*` endpoints only).
 
 ## 5) Required Vercel env vars (Production/Preview)
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
 - `VITE_GEMINI_API_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `OTP_SECRET`
+- `ADMIN_PHONES` (comma-separated allowlist for admin app access)
 - `MESSAGING_CHANNEL` (`auto` | `sms` | `whatsapp`)
+
+Legacy (only if you re-enable direct client Supabase access):
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
 Messaging provider requirements:
 
@@ -71,6 +77,11 @@ Optional:
 - `OTP_TTL_MIN`
 - `OTP_COOLDOWN_SEC`
 - `OTP_MAX_10MIN`
+- `OTP_SECRET_MIN_BYTES` (default `32`)
+- `OTP_SESSION_TTL_MIN`
+- `BUSINESS_SCHEDULE_CACHE_TTL_SEC`
+- `REMINDER_DAY_BEFORE_TIME` (default `18:00` Israel time)
+- `REMINDER_PROVIDER_LABEL` (e.g. `אגם הספרית` / `פוליש`)
 
 WhatsApp assistant modes:
 
@@ -81,3 +92,12 @@ WhatsApp assistant modes:
 Human reply (owner phone -> customer):
 
 - Send to the bot: `השב ל-9725XXXXXXXX: הטקסט שלך`
+
+## 6) Appointment reminders (day before)
+
+Reminders are queued into `public.whatsapp_reminders` when an appointment is created or updated.
+
+To send them automatically, schedule a job to hit `GET /api/reminders-run`:
+
+- Recommended (Pro): run every 5-10 minutes.
+- Hobby plan note: Vercel Cron Jobs can only run once per day; for frequent scheduling use an external scheduler and protect it with `CRON_SECRET` (send `Authorization: Bearer <CRON_SECRET>`).

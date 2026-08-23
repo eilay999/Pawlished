@@ -1,9 +1,9 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { createOtpSessionToken } from './_lib/otpSession.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const messagingChannel = (process.env.MESSAGING_CHANNEL || 'auto').toLowerCase().trim();
 
@@ -16,7 +16,8 @@ const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
 
-const otpSecret = process.env.OTP_SECRET || 'change_me';
+const otpSecret = (process.env.OTP_SECRET || '').trim();
+const minOtpSecretBytes = Number(process.env.OTP_SECRET_MIN_BYTES || 32);
 const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
 const otpMaxPer10Min = Number(process.env.OTP_MAX_10MIN || 5);
@@ -46,8 +47,12 @@ const getSupabaseClient = () => {
   });
 };
 
-const hashCode = (code) =>
-  crypto.createHash('sha256').update(`${code}:${otpSecret}`).digest('hex');
+const hashCode = (code) => {
+  if (!otpSecret || Buffer.byteLength(otpSecret, 'utf8') < minOtpSecretBytes) {
+    throw new Error('OTP_SECRET not configured (or too weak)');
+  }
+  return crypto.createHash('sha256').update(`${code}:${otpSecret}`).digest('hex');
+};
 
 const canUseWhatsApp = () => Boolean(whatsappToken && whatsappPhoneId && otpTemplate);
 const canUseSms = () => Boolean(twilioAccountSid && twilioAuthToken && twilioFromNumber);
@@ -119,12 +124,18 @@ const sendSmsMessage = async (to, bodyText) => {
 };
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
+    if (!otpSecret || Buffer.byteLength(otpSecret, 'utf8') < minOtpSecretBytes) {
+      res.status(500).json({ error: 'OTP_SECRET not configured (or too weak)' });
+      return;
+    }
+
     const { action, phone, code } = req.body || {};
     if (!action) {
       res.status(400).json({ error: 'Missing action' });
@@ -248,7 +259,9 @@ export default async function handler(req, res) {
       }
 
       await supabase.from('wa_otp').update({ used_at: new Date().toISOString() }).eq('id', data.id);
-      res.status(200).json({ ok: true });
+
+      const sessionToken = createOtpSessionToken(waPhone);
+      res.status(200).json({ ok: true, sessionToken });
       return;
     }
 

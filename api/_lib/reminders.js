@@ -3,8 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -152,6 +151,36 @@ export const markReminderCancelled = async (id) => {
   if (error) {
     throw createHttpError(500, `Failed to cancel reminder: ${error.message}`);
   }
+};
+
+export const cancelPendingRemindersForSource = async ({ sourceKind, sourceId, reminderKind }) => {
+  const safeSourceKind = String(sourceKind || '').trim();
+  const safeSourceId = String(sourceId || '').trim();
+  if (!safeSourceKind || !safeSourceId) return 0;
+  const safeReminderKind = String(reminderKind || '').trim();
+
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+
+  let query = supabase
+    .from('whatsapp_reminders')
+    .update({ cancelled_at: now })
+    .eq('source_kind', safeSourceKind)
+    .eq('source_id', safeSourceId)
+    .is('sent_at', null)
+    .is('cancelled_at', null)
+
+  if (safeReminderKind) {
+    query = query.contains('payload', { reminderKind: safeReminderKind });
+  }
+
+  const { data, error } = await query.select('id');
+
+  if (error) {
+    throw createHttpError(500, `Failed to cancel reminders for source: ${error.message}`);
+  }
+
+  return (data || []).length;
 };
 
 const formatReminderLine = (reminder, index = 0) =>

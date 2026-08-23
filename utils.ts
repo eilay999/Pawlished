@@ -1,4 +1,4 @@
-import { Customer, Appointment, AppointmentStatus } from './types';
+import { Customer, Dog, Appointment, AppointmentStatus } from './types';
 
 export type CalculatedStatus = 'LATE' | 'SOON' | 'SCHEDULED' | 'OK' | 'ON_HOLD';
 
@@ -90,6 +90,83 @@ export const analyzeCustomerStatus = (customer: Customer, appointments: Appointm
     } else {
       status = 'OK';
     }
+  }
+
+  return {
+    status,
+    dueDate,
+    daysDiff,
+    nextAppointment: futureAppt,
+    lastEffectiveVisit: effectiveLastVisit,
+  };
+};
+
+// Same due-date/status logic as analyzeCustomerStatus, keyed by dog instead of customer
+// (a family's dogs can be on different schedules/lifecycle statuses independently).
+export const analyzeDogStatus = (dog: Dog, appointments: Appointment[]): CustomerAnalysis => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const safeLastVisit = new Date(dog.lastVisit);
+  if (isNaN(safeLastVisit.getTime())) {
+    return {
+      status: dog.lifecycleStatus === 'ON_HOLD' ? 'ON_HOLD' : 'OK',
+      dueDate: today,
+      daysDiff: 0,
+      lastEffectiveVisit: today,
+    };
+  }
+
+  let effectiveLastVisit = safeLastVisit;
+  effectiveLastVisit.setHours(0, 0, 0, 0);
+
+  const dogAppointments = appointments.filter(a => a.dogId === dog.id);
+
+  if (dogAppointments.length > 0) {
+    const recentCompletedAppt = dogAppointments
+      .filter(a => a.status === AppointmentStatus.COMPLETED)
+      .map(a => new Date(a.date))
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+
+    if (recentCompletedAppt) {
+      const recentDate = new Date(recentCompletedAppt);
+      recentDate.setHours(0, 0, 0, 0);
+      if (recentDate.getTime() > effectiveLastVisit.getTime()) {
+        effectiveLastVisit = recentDate;
+      }
+    }
+  }
+
+  const futureAppt = dogAppointments
+    .filter(a => a.status !== AppointmentStatus.CANCELLED)
+    .map(a => new Date(a.date))
+    .sort((a, b) => a.getTime() - b.getTime())
+    .find(date => {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() >= today.getTime();
+    });
+
+  const frequencyDays = (dog.visitFrequencyWeeks || 4) * 7;
+  const dueDate = new Date(effectiveLastVisit);
+  dueDate.setDate(dueDate.getDate() + frequencyDays);
+  dueDate.setHours(0, 0, 0, 0);
+
+  const timeDiff = dueDate.getTime() - today.getTime();
+  const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+  let status: CalculatedStatus = 'OK';
+
+  if (dog.lifecycleStatus === 'ON_HOLD') {
+    status = 'ON_HOLD';
+  } else if (futureAppt) {
+    status = 'SCHEDULED';
+  } else if (daysDiff < 0) {
+    status = 'LATE';
+  } else if (daysDiff <= 7) {
+    status = 'SOON';
+  } else {
+    status = 'OK';
   }
 
   return {

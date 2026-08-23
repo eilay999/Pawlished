@@ -1,7 +1,9 @@
 import {
   createAppointmentFromStructuredInput,
   findCustomerByPhone,
+  getCachedBusinessSchedule,
   getAllowedSlotsForLocalDate,
+  loadBusinessSchedule,
   toApiError
 } from './_lib/appointments.js';
 import {
@@ -61,6 +63,7 @@ const ownerPhoneNumbers = (process.env.WHATSAPP_OWNER_PHONES || process.env.MANA
   .map((value) => String(value || '').trim())
   .filter(Boolean);
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
+const WHATSAPP_ASSISTANT_NAME = (process.env.WHATSAPP_ASSISTANT_NAME || 'בקו').trim();
 const BOOKING_EXAMPLE = 'לדוגמה: שים את אביבית ביום שני ב-12 תספורת';
 const CUSTOMER_EXAMPLE = 'לדוגמה: לקוח חדש דניאלה להבי, טלפון 0501234567, שם חיה טופי, סוג מלטז';
 const NEW_CUSTOMER_BOOKING_EXAMPLE =
@@ -74,6 +77,8 @@ const SUPPORTED_SERVICE_HINT = 'תספורת';
 const ASSISTANT_HELP_TEXT =
   'אני העוזר של Pawlished. אפשר לבקש ממני לקבוע תור, להוסיף לקוח חדש, לשאול על לוז יומי או שבועי, לנהל משימות, להוסיף אירוע אישי וליצור תזכורת מהירה.\n' +
   'אם חסר פרט, אפשר לענות רק עם החלק החסר. לדוגמה: אם ביקשתי שעה, אפשר לענות פשוט "7" או "07:00".';
+
+const ASSISTANT_HELP_TEXT_BRANDED = ASSISTANT_HELP_TEXT.replace(/Pawlished/g, WHATSAPP_ASSISTANT_NAME);
 
 const canSendWhatsAppReply = () => Boolean(whatsappToken && whatsappPhoneNumberId);
 
@@ -484,6 +489,11 @@ const CUSTOMER_ASSISTANT_HELP_TEXT =
   'שלום, כאן העוזר של Pawlished. אנחנו מטפלים בכלבים קטנים בלבד 🐶\n' +
   'אפשר לכתוב לי מתי נוח לך לתור, למשל: "אפשר מחר ב-12?" או "אני רוצה תור ביום שלישי". אם זו פעם ראשונה שלך, אשאל גם שם מלא, שם חיית המחמד וסוג/גזע.';
 
+const CUSTOMER_ASSISTANT_HELP_TEXT_BRANDED = CUSTOMER_ASSISTANT_HELP_TEXT.replace(
+  /Pawlished/g,
+  WHATSAPP_ASSISTANT_NAME
+);
+
 const CUSTOMER_CLARIFICATION_TEXT =
   'לא לגמרי הבנתי 🙂\n' +
   'רצית לקבוע תור? תכתוב יום ושעה (לדוגמה: מחר ב-07:00).\n' +
@@ -696,7 +706,8 @@ const hydrateCustomerBookingPayload = ({ payload = {}, conversationPhone = '', k
 });
 
 const buildCustomerTimeQuestionForDate = (dateValue = '') => {
-  const slots = getAllowedSlotsForLocalDate(dateValue);
+  const weeklySlots = getCachedBusinessSchedule().weeklySlots;
+  const slots = getAllowedSlotsForLocalDate(dateValue, undefined, weeklySlots);
   if (!slots.length) {
     return 'באיזו שעה נוח לך? אנחנו עובדים ראשון עד שישי.';
   }
@@ -713,7 +724,8 @@ const applyCustomerScheduleRules = (payload = {}) => {
     return { payload, notice: null };
   }
 
-  const allowedSlots = getAllowedSlotsForLocalDate(payload.date);
+  const weeklySlots = getCachedBusinessSchedule().weeklySlots;
+  const allowedSlots = getAllowedSlotsForLocalDate(payload.date, undefined, weeklySlots);
   if (!allowedSlots.length) {
     return {
       payload: { ...payload, date: '', time: '' },
@@ -1474,7 +1486,7 @@ const handlePublicCustomerMessage = async ({ req, res, incoming, conversationPho
 
   if (isGreeting && !hasActiveBookingContext) {
     await clearWhatsAppContext(conversationPhone);
-    const reply = await sendReplySafely(conversationPhone, CUSTOMER_ASSISTANT_HELP_TEXT, {
+    const reply = await sendReplySafely(conversationPhone, CUSTOMER_ASSISTANT_HELP_TEXT_BRANDED, {
       intentKind: 'customer_help'
     });
 
@@ -1482,7 +1494,7 @@ const handlePublicCustomerMessage = async ({ req, res, incoming, conversationPho
       ok: true,
       accepted: true,
       kind: 'customer_help',
-      text: CUSTOMER_ASSISTANT_HELP_TEXT,
+      text: CUSTOMER_ASSISTANT_HELP_TEXT_BRANDED,
       reply
     });
     return;
@@ -1877,6 +1889,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    await loadBusinessSchedule().catch(() => null);
     const incoming = extractIncomingMessage(req.body || {});
     const conversationPhone = incoming.from || req.body?.customerPhone || '';
     const conversationContext = conversationPhone
@@ -1981,7 +1994,7 @@ export default async function handler(req, res) {
     const assistantHelpQuery = parseAssistantHelpQuery(incoming.text);
     if (assistantHelpQuery) {
       await clearWhatsAppContext(conversationPhone);
-      const helpReply = await sendReplySafely(conversationPhone, ASSISTANT_HELP_TEXT);
+      const helpReply = await sendReplySafely(conversationPhone, ASSISTANT_HELP_TEXT_BRANDED);
 
       res.status(200).json({
         ok: true,
@@ -1989,7 +2002,7 @@ export default async function handler(req, res) {
         kind: 'assistant_help',
         query: assistantHelpQuery,
         reply: helpReply,
-        text: ASSISTANT_HELP_TEXT
+        text: ASSISTANT_HELP_TEXT_BRANDED
       });
       return;
     }

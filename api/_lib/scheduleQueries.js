@@ -1,4 +1,4 @@
-import { TIME_SLOTS, getFreeSlotsForAppointments, listAppointmentsForLocalDate } from './appointments.js';
+import { getFreeSlotsForAppointments, listAppointmentsForLocalDate, loadBusinessSchedule } from './appointments.js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 
@@ -305,9 +305,11 @@ const formatAppointmentsCountText = (count, periodLabel) => {
 };
 
 const buildDayScheduleReply = async ({ date, mode }) => {
+  const businessSchedule = await loadBusinessSchedule();
+  const weeklySlots = businessSchedule?.weeklySlots;
   const appointments = await listAppointmentsForLocalDate(date);
   const occupiedSlots = appointments.map((appointment) => appointment.localTime);
-  const freeSlots = getFreeSlotsForAppointments(appointments, date);
+  const freeSlots = getFreeSlotsForAppointments(appointments, date, weeklySlots);
   const dateLabel = formatDateLabel(date);
 
   if (mode === 'overview') {
@@ -361,6 +363,8 @@ const buildDayScheduleReply = async ({ date, mode }) => {
 };
 
 const buildWeekScheduleReply = async ({ startDate, endDate, mode }) => {
+  const businessSchedule = await loadBusinessSchedule();
+  const weeklySlots = businessSchedule?.weeklySlots;
   const start = dateFromParts(
     (() => {
       const [year, month, day] = startDate.split('-').map(Number);
@@ -420,7 +424,7 @@ const buildWeekScheduleReply = async ({ startDate, endDate, mode }) => {
 
   const lines = dayResults.map((day) => {
     const occupiedSlots = day.appointments.map((appointment) => appointment.localTime);
-    const freeSlots = getFreeSlotsForAppointments(day.appointments, day.date);
+    const freeSlots = getFreeSlotsForAppointments(day.appointments, day.date, weeklySlots);
 
     if (mode === 'free') {
       return `${formatDateLabel(day.date)}: ${compressSlots(freeSlots).join(', ') || 'אין שעות פנויות כרגע'}`;

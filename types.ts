@@ -24,12 +24,35 @@ export interface Customer {
 export interface Appointment {
   id: string;
   customerId: string;
+  dogId?: string;
   date: Date;
   service: string;
   status: AppointmentStatus;
   notes?: string;
   price: number; // Added price field
   cancellationFee?: number;
+}
+
+export type DogSex = 'MALE' | 'FEMALE';
+export type DogSize = 'SMALL' | 'MEDIUM' | 'LARGE';
+
+export interface Dog {
+  id: string;
+  customerId: string;
+  name: string;
+  breed?: string;
+  sex?: DogSex;
+  sizeCategory?: DogSize;
+  weightKg?: number;
+  allergies?: string;
+  medicalNotes?: string;
+  behaviorNotes?: string;
+  notes?: string;
+  photoUrl?: string;
+  lastVisit: Date;
+  visitFrequencyWeeks: number;
+  defaultPrice?: number;
+  lifecycleStatus: CustomerLifecycleStatus;
 }
 
 export type TaskStatus = 'OPEN' | 'DONE';
@@ -73,4 +96,4 @@ export interface DayCell {
   holiday?: string | null; // Added holiday field
 }
 
-export type ViewType = 'CALENDAR' | 'CUSTOMERS' | 'MESSAGES' | 'STATS';
+export type ViewType = 'HOME' | 'DASHBOARD' | 'CALENDAR' | 'CUSTOMERS' | 'MESSAGES' | 'SETTINGS';

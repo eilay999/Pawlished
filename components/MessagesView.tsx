@@ -4,6 +4,7 @@ import { Customer, WhatsAppMessage } from '../types';
 import { normalizePhoneForCompare } from '../utils';
 
 interface MessagesViewProps {
+  adminSessionToken?: string;
   messages: WhatsAppMessage[];
   customers: Customer[];
   isTableMissing?: boolean;
@@ -65,6 +66,7 @@ const groupMessages = (messages: WhatsAppMessage[]): Conversation[] => {
 };
 
 export const MessagesView: React.FC<MessagesViewProps> = ({
+  adminSessionToken,
   messages,
   customers,
   isTableMissing = false,
@@ -112,7 +114,10 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     try {
       const response = await fetch('/api/whatsapp-send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminSessionToken ? { 'X-OTP-Token': adminSessionToken } : {})
+        },
         body: JSON.stringify({
           phone: selectedConversation.phone,
           body: text

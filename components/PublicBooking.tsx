@@ -1,32 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, Phone, User, Dog, CheckCircle2 } from 'lucide-react';
-import { Appointment, AppointmentStatus, Customer } from '../types';
-import { APPOINTMENT_DURATION_MINUTES } from '../constants';
+import { Appointment, Customer } from '../types';
 
-type BookingStep = 'PHONE' | 'DETAILS' | 'BOOKING' | 'DONE';
+type BookingStep = 'PHONE' | 'OTP' | 'DETAILS' | 'BOOKING' | 'DONE';
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
-const WEEKLY_SLOTS: Record<number, string[]> = {
-  // 0=Sunday ... 6=Saturday
-  0: ['07:00', '08:00'],
-  1: ['09:00', '12:00', '15:00'],
-  2: ['09:00', '12:00', '15:00'],
-  3: ['08:00', '11:00', '14:00'],
-  4: ['07:00', '08:00'],
-  5: ['07:00', '08:00'],
-  6: []
-};
-
 const normalizeDigits = (value: string) => value.replace(/\D/g, '');
 
-const normalizePhoneForCompare = (value: string) => {
-  const digits = normalizeDigits(value);
-  if (digits.startsWith('972')) {
-    return `0${digits.slice(3)}`;
-  }
-  return digits;
-};
+const OTP_CODE_LENGTH = 6;
+const OTP_RESEND_COOLDOWN_SEC = 60;
 
 const toE164 = (value: string) => {
   const digits = normalizeDigits(value);
@@ -43,151 +26,312 @@ const toE164 = (value: string) => {
   return `+${digits}`;
 };
 
-const ADMIN_PHONES = ['0543131544', '0527075624'].map(normalizePhoneForCompare);
-
-const makeSlotDate = (date: Date, time: string) => {
-  const [hours, minutes] = time.split(':').map(Number);
-  const slot = new Date(date);
-  slot.setHours(hours, minutes, 0, 0);
-  return slot;
+const maskPhoneForDisplay = (value: string) => {
+  const digits = normalizeDigits(value);
+  if (!digits) return value;
+  if (digits.length <= 4) return digits;
+  return `•••${digits.slice(-4)}`;
 };
 
-const toLocalDateKey = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+type AvailabilityDay = {
+  date: string; // YYYY-MM-DD (Israel local date)
+  weekdayIndex: number | null;
+  times: Array<{ time: string; available: boolean }>;
+};
+
+type BookingConfirmationStatus = {
+  ok: boolean;
+  channel?: 'sms' | 'whatsapp';
+  error?: string;
+};
+
+const toDisplayDateLabel = (dateValue: string) => {
+  const safe = new Date(`${dateValue}T12:00:00`);
+  if (Number.isNaN(safe.getTime())) return dateValue;
+  return safe.toLocaleDateString('he-IL');
+};
 
 interface PublicBookingProps {
-  appointments: Appointment[];
-  customers: Customer[];
   onBookingCreated: (payload: { customer: Customer; appointment: Appointment }) => void;
   onCustomerCreated?: (customer: Customer) => void;
-  onAdminAccess?: (phone: string) => void;
 }
 
 export const PublicBooking: React.FC<PublicBookingProps> = ({
-  appointments,
-  customers,
   onBookingCreated,
-  onCustomerCreated,
-  onAdminAccess
+  onCustomerCreated
 }) => {
   const [step, setStep] = useState<BookingStep>('PHONE');
   const [doneKind, setDoneKind] = useState<'BOOKED' | 'CUSTOMER_CREATED' | null>(null);
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState('');
-  const [existingCustomer, setExistingCustomer] = useState<Customer | null>(null);
+  const [otpSessionToken, setOtpSessionToken] = useState('');
+  const [otpPendingPhone, setOtpPendingPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpChannel, setOtpChannel] = useState<'sms' | 'whatsapp' | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpResendAvailableAt, setOtpResendAvailableAt] = useState<number | null>(null);
+  const [otpTick, setOtpTick] = useState(0);
+  const otpInputRef = useRef<HTMLInputElement | null>(null);
+  const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     petName: '',
     petType: ''
   });
   const [selectedSlot, setSelectedSlot] = useState<{
-    date: Date;
+    date: string;
     time: string;
   } | null>(null);
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const [isSavingCustomerCard, setIsSavingCustomerCard] = useState(false);
+  const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
+  const [availabilityDays, setAvailabilityDays] = useState<AvailabilityDay[]>([]);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
+  const [confirmationStatus, setConfirmationStatus] = useState<BookingConfirmationStatus | null>(
+    null
+  );
 
-  const bookedRangesByDate = useMemo(() => {
-    const map = new Map<string, Array<{ start: number; end: number }>>();
-
-    appointments
-      .filter(appointment => appointment.status !== AppointmentStatus.CANCELLED)
-      .forEach((appointment) => {
-        const start = new Date(appointment.date).getTime();
-        if (Number.isNaN(start)) return;
-        const end = start + APPOINTMENT_DURATION_MINUTES * 60 * 1000;
-        const key = toLocalDateKey(new Date(start));
-        map.set(key, [...(map.get(key) || []), { start, end }]);
-      });
-
+  const availableSlotCountByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    availabilityDays.forEach((day) => {
+      map.set(
+        day.date,
+        (day.times || []).reduce((acc, time) => (time.available ? acc + 1 : acc), 0)
+      );
+    });
     return map;
-  }, [appointments]);
+  }, [availabilityDays]);
 
-  const upcomingDays = useMemo(() => {
-    const today = new Date();
-    const days: Array<{ date: Date; times: string[] }> = [];
+  const bookingProgress = useMemo(() => {
+    const labelByStep: Record<BookingStep, string> = {
+      PHONE: 'מספר טלפון',
+      OTP: 'אימות קוד',
+      DETAILS: 'פרטי לקוח',
+      BOOKING: 'בחירת תור',
+      DONE: 'סיום'
+    };
 
-    for (let index = 0; index < 14; index += 1) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + index);
-      date.setHours(0, 0, 0, 0);
+    const base = {
+      label: labelByStep[step] ?? '',
+      current: 1,
+      total: 4
+    };
 
-      const times = WEEKLY_SLOTS[date.getDay()] || [];
-      if (times.length > 0) {
-        days.push({ date, times });
-      }
+    if (step === 'DONE') {
+      const total = doneKind === 'CUSTOMER_CREATED' ? 3 : isExistingCustomer ? 3 : 4;
+      return { ...base, current: total, total, label: doneKind === 'CUSTOMER_CREATED' ? 'כרטיס לקוח נשמר' : 'התור נקבע' };
     }
 
-    return days;
-  }, []);
+    if (isExistingCustomer) {
+      const map: Partial<Record<BookingStep, number>> = {
+        PHONE: 1,
+        OTP: 2,
+        BOOKING: 3
+      };
+      return { ...base, current: map[step] ?? 1, total: 3 };
+    }
 
-  const isSlotAvailable = (date: Date, time: string) => {
-    const slot = makeSlotDate(date, time);
-    if (slot.getTime() < Date.now()) return false;
-    const key = toLocalDateKey(slot);
-    const slotStart = slot.getTime();
-    const slotEnd = slotStart + APPOINTMENT_DURATION_MINUTES * 60 * 1000;
-    const booked = bookedRangesByDate.get(key) || [];
-    return !booked.some((range) => slotStart < range.end && slotEnd > range.start);
+    const map: Partial<Record<BookingStep, number>> = {
+      PHONE: 1,
+      OTP: 2,
+      DETAILS: 3,
+      BOOKING: 4
+    };
+
+    return { ...base, current: map[step] ?? 1, total: 4 };
+  }, [doneKind, isExistingCustomer, step]);
+
+  const otpSecondsUntilResend = useMemo(() => {
+    if (!otpResendAvailableAt) return 0;
+    return Math.max(0, Math.ceil((otpResendAvailableAt - Date.now()) / 1000));
+  }, [otpResendAvailableAt, otpTick]);
+
+  useEffect(() => {
+    if (step !== 'BOOKING') return;
+
+    let cancelled = false;
+    setAvailabilityError(null);
+    setIsLoadingAvailability(true);
+
+    void fetch('/api/public-booking/availability?days=30')
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || 'טעינת זמינות נכשלה.');
+        }
+
+        if (cancelled) return;
+        setAvailabilityDays(Array.isArray(payload.days) ? payload.days : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setAvailabilityDays([]);
+        setAvailabilityError(err instanceof Error ? err.message : 'טעינת זמינות נכשלה.');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoadingAvailability(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [availabilityRefreshKey, step]);
+
+  useEffect(() => {
+    if (step !== 'OTP') return;
+    const timer = window.setTimeout(() => {
+      otpInputRef.current?.focus();
+      otpInputRef.current?.select?.();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== 'OTP' || !otpResendAvailableAt) return;
+    if (Date.now() >= otpResendAvailableAt) return;
+
+    const timer = window.setInterval(() => {
+      if (Date.now() >= otpResendAvailableAt) {
+        window.clearInterval(timer);
+        setOtpTick((value) => value + 1);
+        return;
+      }
+      setOtpTick((value) => value + 1);
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [otpResendAvailableAt, step]);
+
+  const clearOtpState = () => {
+    setOtpPendingPhone('');
+    setOtpCode('');
+    setOtpChannel(null);
+    setOtpResendAvailableAt(null);
   };
 
-  const handleContinueWithPhone = () => {
-    setError(null);
-    setDoneKind(null);
-    const e164 = toE164(phone);
+  const continueAfterVerifiedPhone = async (e164: string, sessionToken: string) => {
+    setIsCheckingCustomer(true);
+    setIsExistingCustomer(false);
+    try {
+      const response = await fetch('/api/public-booking/customer-exists', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'X-OTP-Token': sessionToken } : {})
+        },
+        body: JSON.stringify({ phone: e164, otpToken: sessionToken })
+      });
 
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error || 'בדיקת לקוח נכשלה. נסה שוב.');
+        return;
+      }
+
+      const exists = Boolean(payload.exists);
+      setIsExistingCustomer(exists);
+      setStep(exists ? 'BOOKING' : 'DETAILS');
+    } catch {
+      setError('בדיקת לקוח נכשלה. נסה שוב.');
+    } finally {
+      setIsCheckingCustomer(false);
+    }
+  };
+
+  const handleSendOtp = async (forcedPhone?: string) => {
+    setError(null);
+    setAvailabilityError(null);
+    setDoneKind(null);
+    setVerifiedPhone('');
+    setOtpSessionToken('');
+
+    const e164 = forcedPhone || toE164(phone);
     if (!e164) {
       setError('הזן מספר טלפון תקין.');
       return;
     }
 
-    setVerifiedPhone(e164);
-    const normalized = normalizePhoneForCompare(e164);
+    setSelectedSlot(null);
 
-    if (ADMIN_PHONES.includes(normalized)) {
-      onAdminAccess?.(normalized);
-      return;
-    }
+    if (isSendingOtp) return;
 
-    const existing =
-      customers.find(customer => normalizePhoneForCompare(customer.phone) === normalized) || null;
-
-    setExistingCustomer(existing);
-    if (existing) {
-      setStep('BOOKING');
-      return;
-    }
-
-    setStep('DETAILS');
-  };
-
-  const handleSendConfirmation = async (
-    dateLabel: string,
-    timeLabel: string,
-    managerApproval?: {
-      requested: boolean;
-      customerName?: string;
-      petName?: string;
-      customerPhone?: string;
-    }
-  ) => {
+    setIsSendingOtp(true);
     try {
-      await fetch('/api/whatsapp-confirm', {
+      const response = await fetch('/api/whatsapp-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: verifiedPhone,
-          date: dateLabel,
-          time: timeLabel,
-          requestManagerApproval: managerApproval?.requested ?? false,
-          customerName: managerApproval?.customerName,
-          petName: managerApproval?.petName,
-          customerPhone: managerApproval?.customerPhone
-        })
+        body: JSON.stringify({ action: 'send', phone: e164 })
       });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error || 'שליחת קוד נכשלה. נסה שוב.');
+        return;
+      }
+
+      setOtpPendingPhone(e164);
+      setOtpChannel(payload.channel === 'sms' || payload.channel === 'whatsapp' ? payload.channel : null);
+      setOtpResendAvailableAt(Date.now() + OTP_RESEND_COOLDOWN_SEC * 1000);
+      setOtpCode('');
+      setStep('OTP');
     } catch {
-      // ignore confirmation errors
+      setError('שליחת קוד נכשלה. נסה שוב.');
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async (forcedCode?: string) => {
+    setError(null);
+    setAvailabilityError(null);
+    setDoneKind(null);
+
+    if (!otpPendingPhone) {
+      setError('חסר מספר טלפון לאימות. חזור למסך הקודם.');
+      setStep('PHONE');
+      return;
+    }
+
+    const codeDigits = normalizeDigits(forcedCode ?? otpCode);
+    if (codeDigits.length !== OTP_CODE_LENGTH) {
+      setError('הזן קוד בן 6 ספרות.');
+      return;
+    }
+
+    if (isVerifyingOtp) return;
+
+    setIsVerifyingOtp(true);
+    try {
+      const response = await fetch('/api/whatsapp-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', phone: otpPendingPhone, code: codeDigits })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error || 'אימות הקוד נכשל. נסה שוב.');
+        return;
+      }
+
+      const sessionToken = typeof payload.sessionToken === 'string' ? payload.sessionToken : '';
+      if (!sessionToken) {
+        setError('האימות הצליח אבל חסר אסימון גישה. נסה שוב.');
+        return;
+      }
+
+      setOtpSessionToken(sessionToken);
+      setVerifiedPhone(otpPendingPhone);
+      clearOtpState();
+      await continueAfterVerifiedPhone(otpPendingPhone, sessionToken);
+    } catch {
+      setError('אימות הקוד נכשל. נסה שוב.');
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -204,6 +348,11 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const handleSaveCustomerCard = async () => {
     if (!verifiedPhone) return;
     if (isSavingCustomerCard) return;
+    if (!otpSessionToken) {
+      setError('נדרש אימות טלפון מחדש.');
+      setStep('PHONE');
+      return;
+    }
 
     if (!newCustomer.name.trim() || !newCustomer.petName.trim() || !newCustomer.petType.trim()) {
       setError('מלא שם, שם כלב וסוג.');
@@ -216,9 +365,13 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     try {
       const response = await fetch('/api/public-booking/create-customer', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-OTP-Token': otpSessionToken
+        },
         body: JSON.stringify({
           phone: verifiedPhone,
+          otpToken: otpSessionToken,
           customer: {
             name: newCustomer.name.trim(),
             petName: newCustomer.petName.trim(),
@@ -239,7 +392,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       };
 
       onCustomerCreated?.(customer);
-      setExistingCustomer(customer);
+      setIsExistingCustomer(true);
       setDoneKind('CUSTOMER_CREATED');
       setSelectedSlot(null);
       setStep('DONE');
@@ -256,28 +409,39 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       return;
     }
 
-    if (!isSlotAvailable(selectedSlot.date, selectedSlot.time)) {
-      setError('השעה כבר נתפסה. בחר שעה אחרת.');
+    if (!otpSessionToken) {
+      setError('נדרש אימות טלפון מחדש לפני קביעת תור.');
+      setStep('PHONE');
       return;
     }
 
-    const slotDate = makeSlotDate(selectedSlot.date, selectedSlot.time);
+    const day = availabilityDays.find((item) => item.date === selectedSlot.date);
+    const slot = day?.times?.find((item) => item.time === selectedSlot.time) || null;
+    if (!slot?.available) {
+      setError('השעה כבר נתפסה. רענן זמינות ובחר שעה אחרת.');
+      return;
+    }
+
     setError(null);
     setIsSubmittingBooking(true);
 
     try {
       const response = await fetch('/api/public-booking/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-OTP-Token': otpSessionToken
+        },
         body: JSON.stringify({
           phone: verifiedPhone,
-          slotDate: slotDate.toISOString(),
-          existingCustomerId: existingCustomer?.id,
-          customer: existingCustomer
+          otpToken: otpSessionToken,
+          date: selectedSlot.date,
+          time: selectedSlot.time,
+          customer: isExistingCustomer
             ? undefined
             : {
                 name: newCustomer.name.trim(),
-                phone: normalizePhoneForCompare(verifiedPhone),
+                phone: verifiedPhone,
                 petName: newCustomer.petName.trim(),
                 petType: newCustomer.petType.trim()
               },
@@ -289,6 +453,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         setError(payload.error || 'יצירת התור נכשלה.');
+        setAvailabilityRefreshKey((key) => key + 1);
         return;
       }
 
@@ -303,20 +468,16 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       };
 
       onBookingCreated({ customer, appointment });
-      setExistingCustomer(customer);
+      setIsExistingCustomer(true);
       setDoneKind('BOOKED');
-
-      await handleSendConfirmation(
-        slotDate.toLocaleDateString('he-IL'),
-        selectedSlot.time,
-        payload.createdCustomer
+      setConfirmationStatus(
+        payload?.confirmation && typeof payload.confirmation === 'object'
           ? {
-              requested: true,
-              customerName: customer.name,
-              petName: customer.petName,
-              customerPhone: customer.phone
+              ok: Boolean(payload.confirmation.ok),
+              channel: payload.confirmation.channel,
+              error: payload.confirmation.error
             }
-          : undefined
+          : null
       );
 
       setStep('DONE');
@@ -328,14 +489,38 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 p-4 md:p-8">
-      <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">קביעת תור</h1>
-            <p className="text-sm text-gray-500">אפשר לקבוע עד שבועיים קדימה</p>
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 p-4 md:p-8">
+      <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur rounded-3xl shadow-xl border border-white/70 overflow-hidden">
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900">קביעת תור</h1>
+              <p className="text-sm text-gray-500">אפשר לקבוע עד חודש מראש</p>
+            </div>
+            <div className="shrink-0 rounded-2xl bg-blue-50 border border-blue-100 p-2">
+              <Calendar className="w-6 h-6 text-blue-700" />
+            </div>
           </div>
-          <Calendar className="w-6 h-6 text-blue-600" />
+
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>
+                שלב {bookingProgress.current} מתוך {bookingProgress.total}
+              </span>
+              <span className="font-medium text-gray-600">{bookingProgress.label}</span>
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out"
+                style={{
+                  width: `${Math.max(
+                    8,
+                    Math.min(100, Math.round((bookingProgress.current / bookingProgress.total) * 100))
+                  )}%`
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -353,15 +538,108 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               <input
                 value={phone}
                 onChange={event => setPhone(event.target.value)}
+                dir="ltr"
                 placeholder='לדוגמה: 050-1234567'
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
               />
               <button
-                onClick={handleContinueWithPhone}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-medium"
+                onClick={() => void handleSendOtp()}
+                disabled={isSendingOtp}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl py-3 font-semibold shadow-sm"
               >
-                המשך
+                {isSendingOtp ? 'שולח קוד...' : 'שלח קוד אימות'}
               </button>
+              <div className="text-xs text-gray-500">
+                נשלח אליך קוד אימות בהודעה (WhatsApp או SMS) לפני קביעת התור.
+              </div>
+            </div>
+          )}
+
+          {step === 'OTP' && (
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500">אימות לטלפון</div>
+                  <div dir="ltr" className="text-sm font-semibold text-gray-900 truncate">
+                    {otpPendingPhone ? maskPhoneForDisplay(otpPendingPhone) : ''}
+                  </div>
+                </div>
+                <div className="shrink-0 text-[11px] px-2 py-1 rounded-full border border-blue-100 bg-blue-50 text-blue-700">
+                  {otpChannel ? (otpChannel === 'sms' ? 'SMS' : 'WhatsApp') : 'הודעה'}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500">קוד אימות (6 ספרות)</label>
+                <input
+                  ref={otpInputRef}
+                  value={otpCode}
+                  onChange={(event) => {
+                    const digits = normalizeDigits(event.target.value).slice(0, OTP_CODE_LENGTH);
+                    setOtpCode(digits);
+                    if (digits.length === OTP_CODE_LENGTH) {
+                      void handleVerifyOtp(digits);
+                    }
+                  }}
+                  dir="ltr"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={OTP_CODE_LENGTH}
+                  placeholder="123456"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-semibold tracking-[0.55em] text-center bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                />
+                <div className="mt-2 text-xs text-gray-500">
+                  לא קיבלת קוד?{' '}
+                  {otpSecondsUntilResend > 0
+                    ? `אפשר לשלוח שוב בעוד ${otpSecondsUntilResend} שנ׳.`
+                    : 'אפשר לשלוח שוב עכשיו.'}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => void handleVerifyOtp()}
+                  disabled={isVerifyingOtp || isCheckingCustomer}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl py-3 font-semibold shadow-sm"
+                >
+                  {isVerifyingOtp ? 'מאמת...' : isCheckingCustomer ? 'בודק לקוח...' : 'אמת קוד'}
+                </button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearOtpState();
+                      setVerifiedPhone('');
+                      setOtpSessionToken('');
+                      setStep('PHONE');
+                    }}
+                    disabled={isSendingOtp || isVerifyingOtp || isCheckingCustomer}
+                    className="w-full bg-white hover:bg-gray-50 disabled:opacity-60 text-gray-700 border border-gray-200 rounded-xl py-3 font-medium"
+                  >
+                    שנה מספר
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleSendOtp(otpPendingPhone)}
+                    disabled={
+                      isSendingOtp ||
+                      isVerifyingOtp ||
+                      isCheckingCustomer ||
+                      !otpPendingPhone ||
+                      otpSecondsUntilResend > 0
+                    }
+                    className="w-full bg-white hover:bg-blue-50 disabled:opacity-60 text-blue-700 border border-blue-200 rounded-xl py-3 font-medium"
+                  >
+                    {otpSecondsUntilResend > 0
+                      ? `שלח שוב בעוד ${otpSecondsUntilResend} שנ׳`
+                      : isSendingOtp
+                        ? 'שולח...'
+                        : 'שלח שוב'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -378,7 +656,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, name: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                   />
                 </div>
                 <div>
@@ -390,7 +668,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, petName: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -402,7 +680,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, petType: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                   />
                 </div>
               </div>
@@ -410,7 +688,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 <button
                   onClick={handleContinueDetails}
                   disabled={isSavingCustomerCard}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl py-3 font-medium"
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl py-3 font-semibold shadow-sm"
                 >
                   המשך לקביעת תור
                 </button>
@@ -427,30 +705,58 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
           {step === 'BOOKING' && (
             <div className="space-y-4">
-              <div className="text-sm text-gray-600">בחר תאריך ושעה (עד שבועיים קדימה)</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm text-gray-600">בחר תאריך ושעה (עד חודש מראש)</div>
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityRefreshKey((key) => key + 1)}
+                  disabled={isLoadingAvailability || isSubmittingBooking}
+                  className="text-xs px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  רענן זמינות
+                </button>
+              </div>
+
+              {availabilityError && (
+                <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">
+                  {availabilityError}
+                </div>
+              )}
+
+              {isLoadingAvailability ? (
+                <div className="text-sm text-gray-500">טוען זמינות...</div>
+              ) : availabilityDays.length === 0 ? (
+                <div className="text-sm text-gray-500">אין זמינות להצגה כרגע.</div>
+              ) : null}
+
               <div className="space-y-3">
-                {upcomingDays.map(day => (
-                  <div key={day.date.toISOString()} className="border border-gray-100 rounded-2xl p-3">
+                {availabilityDays.map((day) => (
+                  <div
+                    key={day.date}
+                    className="border border-gray-100 bg-white rounded-2xl p-4 shadow-sm shadow-blue-100/20"
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <div className="font-semibold text-gray-800">
-                        {DAY_NAMES[day.date.getDay()]} - {day.date.toLocaleDateString('he-IL')}
+                        {DAY_NAMES[day.weekdayIndex ?? 0]} - {toDisplayDateLabel(day.date)}
                       </div>
-                      <div className="text-xs text-gray-400">{day.times.length} תורים אפשריים</div>
+                      <div className="text-xs text-gray-400">
+                        {availableSlotCountByDate.get(day.date) ?? 0} זמינים
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {day.times.map(time => {
-                        const available = isSlotAvailable(day.date, time);
+                      {day.times.map((slotTime) => {
+                        const available = slotTime.available;
                         const isSelected =
                           Boolean(selectedSlot) &&
-                          selectedSlot!.time === time &&
-                          selectedSlot!.date.getTime() === day.date.getTime();
+                          selectedSlot!.time === slotTime.time &&
+                          selectedSlot!.date === day.date;
 
                         return (
                           <button
-                            key={time}
+                            key={slotTime.time}
                             disabled={!available || isSubmittingBooking}
-                            onClick={() => setSelectedSlot({ date: day.date, time })}
-                            className={`px-3 py-2 rounded-xl text-sm border transition ${
+                            onClick={() => setSelectedSlot({ date: day.date, time: slotTime.time })}
+                            className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition focus:outline-none focus:ring-2 focus:ring-blue-100 ${
                               isSelected
                                 ? 'bg-blue-600 text-white border-blue-600'
                                 : available
@@ -458,7 +764,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                                   : 'border-gray-100 text-gray-300 cursor-not-allowed'
                             }`}
                           >
-                            {time}
+                            {slotTime.time}
                           </button>
                         );
                       })}
@@ -469,7 +775,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               <button
                 onClick={handleConfirmBooking}
                 disabled={isSubmittingBooking}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl py-3 font-medium"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl py-3 font-semibold shadow-sm"
               >
                 {isSubmittingBooking ? 'שומר...' : 'אישור תור'}
               </button>
@@ -484,7 +790,20 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               </div>
               {doneKind !== 'CUSTOMER_CREATED' && selectedSlot && (
                 <div className="text-sm text-gray-500">
-                  {selectedSlot.date.toLocaleDateString('he-IL')} בשעה {selectedSlot.time}
+                  {toDisplayDateLabel(selectedSlot.date)} בשעה {selectedSlot.time}
+                </div>
+              )}
+              {doneKind !== 'CUSTOMER_CREATED' && confirmationStatus && (
+                <div
+                  className={`text-sm rounded-xl px-4 py-3 border ${
+                    confirmationStatus?.ok === false
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  }`}
+                >
+                  {confirmationStatus?.ok === false
+                    ? 'התור נקבע אבל לא הצלחנו לשלוח הודעת אישור. אם לא קיבלת הודעה תוך כמה דקות – צור קשר איתנו.'
+                    : `הודעת אישור נשלחה ${confirmationStatus?.channel === 'sms' ? 'ב‑SMS' : 'ב‑WhatsApp'}.`}
                 </div>
               )}
               {doneKind === 'CUSTOMER_CREATED' && (

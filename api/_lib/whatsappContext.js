@@ -2,8 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { normalizeDigits } from './appointments.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const CONTEXT_TTL_HOURS = 24;
 

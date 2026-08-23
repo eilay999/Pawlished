@@ -3,7 +3,7 @@ import {
   Search,
   Edit2,
   Plus,
-  Dog,
+  Dog as DogIcon,
   Calendar,
   AlertCircle,
   Clock,
@@ -11,23 +11,27 @@ import {
   Phone,
   PauseCircle
 } from 'lucide-react';
-import { Appointment, Customer } from '../types';
-import { analyzeCustomerStatus, normalizeDigits, normalizePhoneForCompare } from '../utils';
+import { Appointment, Customer, Dog } from '../types';
+import { analyzeDogStatus, normalizeDigits, normalizePhoneForCompare } from '../utils';
 
 interface CustomersViewProps {
   customers: Customer[];
+  dogs: Dog[];
   appointments: Appointment[];
   onEditCustomer: (customer: Customer) => void;
   onAddCustomer: () => void;
+  onOpenDog: (dogId: string) => void;
 }
 
 type CustomerFilter = 'ACTIVE' | 'ON_HOLD' | 'ALL';
 
 export const CustomersView: React.FC<CustomersViewProps> = ({
   customers,
+  dogs,
   appointments,
   onEditCustomer,
-  onAddCustomer
+  onAddCustomer,
+  onOpenDog
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<CustomerFilter>('ACTIVE');
@@ -42,7 +46,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
   const filteredCustomers = useMemo(() => {
     const matchesSearch = (customer: Customer) => {
       if (!normalizedSearch) return true;
-      if ([customer.name, customer.petName].some(value => value.toLowerCase().includes(normalizedSearch))) {
+      const customerDogNames = dogs.filter(d => d.customerId === customer.id).map(d => d.name);
+      if ([customer.name, ...customerDogNames].some(value => value.toLowerCase().includes(normalizedSearch))) {
         return true;
       }
 
@@ -61,7 +66,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
       })
       .filter(matchesSearch)
       .sort((left, right) => left.name.localeCompare(right.name, 'he'));
-  }, [customers, filter, normalizedSearch, normalizedPhoneSearch]);
+  }, [customers, dogs, filter, normalizedSearch, normalizedPhoneSearch]);
 
   return (
     <div className="flex-1 bg-white/90 m-3 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-gray-100 backdrop-blur-sm">
@@ -124,7 +129,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
       <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
         {filteredCustomers.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
-            <Dog className="w-16 h-16 mx-auto mb-4 opacity-20" />
+            <DogIcon className="w-16 h-16 mx-auto mb-4 opacity-20" />
             <p>לא נמצאו לקוחות מתאימים</p>
           </div>
         ) : (
@@ -141,7 +146,17 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
             </thead>
             <tbody className="divide-y divide-gray-50 text-sm">
               {filteredCustomers.map(customer => {
-                const analysis = analyzeCustomerStatus(customer, appointments);
+                const customerDogs = dogs.filter(d => d.customerId === customer.id);
+                const primaryDog = customerDogs[0];
+                const analysis = primaryDog
+                  ? analyzeDogStatus(primaryDog, appointments)
+                  : {
+                      status: 'OK' as const,
+                      dueDate: new Date(),
+                      daysDiff: 0,
+                      nextAppointment: undefined,
+                      lastEffectiveVisit: new Date(customer.lastVisit)
+                    };
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const lastVisit = new Date(analysis.lastEffectiveVisit);
@@ -236,9 +251,27 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                         </div>
                         <div>
                           <div className="font-bold text-gray-800">{customer.name}</div>
-                          <div className="text-gray-500 text-xs flex items-center gap-1">
-                            <Dog className="w-3 h-3" />
-                            {customer.petName}
+                          <div className="text-gray-500 text-xs flex items-center gap-1 flex-wrap">
+                            <DogIcon className="w-3 h-3 shrink-0" />
+                            {customerDogs.length === 0 ? (
+                              <span className="text-gray-400">אין כלב רשום</span>
+                            ) : (
+                              customerDogs.map((dog, index) => (
+                                <React.Fragment key={dog.id}>
+                                  {index > 0 && <span className="text-gray-300">·</span>}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenDog(dog.id);
+                                    }}
+                                    className="hover:text-blue-600 hover:underline"
+                                  >
+                                    {dog.name}
+                                  </button>
+                                </React.Fragment>
+                              ))
+                            )}
                           </div>
                         </div>
                       </div>
@@ -286,7 +319,11 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                     <td className="px-6 py-4 hidden lg:table-cell">
                       <div className="text-gray-500 flex flex-col text-xs">
                         <span className="mb-1 block font-medium">
-                          {analysis.status === 'ON_HOLD' ? 'בהמתנה' : `כל ${customer.visitFrequencyWeeks} שבועות`}
+                          {analysis.status === 'ON_HOLD'
+                            ? 'בהמתנה'
+                            : primaryDog
+                              ? `כל ${primaryDog.visitFrequencyWeeks} שבועות`
+                              : '—'}
                         </span>
                         <span className="text-gray-400 flex items-center gap-1">
                           ביקור אחרון: {analysis.lastEffectiveVisit.toLocaleDateString('he-IL')}

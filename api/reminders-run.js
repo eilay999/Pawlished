@@ -1,17 +1,31 @@
 import { listDueReminders, markReminderSent } from './_lib/reminders.js';
+import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const cronSecret = (process.env.CRON_SECRET || process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
 
+const reminderProviderLabel = (process.env.REMINDER_PROVIDER_LABEL || 'Pawlished').trim();
+
 const canSendWhatsAppReply = () => Boolean(whatsappToken && whatsappPhoneNumberId);
+
+const normalizeDigits = (value = '') => String(value || '').replace(/\D/g, '');
+
+const toWhatsAppNumber = (value = '') => {
+  const digits = normalizeDigits(value);
+  if (!digits) return '';
+  if (digits.startsWith('972')) return digits;
+  if (digits.startsWith('0')) return `972${digits.slice(1)}`;
+  if (String(value || '').trim().startsWith('+')) return digits;
+  return digits;
+};
 
 const sendWhatsAppTextReply = async (to, bodyText) => {
   if (!canSendWhatsAppReply()) {
     throw new Error('Missing WHATSAPP_TOKEN or WHATSAPP_PHONE_NUMBER_ID');
   }
 
-  const recipient = String(to || '').replace(/\D/g, '');
+  const recipient = toWhatsAppNumber(to);
   if (!recipient) {
     throw new Error('Missing recipient phone number');
   }
@@ -39,8 +53,28 @@ const sendWhatsAppTextReply = async (to, bodyText) => {
   }
 };
 
+const buildDayBeforeAppointmentText = (reminder) => {
+  const appointmentTime = reminder.payload?.time ? `בשעה ${reminder.payload.time}` : '';
+  const appointmentDate = reminder.payload?.date ? ` (${reminder.payload.date})` : '';
+  const customerLabel = reminder.payload?.customerName || reminder.title;
+  const petLabel = reminder.payload?.petName ? ` (${reminder.payload.petName})` : '';
+  const providerLabel = reminderProviderLabel ? `ל${reminderProviderLabel}` : 'אלינו';
+  const timePart = appointmentTime ? ` ${appointmentTime}` : '';
+
+  return (
+    `היי ${customerLabel}${petLabel} 😊\n` +
+    `תזכורת ליום מחר${appointmentDate}: יש לך תור ${providerLabel}${timePart}.` +
+    `\nאם צריך שינוי או ביטול — אפשר פשוט לענות להודעה הזו.`
+  );
+};
+
 const buildReminderText = (reminder) => {
   if (reminder.source_kind === 'APPOINTMENT') {
+    const reminderKind = String(reminder.payload?.reminderKind || '').trim().toUpperCase();
+    if (reminderKind === 'DAY_BEFORE') {
+      return buildDayBeforeAppointmentText(reminder);
+    }
+
     const appointmentTime = reminder.payload?.time ? ` בשעה ${reminder.payload.time}` : '';
     const customerLabel = reminder.payload?.customerName || reminder.title;
     const petLabel = reminder.payload?.petName ? ` (${reminder.payload.petName})` : '';
@@ -56,15 +90,12 @@ const buildReminderText = (reminder) => {
 
 const isAuthorized = (req) => {
   if (!cronSecret) {
-    return true;
+    // Avoid leaving a public endpoint that can send messages.
+    return process.env.NODE_ENV !== 'production';
   }
 
   const authHeader = String(req.headers.authorization || '');
-  if (authHeader === `Bearer ${cronSecret}`) {
-    return true;
-  }
-
-  return req.headers['x-vercel-cron'] === '1';
+  return authHeader === `Bearer ${cronSecret}`;
 };
 
 export default async function handler(req, res) {
@@ -85,7 +116,20 @@ export default async function handler(req, res) {
 
     for (const reminder of dueReminders) {
       try {
-        await sendWhatsAppTextReply(reminder.phone, buildReminderText(reminder));
+        const text = buildReminderText(reminder);
+        await sendWhatsAppTextReply(reminder.phone, text);
+        await logWhatsAppMessage({
+          phone: reminder.phone,
+          direction: 'OUTGOING',
+          body: text,
+          intentKind: reminder.payload?.reminderKind === 'DAY_BEFORE' ? 'appointment_day_before' : 'reminder',
+          metadata: {
+            via: 'cron',
+            reminderId: reminder.id,
+            sourceKind: reminder.source_kind,
+            sourceId: reminder.source_id || null
+          }
+        }).catch(() => null);
         await markReminderSent(reminder.id);
         results.push({ id: reminder.id, sent: true });
       } catch (error) {

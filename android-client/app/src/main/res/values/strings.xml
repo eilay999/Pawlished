@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pawlished Booking</string>
+    <string name="title_activity_main">Pawlished Booking</string>
+    <string name="package_name">com.pawlished.booking</string>
+    <string name="custom_url_scheme">com.pawlished.booking</string>
+</resources>

@@ -1,37 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Dog, Calendar, User, Phone, Clock, CircleDollarSign, Trash2 } from 'lucide-react';
-import { Customer, CustomerLifecycleStatus } from '../types';
+import { X, Save, Dog as DogIcon, Plus, User, Phone, Trash2 } from 'lucide-react';
+import { Customer, CustomerLifecycleStatus, Dog } from '../types';
 import { normalizePhoneForCompare } from '../utils';
 
 interface CustomerModalProps {
   customer?: Customer | null;
+  dogs?: Dog[];
   isOpen: boolean;
   prefillPhone?: string;
   onClose: () => void;
   onSave: (customer: Customer) => void;
   onDelete?: (customerId: string) => void;
+  onOpenDog?: (dogId: string) => void;
+  onAddDog?: (customerId: string) => void;
 }
-
-const FREQUENCY_OPTIONS = [
-  { weeks: 2, label: 'שבועיים' },
-  { weeks: 4, label: 'חודש' },
-  { weeks: 6, label: 'חודש וחצי' },
-  { weeks: 8, label: 'חודשיים' },
-  { weeks: 10, label: 'חודשיים וחצי' },
-  { weeks: 12, label: '3 חודשים' },
-];
-
-const PET_TYPES = [
-  'פודל',
-  'טוי פודל',
-  'פודל ננסי',
-  'שיצו',
-  'פומרניין',
-  'מלטיפו',
-  'שיצו פודל',
-  'מלטז'
-];
 
 const LIFECYCLE_OPTIONS: Array<{
   value: CustomerLifecycleStatus;
@@ -50,37 +33,33 @@ const LIFECYCLE_OPTIONS: Array<{
   }
 ];
 
-export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, prefillPhone, onClose, onSave, onDelete }) => {
+export const CustomerModal: React.FC<CustomerModalProps> = ({
+  customer,
+  dogs = [],
+  isOpen,
+  prefillPhone,
+  onClose,
+  onSave,
+  onDelete,
+  onOpenDog,
+  onAddDog
+}) => {
   const [formData, setFormData] = useState<Partial<Customer>>({
     name: '',
     phone: '',
-    petName: '',
-    petType: '',
-    visitFrequencyWeeks: 4,
     lifecycleStatus: 'ACTIVE',
-    lastVisit: new Date(),
-    defaultPrice: undefined,
     notes: ''
   });
   useEffect(() => {
     if (customer) {
-      setFormData({
-        ...customer,
-        lastVisit: new Date(customer.lastVisit), // Ensure date object
-        petType: customer.petType || ''
-      });
+      setFormData({ ...customer });
     } else {
       const normalizedPrefillPhone = prefillPhone ? normalizePhoneForCompare(prefillPhone) : '';
       // Reset for new customer
       setFormData({
         name: '',
         phone: normalizedPrefillPhone,
-        petName: '',
-        petType: '',
-        visitFrequencyWeeks: 4,
         lifecycleStatus: 'ACTIVE',
-        lastVisit: new Date(),
-        defaultPrice: undefined,
         notes: ''
       });
     }
@@ -92,18 +71,19 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedPhone = normalizePhoneForCompare(formData.phone || '');
-    if (!formData.name || !formData.petName || !normalizedPhone) return;
+    if (!formData.name || !normalizedPhone) return;
 
     onSave({
       id: customer?.id || Math.random().toString(36).substr(2, 9),
       name: formData.name || '',
       phone: normalizedPhone,
-      petName: formData.petName || '',
-      petType: formData.petType?.trim() || '',
-      visitFrequencyWeeks: Number(formData.visitFrequencyWeeks) || 4,
+      // Pet fields live on `dogs` now; these are kept only as inert legacy columns.
+      petName: customer?.petName || '',
+      petType: customer?.petType || '',
+      visitFrequencyWeeks: customer?.visitFrequencyWeeks || 4,
+      lastVisit: customer?.lastVisit || new Date(),
+      defaultPrice: customer?.defaultPrice,
       lifecycleStatus: formData.lifecycleStatus || 'ACTIVE',
-      lastVisit: formData.lastVisit || new Date(),
-      defaultPrice: formData.defaultPrice,
       notes: formData.notes?.trim() || undefined
     });
     onClose();
@@ -111,19 +91,10 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
 
   const handleDelete = () => {
     if (!customer || !onDelete) return;
-    const confirmed = window.confirm('למחוק את הלקוח וכל התורים שלו?');
+    const confirmed = window.confirm('למחוק את הלקוח, כל הכלבים שלו וכל התורים שלו?');
     if (!confirmed) return;
     onDelete(customer.id);
     onClose();
-  };
-
-  const toInputDate = (date: Date) => {
-     if (!date) return '';
-     const d = new Date(date);
-     const year = d.getFullYear();
-     const month = String(d.getMonth() + 1).padStart(2, '0');
-     const day = String(d.getDate()).padStart(2, '0');
-     return `${year}-${month}-${day}`;
   };
 
   return (
@@ -184,62 +155,46 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 space-y-4">
-            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">פרטי הכלב ומחיר</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">שם הכלב</label>
-                    <div className="relative">
-                        <Dog className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
-                        <input 
-                            type="text" 
-                            required
-                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all" 
-                            placeholder="שם הכלב"
-                            value={formData.petName}
-                            onChange={e => setFormData({...formData, petName: e.target.value})}
-                        />
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">סוג הכלב</label>
-                    <div className="relative">
-                        <Dog className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            list="pet-types"
-                            required
-                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all"
-                            placeholder="בחר/י או הקלד/י סוג"
-                            value={formData.petType || ''}
-                            onChange={e => setFormData({...formData, petType: e.target.value})}
-                        />
-                        <datalist id="pet-types">
-                          {PET_TYPES.map(t => (
-                            <option key={t} value={t} />
-                          ))}
-                        </datalist>
-                    </div>
-                </div>
-
-                {/* Default Price Input */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">מחיר קבוע (אופציונלי)</label>
-                    <div className="relative">
-                        <CircleDollarSign className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
-                        <input 
-                            type="number" 
-                            min="0"
-                            className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 shadow-sm transition-all font-medium" 
-                            placeholder="לדוגמה: 200"
-                            value={formData.defaultPrice || ''}
-                            onChange={e => setFormData({...formData, defaultPrice: Number(e.target.value)})}
-                        />
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1">יופיע אוטומטית בקביעת תור</p>
-                </div>
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">כלבים</h4>
+              <button
+                type="button"
+                disabled={!customer || !onAddDog}
+                onClick={() => customer && onAddDog?.(customer.id)}
+                className="text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg px-2 py-1 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                הוסף כלב
+              </button>
             </div>
+            {!customer && (
+              <p className="text-[11px] text-gray-400">שמור/י את הלקוח קודם כדי להוסיף כלב.</p>
+            )}
+            {customer && dogs.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-3 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                עדיין אין כלבים ללקוח הזה
+              </p>
+            )}
+            {dogs.length > 0 && (
+              <div className="space-y-2">
+                {dogs.map(dog => (
+                  <button
+                    key={dog.id}
+                    type="button"
+                    onClick={() => onOpenDog?.(dog.id)}
+                    className="w-full text-right flex items-center justify-between px-3 py-2.5 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 font-medium text-gray-800">
+                      <DogIcon className="w-4 h-4 text-gray-400" />
+                      {dog.name}
+                      {dog.breed ? ` · ${dog.breed}` : ''}
+                    </span>
+                    <span className="text-[11px] text-gray-400">כרטיס הכלב ←</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-gray-100 pt-4 space-y-2">
@@ -274,54 +229,6 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, isOpen, 
                   </button>
                 );
               })}
-            </div>
-          </div>
-
-          <div className="border-t border-gray-100 pt-4 space-y-4 bg-blue-50 -mx-6 px-6 py-6 mt-2">
-            <h4 className="text-sm font-bold text-blue-800 uppercase tracking-wider flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                תזמון ותדירות
-            </h4>
-            
-            {/* Added Last Visit Field */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">תאריך ביקור אחרון</label>
-                <div className="relative">
-                    <Calendar className="absolute right-3 top-2.5 w-4 h-4 text-blue-500" />
-                    <input 
-                        type="date"
-                        required
-                        className="w-full pr-10 pl-3 py-2.5 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                        value={formData.lastVisit ? toInputDate(formData.lastVisit) : ''}
-                        onChange={e => {
-                            if (e.target.value) {
-                                setFormData({...formData, lastVisit: new Date(e.target.value)})
-                            }
-                        }}
-                    />
-                </div>
-            </div>
-            
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">כל כמה זמן הכלב מגיע?</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {FREQUENCY_OPTIONS.map((option) => (
-                    <button
-                      key={option.weeks}
-                      type="button"
-                      onClick={() => setFormData({...formData, visitFrequencyWeeks: option.weeks})}
-                      className={`
-                        py-2 px-2 text-sm font-medium rounded-lg transition-all border
-                        ${formData.visitFrequencyWeeks === option.weeks 
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
-                          : 'bg-white text-gray-600 border-blue-100 hover:bg-blue-50'}
-                      `}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mt-2">המערכת תתריע אוטומטית כשהמועד יתקרב.</p>
             </div>
           </div>
 

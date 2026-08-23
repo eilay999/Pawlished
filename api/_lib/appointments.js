@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { createReminder } from './reminders.js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 const DEFAULT_SERVICE = 'תספורת';
@@ -19,8 +20,7 @@ export const WEEKLY_BUSINESS_SLOTS = {
 };
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);
@@ -126,6 +126,121 @@ const normalizeTimeString = (value = '') => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
+const toWhatsAppNumber = (value = '') => {
+  const digits = normalizeDigits(value);
+  if (!digits) return '';
+  if (digits.startsWith('972')) return digits;
+  if (digits.startsWith('0')) return `972${digits.slice(1)}`;
+  if (String(value || '').trim().startsWith('+')) return digits;
+  return digits;
+};
+
+// Customers can only book up to 1 month ahead.
+const MAX_BOOKING_DAYS_AHEAD = 30;
+const businessScheduleCacheTtlSec = Number(process.env.BUSINESS_SCHEDULE_CACHE_TTL_SEC || 30);
+let cachedBusinessSchedule = null;
+let cachedBusinessScheduleAt = 0;
+
+const reminderDayBeforeTimeDefault = '18:00';
+const reminderDayBeforeTime = (() => {
+  const raw = String(process.env.REMINDER_DAY_BEFORE_TIME || reminderDayBeforeTimeDefault).trim();
+  try {
+    return normalizeTimeString(raw);
+  } catch {
+    return reminderDayBeforeTimeDefault;
+  }
+})();
+
+const normalizeTimeList = (values = []) => {
+  const list = Array.isArray(values) ? values : [];
+  const seen = new Set();
+
+  list.forEach((raw) => {
+    if (typeof raw !== 'string') return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    try {
+      seen.add(normalizeTimeString(trimmed));
+    } catch {
+      // ignore invalid times
+    }
+  });
+
+  return Array.from(seen).sort();
+};
+
+const normalizeWeeklySlots = (input) => {
+  const weeklySlots = input && typeof input === 'object' ? input : {};
+  const normalized = {};
+
+  for (let day = 0; day <= 6; day += 1) {
+    const raw = weeklySlots[day] ?? weeklySlots[String(day)];
+    normalized[day] = normalizeTimeList(raw);
+  }
+
+  return normalized;
+};
+
+const normalizeMaxDaysAhead = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return MAX_BOOKING_DAYS_AHEAD;
+  return Math.min(MAX_BOOKING_DAYS_AHEAD, Math.max(1, Math.round(numeric)));
+};
+
+export const getAllTimeSlots = (weeklySlots = WEEKLY_BUSINESS_SLOTS) => {
+  const values =
+    weeklySlots && typeof weeklySlots === 'object' ? Object.values(weeklySlots) : [];
+  return Array.from(new Set(values.flat().filter((t) => typeof t === 'string' && t.trim()))).sort();
+};
+
+export const loadBusinessSchedule = async () => {
+  const ttlMs =
+    Math.max(0, (Number.isFinite(businessScheduleCacheTtlSec) ? businessScheduleCacheTtlSec : 30)) *
+    1000;
+
+  if (cachedBusinessSchedule && ttlMs > 0 && Date.now() - cachedBusinessScheduleAt < ttlMs) {
+    return cachedBusinessSchedule;
+  }
+
+  const supabase = getSupabaseClient();
+
+  try {
+    const { data, error } = await supabase
+      .from('business_schedule')
+      .select('weekly_slots, max_booking_days_ahead')
+      .eq('id', 'default')
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    const schedule = {
+      weeklySlots: normalizeWeeklySlots(data?.weekly_slots || WEEKLY_BUSINESS_SLOTS),
+      maxBookingDaysAhead: normalizeMaxDaysAhead(data?.max_booking_days_ahead)
+    };
+
+    cachedBusinessSchedule = schedule;
+    cachedBusinessScheduleAt = Date.now();
+    return schedule;
+  } catch {
+    const schedule = {
+      weeklySlots: WEEKLY_BUSINESS_SLOTS,
+      maxBookingDaysAhead: MAX_BOOKING_DAYS_AHEAD
+    };
+
+    cachedBusinessSchedule = schedule;
+    cachedBusinessScheduleAt = Date.now();
+    return schedule;
+  }
+};
+
+export const getCachedBusinessSchedule = () =>
+  cachedBusinessSchedule || {
+    weeklySlots: WEEKLY_BUSINESS_SLOTS,
+    maxBookingDaysAhead: MAX_BOOKING_DAYS_AHEAD
+  };
+
 export const buildSlotDateFromLocal = (
   dateValue,
   timeValue,
@@ -170,17 +285,17 @@ const getWeekdayIndexForLocalDate = (dateValue, timeZone = ISRAEL_TIME_ZONE) => 
   return WEEKDAY_SHORT_TO_INDEX[weekdayShort] ?? null;
 };
 
-export const getAllowedSlotsForLocalDate = (dateValue, timeZone = ISRAEL_TIME_ZONE) => {
+export const getAllowedSlotsForLocalDate = (dateValue, timeZone = ISRAEL_TIME_ZONE, weeklySlots = WEEKLY_BUSINESS_SLOTS) => {
   try {
     const weekdayIndex = getWeekdayIndexForLocalDate(dateValue, timeZone);
     if (weekdayIndex === null) return [];
-    return WEEKLY_BUSINESS_SLOTS[weekdayIndex] || [];
+    return weeklySlots[weekdayIndex] || [];
   } catch {
     return [];
   }
 };
 
-export const TIME_SLOTS = Array.from(new Set(Object.values(WEEKLY_BUSINESS_SLOTS).flat())).sort();
+export const TIME_SLOTS = getAllTimeSlots(WEEKLY_BUSINESS_SLOTS);
 
 const addDaysToDateString = (dateValue, daysToAdd) => {
   const normalizedDate = normalizeDateString(dateValue);
@@ -194,6 +309,11 @@ const addDaysToDateString = (dateValue, daysToAdd) => {
 const toLocalTimeLabel = (value, timeZone = ISRAEL_TIME_ZONE) => {
   const parts = getFormatterParts(new Date(value), timeZone);
   return `${parts.hour}:${parts.minute}`;
+};
+
+const toLocalDateLabel = (value, timeZone = ISRAEL_TIME_ZONE) => {
+  const parts = getFormatterParts(new Date(value), timeZone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
 };
 
 export const listAppointmentsForLocalDate = async (
@@ -252,6 +372,39 @@ export const listAppointmentsForLocalDate = async (
       petName: customer.petName || ''
     };
   });
+};
+
+export const listAppointmentsForIsoRange = async (
+  startIso,
+  endIso,
+  timeZone = ISRAEL_TIME_ZONE
+) => {
+  const supabase = getSupabaseClient();
+  const start = startIso instanceof Date ? startIso.toISOString() : String(startIso || '').trim();
+  const end = endIso instanceof Date ? endIso.toISOString() : String(endIso || '').trim();
+
+  if (!start || !end) {
+    throw createHttpError(400, 'Missing date range for appointments query');
+  }
+
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('id, date, status')
+    .gte('date', start)
+    .lt('date', end)
+    .neq('status', 'CANCELLED')
+    .order('date', { ascending: true });
+
+  if (error) {
+    throw createHttpError(500, `Failed to load appointments for range: ${error.message}`);
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    date: row.date,
+    localDate: toLocalDateLabel(row.date, timeZone),
+    localTime: toLocalTimeLabel(row.date, timeZone)
+  }));
 };
 
 const mapCustomerResponse = (row) => ({
@@ -478,8 +631,14 @@ const resolveAppointmentStartMinutes = (appointment) => {
   return appointmentDate.getHours() * 60 + appointmentDate.getMinutes();
 };
 
-export const getFreeSlotsForAppointments = (appointments = [], dateValue = null) => {
-  const slots = dateValue ? getAllowedSlotsForLocalDate(dateValue) : TIME_SLOTS;
+export const getFreeSlotsForAppointments = (
+  appointments = [],
+  dateValue = null,
+  weeklySlots = WEEKLY_BUSINESS_SLOTS
+) => {
+  const slots = dateValue
+    ? getAllowedSlotsForLocalDate(dateValue, ISRAEL_TIME_ZONE, weeklySlots)
+    : getAllTimeSlots(weeklySlots);
 
   return slots.filter((slot) => {
     const [hours, minutes] = slot.split(':').map(Number);
@@ -494,13 +653,17 @@ export const getFreeSlotsForAppointments = (appointments = [], dateValue = null)
   });
 };
 
-export const suggestAlternativeSlots = async (dateValue, maxSuggestions = 6) => {
+export const suggestAlternativeSlots = async (
+  dateValue,
+  maxSuggestions = 6,
+  weeklySlots = WEEKLY_BUSINESS_SLOTS
+) => {
   const suggestions = [];
 
   for (let dayOffset = 0; dayOffset < 4 && suggestions.length < maxSuggestions; dayOffset += 1) {
     const currentDate = addDaysToDateString(dateValue, dayOffset);
     const appointments = await listAppointmentsForLocalDate(currentDate);
-    const freeSlots = getFreeSlotsForAppointments(appointments, currentDate);
+    const freeSlots = getFreeSlotsForAppointments(appointments, currentDate, weeklySlots);
 
     freeSlots.slice(0, maxSuggestions - suggestions.length).forEach((slot) => {
       suggestions.push({
@@ -613,10 +776,24 @@ export const createAppointmentRecord = async ({
     throw createHttpError(400, 'Cannot create appointments in the past');
   }
 
+  const businessSchedule = await loadBusinessSchedule();
+  const weeklySlots = businessSchedule?.weeklySlots || WEEKLY_BUSINESS_SLOTS;
+  const maxBookingDaysAhead =
+    typeof businessSchedule?.maxBookingDaysAhead === 'number'
+      ? businessSchedule.maxBookingDaysAhead
+      : MAX_BOOKING_DAYS_AHEAD;
+
   const slotDateIso = parsedSlotDate.toISOString();
 
+  const todayLocalDate = buildDayBoundsFromSlot(new Date().toISOString()).localDate;
+  const lastAllowedLocalDate = addDaysToDateString(todayLocalDate, maxBookingDaysAhead);
+
   const slotLocalDate = buildDayBoundsFromSlot(slotDateIso).localDate;
-  const allowedSlots = getAllowedSlotsForLocalDate(slotLocalDate, ISRAEL_TIME_ZONE);
+  if (slotLocalDate > lastAllowedLocalDate) {
+    throw createHttpError(400, `אפשר לקבוע תור רק עד ${maxBookingDaysAhead} ימים מראש.`);
+  }
+
+  const allowedSlots = getAllowedSlotsForLocalDate(slotLocalDate, ISRAEL_TIME_ZONE, weeklySlots);
   if (allowedSlots.length === 0) {
     throw createHttpError(400, 'ביום שבחרת אנחנו לא עובדים. אנחנו עובדים ראשון עד שישי.');
   }
@@ -631,7 +808,7 @@ export const createAppointmentRecord = async ({
 
   const slotAvailable = await ensureSlotAvailable(supabase, slotDateIso);
   if (!slotAvailable) {
-    const alternatives = await suggestAlternativeSlots(slotLocalDate);
+    const alternatives = await suggestAlternativeSlots(slotLocalDate, 6, weeklySlots);
     const alternativesText =
       alternatives.length > 0
         ? ` אפשרויות קרובות: ${alternatives
@@ -694,7 +871,7 @@ export const createAppointmentRecord = async ({
 
   const slotStillAvailable = await ensureSlotAvailable(supabase, slotDateIso);
   if (!slotStillAvailable) {
-    const alternatives = await suggestAlternativeSlots(slotLocalDate);
+    const alternatives = await suggestAlternativeSlots(slotLocalDate, 6, weeklySlots);
     const alternativesText =
       alternatives.length > 0
         ? ` אפשרויות קרובות: ${alternatives
@@ -725,6 +902,37 @@ export const createAppointmentRecord = async ({
 
   if (appointmentError || !appointmentRow) {
     throw createHttpError(500, appointmentError?.message || 'Failed to create appointment');
+  }
+
+  // Schedule a "day before" reminder for customers.
+  try {
+    const reminderPhone = toWhatsAppNumber(phone || customerRow.phone || customer?.phone || '');
+    if (reminderPhone) {
+      const remindLocalDate = addDaysToDateString(slotLocalDate, -1);
+      const computedRemindAt = buildSlotDateFromLocal(remindLocalDate, reminderDayBeforeTime);
+      const now = Date.now();
+      const remindAt =
+        computedRemindAt instanceof Date && computedRemindAt.getTime() > now
+          ? computedRemindAt
+          : new Date(now + 60 * 1000);
+
+      await createReminder({
+        sourceKind: 'APPOINTMENT',
+        sourceId: appointmentRow.id,
+        phone: reminderPhone,
+        title: (customerRow?.name || customerName || customer?.name || 'תור').toString().trim() || 'תור',
+        remindAt,
+        payload: {
+          reminderKind: 'DAY_BEFORE',
+          customerName: customerRow?.name || customerName || customer?.name || '',
+          petName: customerRow?.pet_name || customer?.petName || '',
+          date: slotLocalDate,
+          time: slotLocalTime
+        }
+      });
+    }
+  } catch {
+    // Reminder scheduling is best-effort; appointment creation should still succeed.
   }
 
   return {

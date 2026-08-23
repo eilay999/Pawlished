@@ -2,10 +2,12 @@ import React from 'react';
 import {
   Calendar,
   CalendarDays,
+  Home,
   MessageCircle,
   Palette,
   Plus,
   Scissors,
+  Settings,
   TrendingUp,
   Users
 } from 'lucide-react';
@@ -27,10 +29,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenTheme
 }) => {
   const navItems = [
+    { id: 'HOME' as ViewType, label: 'היום', icon: Home },
+    { id: 'DASHBOARD' as ViewType, label: 'דשבורד', icon: TrendingUp },
     { id: 'CALENDAR' as ViewType, label: 'יומן', icon: Calendar },
     { id: 'CUSTOMERS' as ViewType, label: 'לקוחות', icon: Users },
     { id: 'MESSAGES' as ViewType, label: 'הודעות', icon: MessageCircle },
-    { id: 'STATS' as ViewType, label: 'דוחות', icon: TrendingUp }
+    { id: 'SETTINGS' as ViewType, label: 'הגדרות', icon: Settings }
   ];
 
   return (

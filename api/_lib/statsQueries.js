@@ -3,8 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const createHttpError = (statusCode, message) => {
   const error = new Error(message);

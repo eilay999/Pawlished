@@ -3,6 +3,7 @@ import { listMemoriesForPhone } from './memoryQueries.js';
 import { listRecentLearningEvents } from './learningQueries.js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
+const WHATSAPP_ASSISTANT_NAME = (process.env.WHATSAPP_ASSISTANT_NAME || 'בקו').trim();
 
 const getGeminiApiKeys = () =>
   Array.from(
@@ -109,7 +110,7 @@ const buildCapabilitiesReply = () =>
     'בעסק: לקבוע תורים, להוסיף לקוחות, לבדוק לוז, סטטיסטיקות, משימות, תזכורות וזיכרון.',
     'כללי: לענות על שאלות, להסביר, לנסח הודעות, לתת רעיונות, ולחבר את זה למה שאני יודע על Pawlished.',
     'כדי ללמד אותי: תכתוב "תזכור ש..." ואז המידע שחשוב שאדע.'
-  ].join('\n');
+  ].join('\n').replace(/Pawlished/g, WHATSAPP_ASSISTANT_NAME);
 
 const buildFallbackReply = () =>
   [
@@ -164,7 +165,7 @@ const generateAiReply = async ({ text, memories, learningEvents }) => {
   const current = formatIsraelDateTimeParts();
   const model = (process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash').trim();
   const prompt = `
-You are the WhatsApp assistant for Pawlished, a dog grooming business in Israel.
+ You are the WhatsApp assistant for ${WHATSAPP_ASSISTANT_NAME}, a dog grooming business in Israel.
 Answer in Hebrew, naturally and briefly.
 You can answer general questions too, not only business operations.
 If the user asks about current date/time, use this exact Israel time context:

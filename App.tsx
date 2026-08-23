@@ -9,13 +9,15 @@ import { AppointmentModal } from './components/AppointmentModal';
 import { CalendarEventModal } from './components/CalendarEventModal';
 import { StatsView } from './components/StatsView';
 import { MessagesView } from './components/MessagesView';
-import { PublicBooking } from './components/PublicBooking';
+import { AdminLogin } from './components/AdminLogin';
+import { ScheduleSettingsView } from './components/ScheduleSettingsView';
 import { ThemePanel } from './components/ThemePanel';
-import { ViewType, Appointment, CalendarEvent, Customer, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
+import { ViewType, Appointment, CalendarEvent, Customer, Dog, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
 import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
-import { supabase } from './services/supabaseClient';
 import { applyTheme, loadTheme } from './theme';
 import { normalizePhoneForCompare } from './utils';
+import { HomeDashboard } from './components/HomeDashboard';
+import { DogCardModal } from './components/DogCardModal';
 
 type DbCustomer = {
   id: string;
@@ -33,12 +35,32 @@ type DbCustomer = {
 type DbAppointment = {
   id: string;
   customer_id: string;
+  dog_id?: string | null;
   date: string;
   service: string;
   status: AppointmentStatus;
   notes: string | null;
   price: number;
   cancellation_fee?: number | null;
+};
+
+type DbDog = {
+  id: string;
+  customer_id: string;
+  name: string;
+  breed: string | null;
+  sex: 'MALE' | 'FEMALE' | null;
+  size: 'SMALL' | 'MEDIUM' | 'LARGE' | null;
+  weight_kg: number | null;
+  allergies: string | null;
+  medical_notes: string | null;
+  behavior_notes: string | null;
+  notes: string | null;
+  photo_url: string | null;
+  last_visit: string;
+  visit_frequency_weeks: number;
+  default_price: number | null;
+  lifecycle_status: 'ACTIVE' | 'ON_HOLD' | null;
 };
 
 type DbTask = {
@@ -87,12 +109,51 @@ const mapCustomerFromDb = (row: DbCustomer): Customer => ({
 const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
   id: row.id,
   customerId: row.customer_id,
+  dogId: row.dog_id ?? undefined,
   date: new Date(row.date),
   service: row.service,
   status: row.status,
   notes: row.notes ?? undefined,
   price: row.price,
   cancellationFee: row.cancellation_fee ?? undefined
+});
+
+const mapDogFromDb = (row: DbDog): Dog => ({
+  id: row.id,
+  customerId: row.customer_id,
+  name: row.name,
+  breed: row.breed ?? undefined,
+  sex: row.sex ?? undefined,
+  sizeCategory: row.size ?? undefined,
+  weightKg: row.weight_kg ?? undefined,
+  allergies: row.allergies ?? undefined,
+  medicalNotes: row.medical_notes ?? undefined,
+  behaviorNotes: row.behavior_notes ?? undefined,
+  notes: row.notes ?? undefined,
+  photoUrl: row.photo_url ?? undefined,
+  lastVisit: new Date(row.last_visit),
+  visitFrequencyWeeks: row.visit_frequency_weeks,
+  defaultPrice: row.default_price ?? undefined,
+  lifecycleStatus: row.lifecycle_status ?? 'ACTIVE',
+});
+
+const mapDogToDb = (dog: Dog): DbDog => ({
+  id: dog.id,
+  customer_id: dog.customerId,
+  name: dog.name,
+  breed: dog.breed ?? null,
+  sex: dog.sex ?? null,
+  size: dog.sizeCategory ?? null,
+  weight_kg: dog.weightKg ?? null,
+  allergies: dog.allergies ?? null,
+  medical_notes: dog.medicalNotes ?? null,
+  behavior_notes: dog.behaviorNotes ?? null,
+  notes: dog.notes ?? null,
+  photo_url: dog.photoUrl ?? null,
+  last_visit: dog.lastVisit.toISOString(),
+  visit_frequency_weeks: dog.visitFrequencyWeeks,
+  default_price: dog.defaultPrice ?? null,
+  lifecycle_status: dog.lifecycleStatus,
 });
 
 const mapCustomerToDb = (customer: Customer): DbCustomer => ({
@@ -111,6 +172,7 @@ const mapCustomerToDb = (customer: Customer): DbCustomer => ({
 const mapAppointmentToDb = (appointment: Appointment): DbAppointment => ({
   id: appointment.id,
   customer_id: appointment.customerId,
+  dog_id: appointment.dogId ?? null,
   date: appointment.date.toISOString(),
   service: appointment.service,
   status: appointment.status,
@@ -217,8 +279,17 @@ const appointmentsSignature = (list: Appointment[]) =>
     sortById(list).map(a => ({
       ...a,
       date: a.date.toISOString(),
+      dogId: a.dogId ?? null,
       notes: a.notes ?? null,
       cancellationFee: a.cancellationFee ?? null
+    }))
+  );
+
+const dogsSignature = (list: Dog[]) =>
+  JSON.stringify(
+    sortById(list).map(d => ({
+      ...d,
+      lastVisit: d.lastVisit.toISOString(),
     }))
   );
 
@@ -280,23 +351,52 @@ const isBrowserOffline = () =>
   typeof navigator !== 'undefined' && navigator.onLine === false;
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<ViewType>('CALENDAR');
+  const [currentView, setCurrentView] = useState<ViewType>('HOME');
   const [currentDate, setCurrentDate] = useState(new Date());
-  
+
   // Data State
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [dogs, setDogs] = useState<Dog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
   const [whatsappMessagesTableMissing, setWhatsappMessagesTableMissing] = useState(false);
+  const [businessSchedule, setBusinessSchedule] = useState<{
+    weeklySlots: Record<string, string[]>;
+    maxBookingDaysAhead: number;
+  }>(() => ({
+    weeklySlots: {
+      '0': ['07:00', '08:00'],
+      '1': ['09:00', '12:00', '15:00'],
+      '2': ['09:00', '12:00', '15:00'],
+      '3': ['08:00', '11:00', '14:00'],
+      '4': ['07:00', '08:00'],
+      '5': ['07:00', '08:00'],
+      '6': []
+    },
+    maxBookingDaysAhead: 30
+  }));
   const [syncingTaskIds, setSyncingTaskIds] = useState<Set<string>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [adminSessionToken, setAdminSessionToken] = useState(() => {
+    try {
+      return localStorage.getItem('pawlished_admin_session') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [adminPhone, setAdminPhone] = useState(() => {
+    try {
+      return localStorage.getItem('pawlished_admin_phone') || '';
+    } catch {
+      return '';
+    }
+  });
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>(
-    supabase && !isBrowserOffline() ? 'connecting' : 'offline'
+    adminSessionToken && !isBrowserOffline() ? 'connecting' : 'offline'
   );
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<Date | null>(null);
-  const [realtimeReconnectKey, setRealtimeReconnectKey] = useState(0);
   const [askedAppointmentIds, setAskedAppointmentIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('pawlished_asked_appt_ids');
@@ -315,7 +415,9 @@ const App: React.FC = () => {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [prefillCustomerPhone, setPrefillCustomerPhone] = useState<string>('');
-  
+  const [selectedDogId, setSelectedDogId] = useState<string | null>(null);
+  const [newDogForCustomerId, setNewDogForCustomerId] = useState<string | null>(null);
+
   // Appointment Modal State
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [selectedDateForAppointment, setSelectedDateForAppointment] = useState<Date>(new Date());
@@ -326,39 +428,16 @@ const App: React.FC = () => {
   const [editingCalendarEvent, setEditingCalendarEvent] = useState<CalendarEvent | null>(null);
   const [dayPanelDate, setDayPanelDate] = useState<Date | null>(null);
   const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
-  const [isAdminOverride, setIsAdminOverride] = useState(() => {
-    try {
-      return localStorage.getItem('pawlished_admin') === '1';
-    } catch {
-      return false;
-    }
-  });
   const localMutationSuppressUntilRef = useRef(0);
-  const realtimeRefreshTimerRef = useRef<number | null>(null);
-  const realtimeReconnectTimerRef = useRef<number | null>(null);
   const cloudLoadInFlightRef = useRef(false);
   const cloudRetryTimerRef = useRef<number | null>(null);
   const cloudRetryAttemptRef = useRef(0);
   const customersRef = useRef<Customer[]>([]);
+  const dogsRef = useRef<Dog[]>([]);
   const appointmentsRef = useRef<Appointment[]>([]);
   const calendarEventsRef = useRef<CalendarEvent[]>([]);
   const tasksRef = useRef<Task[]>([]);
   const whatsappMessagesRef = useRef<WhatsAppMessage[]>([]);
-  const { isPublicEntry, isForcedPublic } = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    const path = window.location.pathname.toLowerCase();
-    const hash = window.location.hash.toLowerCase();
-    const forced = path.includes('booking');
-    return {
-      isForcedPublic: forced,
-      isPublicEntry:
-        forced ||
-        params.get('booking') === '1' ||
-        params.get('public') === '1' ||
-        hash.includes('booking')
-    };
-  }, []);
-  const isPublicBooking = isPublicEntry && (!isAdminOverride || isForcedPublic);
 
   useEffect(() => {
     applyTheme(loadTheme());
@@ -376,6 +455,10 @@ const App: React.FC = () => {
   }, [customers]);
 
   useEffect(() => {
+    dogsRef.current = dogs;
+  }, [dogs]);
+
+  useEffect(() => {
     appointmentsRef.current = appointments;
   }, [appointments]);
 
@@ -391,11 +474,29 @@ const App: React.FC = () => {
     whatsappMessagesRef.current = whatsappMessages;
   }, [whatsappMessages]);
 
+  const clearAdminSession = useCallback((message?: string) => {
+    setAdminSessionToken('');
+    setAdminPhone('');
+
+    try {
+      localStorage.removeItem('pawlished_admin_session');
+      localStorage.removeItem('pawlished_admin_phone');
+    } catch {
+      // ignore storage errors
+    }
+
+    setCloudStatus('offline');
+    setWhatsappMessagesTableMissing(false);
+    if (message) {
+      setLoadError(message);
+    }
+  }, []);
+
   const loadDataFromCloud = useCallback(
     async (source: CloudLoadSource = 'manual') => {
-    if ((source === 'realtime' || source === 'auto') && Date.now() < localMutationSuppressUntilRef.current) {
-      return true;
-    }
+      if (source === 'auto' && Date.now() < localMutationSuppressUntilRef.current) {
+        return true;
+      }
 
     if (cloudLoadInFlightRef.current) {
       return source === 'manual' || source === 'initial';
@@ -404,10 +505,10 @@ const App: React.FC = () => {
     cloudLoadInFlightRef.current = true;
 
     try {
-    if (!supabase) {
+    if (!adminSessionToken) {
       setCloudStatus('offline');
       setWhatsappMessagesTableMissing(false);
-      setLoadError('אין חיבור Supabase בפרויקט. היומן עובד בענן בלבד עד שתוגדר גישה תקינה.');
+      setLoadError('נדרשת התחברות כדי לטעון את היומן מהענן.');
       return false;
     }
 
@@ -421,23 +522,86 @@ const App: React.FC = () => {
       setCloudStatus('connecting');
     }
 
-    const [customersRes, appointmentsRes, calendarEventsRes, tasksRes, whatsappMessagesRes] = await Promise.all([
-      supabase.from('customers').select('*').order('id', { ascending: true }),
-      supabase.from('appointments').select('*').order('date', { ascending: true }),
-      supabase.from('calendar_events').select('*').order('starts_at', { ascending: true }),
-      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-      supabase.from('whatsapp_messages').select('*').order('created_at', { ascending: false }).limit(300)
-    ]);
+    const response = await fetch('/api/admin/data', {
+      method: 'GET',
+      headers: {
+        'X-OTP-Token': adminSessionToken
+      }
+    });
 
-    const customersError = customersRes.error;
-    const appointmentsError = appointmentsRes.error;
-    const calendarEventsError = calendarEventsRes.error;
-    const tasksError = tasksRes.error;
-    const whatsappMessagesError = whatsappMessagesRes.error;
-    const whatsappMessagesMissing = Boolean(
-      whatsappMessagesError && isMissingTableError(whatsappMessagesError.message)
-    );
-    setWhatsappMessagesTableMissing(whatsappMessagesMissing);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.ok) {
+      if (response.status === 401 || response.status === 403) {
+        clearAdminSession(payload?.error || 'נדרשת התחברות מחדש.');
+        return false;
+      }
+
+      setCloudStatus('error');
+      setLoadError(payload?.error || 'טעינת היומן מהענן נכשלה.');
+      return false;
+    }
+
+    setWhatsappMessagesTableMissing(Boolean(payload.whatsappMessagesMissing));
+    {
+      const scheduleRow =
+        payload.businessSchedule && typeof payload.businessSchedule === 'object'
+          ? (payload.businessSchedule as Record<string, unknown>)
+          : null;
+
+      const weeklySlotsRaw =
+        (scheduleRow?.weekly_slots as unknown) ?? (scheduleRow?.weeklySlots as unknown);
+      const weeklySlots =
+        weeklySlotsRaw && typeof weeklySlotsRaw === 'object'
+          ? (weeklySlotsRaw as Record<string, unknown>)
+          : null;
+
+      const normalizeTime = (value: unknown) => {
+        const trimmed = typeof value === 'string' ? value.trim() : '';
+        const match = trimmed.match(/^([01]?\d|2[0-3])(?::([0-5]\d))?$/);
+        if (!match) return null;
+        const hours = Number(match[1]);
+        const minutes = Number(match[2] || '0');
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      };
+
+      const normalizedWeeklySlots: Record<string, string[]> = {};
+      for (let day = 0; day <= 6; day += 1) {
+        const raw = weeklySlots?.[String(day)];
+        const list = Array.isArray(raw) ? raw : [];
+        const seen = new Set<string>();
+        list.forEach((time) => {
+          const normalized = normalizeTime(time);
+          if (normalized) {
+            seen.add(normalized);
+          }
+        });
+        normalizedWeeklySlots[String(day)] = Array.from(seen).sort();
+      }
+
+      const maxDaysRaw =
+        (scheduleRow?.max_booking_days_ahead as unknown) ?? (scheduleRow?.maxBookingDaysAhead as unknown);
+      const numeric = Number(maxDaysRaw);
+      const maxBookingDaysAhead = Math.min(30, Math.max(1, Number.isFinite(numeric) ? Math.round(numeric) : 30));
+
+      if (scheduleRow) {
+        setBusinessSchedule({ weeklySlots: normalizedWeeklySlots, maxBookingDaysAhead });
+      }
+    }
+
+    const customersRes = { data: payload.customers || [], error: null as any };
+    const dogsRes = { data: payload.dogs || [], error: null as any };
+    const dogsMissing = Boolean(payload.dogsMissing);
+    const appointmentsRes = { data: payload.appointments || [], error: null as any };
+    const calendarEventsRes = { data: payload.calendarEvents || [], error: null as any };
+    const tasksRes = { data: payload.tasks || [], error: null as any };
+    const whatsappMessagesRes = { data: payload.whatsappMessages || [], error: null as any };
+
+    const customersError = null as any;
+    const appointmentsError = null as any;
+    const calendarEventsError = null as any;
+    const tasksError = null as any;
+    const whatsappMessagesError = null as any;
+    const whatsappMessagesMissing = Boolean(payload.whatsappMessagesMissing);
 
     if (customersError || appointmentsError) {
       console.error('Supabase load error', customersError || appointmentsError);
@@ -452,6 +616,7 @@ const App: React.FC = () => {
     }
 
     const mappedCustomers = (customersRes.data || []).map(mapCustomerFromDb);
+    const mappedDogs = dogsMissing ? [] : (dogsRes.data || []).map(mapDogFromDb);
     const mappedAppointments = (appointmentsRes.data || []).map(mapAppointmentFromDb);
     const mappedCalendarEvents =
       calendarEventsError && isMissingTableError(calendarEventsError.message)
@@ -464,6 +629,10 @@ const App: React.FC = () => {
 
     if (customersSignature(customersRef.current) !== customersSignature(mappedCustomers)) {
       setCustomers(mappedCustomers);
+    }
+
+    if (dogsSignature(dogsRef.current) !== dogsSignature(mappedDogs)) {
+      setDogs(mappedDogs);
     }
 
     if (appointmentsSignature(appointmentsRef.current) !== appointmentsSignature(mappedAppointments)) {
@@ -530,100 +699,29 @@ const App: React.FC = () => {
     } finally {
       cloudLoadInFlightRef.current = false;
     }
+  }, [adminSessionToken, clearAdminSession]);
+
+  useEffect(() => {
+    if (!adminSessionToken) {
+      setCloudStatus('offline');
+      return;
+    }
+
+    if (isBrowserOffline()) {
+      setCloudStatus('offline');
+      return;
+    }
+
+    setCloudStatus('connecting');
+    void loadDataFromCloud('initial');
+  }, [adminSessionToken, loadDataFromCloud]);
+
+  useEffect(() => {
+    // Realtime sync disabled (admin API mode).
   }, []);
 
   useEffect(() => {
-    setCloudStatus(supabase && !isBrowserOffline() ? 'connecting' : 'offline');
-    void loadDataFromCloud('initial');
-  }, [loadDataFromCloud]);
-
-  useEffect(() => {
-    if (!supabase) return;
-
-    const clearRealtimeReconnectTimer = () => {
-      if (realtimeReconnectTimerRef.current) {
-        window.clearTimeout(realtimeReconnectTimerRef.current);
-        realtimeReconnectTimerRef.current = null;
-      }
-    };
-
-    const scheduleRealtimeReconnect = () => {
-      if (realtimeReconnectTimerRef.current || isBrowserOffline()) return;
-
-      realtimeReconnectTimerRef.current = window.setTimeout(() => {
-        realtimeReconnectTimerRef.current = null;
-        setRealtimeReconnectKey(key => key + 1);
-        void loadDataFromCloud('reconnect');
-      }, 3_000);
-    };
-
-    const scheduleRefresh = () => {
-      if (realtimeRefreshTimerRef.current) {
-        window.clearTimeout(realtimeRefreshTimerRef.current);
-      }
-      const delay = Math.max(
-        250,
-        localMutationSuppressUntilRef.current > Date.now()
-          ? localMutationSuppressUntilRef.current - Date.now() + 120
-          : 250
-      );
-      realtimeRefreshTimerRef.current = window.setTimeout(() => {
-        void loadDataFromCloud('realtime');
-      }, delay);
-    };
-
-    const channel = supabase
-      .channel('pawlished-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'customers' },
-        scheduleRefresh
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'appointments' },
-        scheduleRefresh
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'calendar_events' },
-        scheduleRefresh
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        scheduleRefresh
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'whatsapp_messages' },
-        scheduleRefresh
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          clearRealtimeReconnectTimer();
-          void loadDataFromCloud('realtime');
-          return;
-        }
-
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          setCloudStatus(isBrowserOffline() ? 'offline' : 'error');
-          setLoadError('\u05D7\u05D9\u05D1\u05D5\u05E8 Realtime \u05D1\u05E2\u05E0\u05DF \u05E0\u05D5\u05EA\u05E7. \u05DE\u05E0\u05E1\u05D4 \u05DC\u05D4\u05EA\u05D7\u05D1\u05E8 \u05DE\u05D7\u05D3\u05E9 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA.');
-          scheduleRealtimeReconnect();
-        }
-      });
-
-    return () => {
-      if (realtimeRefreshTimerRef.current) {
-        window.clearTimeout(realtimeRefreshTimerRef.current);
-      }
-      clearRealtimeReconnectTimer();
-      void supabase.removeChannel(channel);
-    };
-  }, [loadDataFromCloud, realtimeReconnectKey]);
-
-  useEffect(() => {
-    if (!supabase) return;
+    if (!adminSessionToken) return;
 
     const runAutoRefresh = () => {
       if (document.visibilityState !== 'visible') return;
@@ -643,10 +741,10 @@ const App: React.FC = () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [loadDataFromCloud]);
+  }, [adminSessionToken, loadDataFromCloud]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!adminSessionToken) return;
 
     const handleOffline = () => {
       setCloudStatus('offline');
@@ -656,8 +754,7 @@ const App: React.FC = () => {
     const handleOnline = () => {
       cloudRetryAttemptRef.current = 0;
       setCloudStatus('connecting');
-      setRealtimeReconnectKey(key => key + 1);
-      void loadDataFromCloud('reconnect');
+      void loadDataFromCloud('manual');
     };
 
     window.addEventListener('offline', handleOffline);
@@ -671,10 +768,10 @@ const App: React.FC = () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, [loadDataFromCloud]);
+  }, [adminSessionToken, loadDataFromCloud]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!adminSessionToken) return;
 
     if (cloudStatus !== 'error') {
       cloudRetryAttemptRef.current = 0;
@@ -714,7 +811,7 @@ const App: React.FC = () => {
         cloudRetryTimerRef.current = null;
       }
     };
-  }, [cloudStatus, loadDataFromCloud]);
+  }, [cloudStatus, adminSessionToken, loadDataFromCloud]);
 
   useEffect(() => {
     if (pendingCheck) return;
@@ -739,33 +836,46 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [appointments, customers, askedAppointmentIds, pendingCheck]);
 
+  const adminMutate = useCallback(
+    async (payload: Record<string, unknown>) => {
+      if (!adminSessionToken) {
+        throw new Error('נדרשת התחברות הנהלה.');
+      }
+
+      const response = await fetch('/api/admin/mutate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-OTP-Token': adminSessionToken
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) {
+        const message = typeof data?.error === 'string' ? data.error : 'שגיאה בביצוע פעולה בענן.';
+        if (response.status === 401 || response.status === 403) {
+          clearAdminSession(message || 'נדרשת התחברות מחדש.');
+        }
+        throw new Error(message);
+      }
+
+      return data as Record<string, unknown>;
+    },
+    [adminSessionToken, clearAdminSession]
+  );
+
   const persistCloudMutation = (
     fallbackMessage: string,
-    writer: () => PromiseLike<{ error: { message?: string | null; code?: string | null } | null }>,
+    writer: () => PromiseLike<unknown>,
     refreshAfterSuccess = false
   ) => {
-    if (!supabase) return;
     void Promise.resolve(writer())
-      .then(({ error }) => {
-        if (error) {
-          console.error('Supabase mutation error', error);
-          setCloudStatus('error');
-          setLoadError(formatSupabaseError(fallbackMessage, error));
-          return;
-        }
-
-        setCloudStatus('online');
-        setLastCloudSyncAt(new Date());
-        setLoadError(null);
-        if (refreshAfterSuccess) {
-          void loadDataFromCloud('manual');
-        }
+      .then(() => {
+        markCloudMutationSuccess(refreshAfterSuccess);
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('Supabase mutation exception', error);
-        setCloudStatus('error');
-        setLoadError(`${fallbackMessage}: ${message}`);
+        reportCloudMutationError(fallbackMessage, error);
       });
   };
 
@@ -784,7 +894,7 @@ const App: React.FC = () => {
         ? { message: String((error as { message?: unknown }).message || '') }
         : { message: error instanceof Error ? error.message : String(error) };
 
-    console.error('Supabase mutation error', error);
+    console.error('Cloud mutation error', error);
     setCloudStatus('error');
     setLoadError(formatSupabaseError(fallbackMessage, normalizedError));
   };
@@ -802,7 +912,7 @@ const App: React.FC = () => {
   };
 
   const ensureCloudWritable = () => {
-    if (!supabase || cloudStatus === 'offline' || isBrowserOffline()) {
+    if (!adminSessionToken || cloudStatus === 'offline' || isBrowserOffline()) {
       setCloudStatus('offline');
       setLoadError('אין חיבור לענן כרגע. שינויים נחסמו עד שחיבור Supabase יחזור.');
       return false;
@@ -889,13 +999,13 @@ const App: React.FC = () => {
 
       if (updatedAppointment) {
         persistCloudMutation('עדכון תור בענן נכשל', () =>
-          supabase!.from('appointments').upsert(mapAppointmentToDb(updatedAppointment))
+          adminMutate({ action: 'upsert_appointment', appointment: mapAppointmentToDb(updatedAppointment) })
         );
       }
 
       if (updatedCustomer) {
         persistCloudMutation('עדכון לקוח בענן נכשל', () =>
-          supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+          adminMutate({ action: 'upsert_customer', customer: mapCustomerToDb(updatedCustomer) })
         );
       }
   };
@@ -923,7 +1033,7 @@ const App: React.FC = () => {
 
     if (updatedCustomer) {
       persistCloudMutation('עדכון הערות לקוח בענן נכשל', () =>
-        supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+        adminMutate({ action: 'upsert_customer', customer: mapCustomerToDb(updatedCustomer) })
       );
     }
   };
@@ -941,7 +1051,7 @@ const App: React.FC = () => {
     setIsCustomerModalOpen(false);
 
     persistCloudMutation('שמירת לקוח בענן נכשלה', () =>
-      supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+      adminMutate({ action: 'upsert_customer', customer: mapCustomerToDb(updatedCustomer) })
     );
   };
 
@@ -961,11 +1071,45 @@ const App: React.FC = () => {
     });
 
     persistCloudMutation('מחיקת תורים בענן נכשלה', () =>
-      supabase!.from('appointments').delete().eq('customer_id', customerId)
+      adminMutate({ action: 'delete_customer', customerId })
     );
 
-    persistCloudMutation('מחיקת לקוח בענן נכשלה', () =>
-      supabase!.from('customers').delete().eq('id', customerId)
+  };
+
+  const handleOpenDog = (dogId: string) => {
+    setSelectedDogId(dogId);
+  };
+
+  const handleAddDogForCustomer = (customerId: string) => {
+    setSelectedDogId(null);
+    setNewDogForCustomerId(customerId);
+  };
+
+  const handleSaveDog = (updatedDog: Dog) => {
+    if (!ensureCloudWritable()) return;
+    setDogs(prev => {
+      const exists = prev.find(d => d.id === updatedDog.id);
+      if (exists) {
+        return prev.map(d => d.id === updatedDog.id ? updatedDog : d);
+      }
+      return [...prev, updatedDog];
+    });
+    setNewDogForCustomerId(null);
+    setSelectedDogId(updatedDog.id);
+
+    persistCloudMutation('שמירת כרטיס הכלב בענן נכשלה', () =>
+      adminMutate({ action: 'upsert_dog', dog: mapDogToDb(updatedDog) })
+    );
+  };
+
+  const handleDeleteDog = (dogId: string) => {
+    if (!ensureCloudWritable()) return;
+    setDogs(prev => prev.filter(d => d.id !== dogId));
+    setAppointments(prev => prev.filter(a => a.dogId !== dogId));
+    setSelectedDogId(null);
+
+    persistCloudMutation('מחיקת כרטיס הכלב בענן נכשלה', () =>
+      adminMutate({ action: 'delete_dog', dogId })
     );
   };
 
@@ -993,6 +1137,15 @@ const App: React.FC = () => {
       normalizedAppointment = { ...normalizedAppointment, cancellationFee: 0 };
     }
 
+    // Appointments target a specific dog; default to the customer's (first/only) dog
+    // when one wasn't explicitly chosen, since booking UI doesn't offer a dog picker yet.
+    if (!normalizedAppointment.dogId) {
+      const defaultDog = dogs.find(d => d.customerId === normalizedAppointment.customerId);
+      if (defaultDog) {
+        normalizedAppointment = { ...normalizedAppointment, dogId: defaultDog.id };
+      }
+    }
+
     setAppointments(prev => {
       const exists = prev.find(a => a.id === normalizedAppointment.id);
       if (exists) {
@@ -1000,6 +1153,20 @@ const App: React.FC = () => {
       }
       return [...prev, normalizedAppointment];
     });
+
+    if (normalizedAppointment.status === AppointmentStatus.COMPLETED && normalizedAppointment.dogId) {
+      const dogIdForVisit = normalizedAppointment.dogId;
+      const appointmentDate = new Date(normalizedAppointment.date);
+      setDogs(prev => prev.map(d => {
+        if (d.id !== dogIdForVisit) return d;
+        if (appointmentDate <= new Date(d.lastVisit)) return d;
+        const updatedDog = { ...d, lastVisit: appointmentDate };
+        persistCloudMutation('עדכון כרטיס הכלב בענן נכשל', () =>
+          adminMutate({ action: 'upsert_dog', dog: mapDogToDb(updatedDog) })
+        );
+        return updatedDog;
+      }));
+    }
 
     let updatedCustomer: Customer | null = null;
     const existingCustomer = customers.find(c => c.id === normalizedAppointment.customerId);
@@ -1034,12 +1201,12 @@ const App: React.FC = () => {
     setEditingAppointment(null);
 
     persistCloudMutation('שמירת תור בענן נכשלה', () =>
-      supabase!.from('appointments').upsert(mapAppointmentToDb(normalizedAppointment))
+      adminMutate({ action: 'upsert_appointment', appointment: mapAppointmentToDb(normalizedAppointment) })
     );
 
     if (updatedCustomer) {
       persistCloudMutation('עדכון לקוח בענן נכשל', () =>
-        supabase!.from('customers').upsert(mapCustomerToDb(updatedCustomer))
+        adminMutate({ action: 'upsert_customer', customer: mapCustomerToDb(updatedCustomer) })
       );
     }
   };
@@ -1059,7 +1226,7 @@ const App: React.FC = () => {
     }
 
     persistCloudMutation('מחיקת תור בענן נכשלה', () =>
-      supabase!.from('appointments').delete().eq('id', appointmentId)
+      adminMutate({ action: 'delete_appointment', appointmentId })
     );
   };
 
@@ -1077,7 +1244,7 @@ const App: React.FC = () => {
 
     persistCloudMutation(
       'שמירת אירוע בענן נכשלה',
-      () => supabase!.from('calendar_events').upsert(mapCalendarEventToDb(savedEvent)),
+      () => adminMutate({ action: 'upsert_calendar_event', event: mapCalendarEventToDb(savedEvent) }),
       true
     );
   };
@@ -1091,43 +1258,9 @@ const App: React.FC = () => {
 
     persistCloudMutation(
       'מחיקת אירוע בענן נכשלה',
-      () => supabase!.from('calendar_events').delete().eq('id', eventId),
+      () => adminMutate({ action: 'delete_calendar_event', eventId }),
       true
     );
-  };
-
-  const handlePublicBookingCreated = ({
-    customer,
-    appointment
-  }: {
-    customer: Customer;
-    appointment: Appointment;
-  }) => {
-    setCustomers(prev => {
-      const exists = prev.find(c => c.id === customer.id);
-      if (exists) {
-        return prev.map(c => (c.id === customer.id ? customer : c));
-      }
-      return [...prev, customer];
-    });
-
-    setAppointments(prev => {
-      const exists = prev.find(a => a.id === appointment.id);
-      if (exists) {
-        return prev.map(a => (a.id === appointment.id ? appointment : a));
-      }
-      return [...prev, appointment];
-    });
-  };
-
-  const handlePublicCustomerCreated = (customer: Customer) => {
-    setCustomers(prev => {
-      const exists = prev.find(c => c.id === customer.id);
-      if (exists) {
-        return prev.map(c => (c.id === customer.id ? customer : c));
-      }
-      return [...prev, customer];
-    });
   };
 
   const handleAddTask = (title: string, startDate: Date) => {
@@ -1143,14 +1276,15 @@ const App: React.FC = () => {
     setTaskSyncing(newTask.id, true);
 
     void Promise.resolve(
-      supabase!.from('tasks').insert(mapTaskToDb(newTask)).select('*').single()
+      adminMutate({ action: 'insert_task', task: mapTaskToDb(newTask) })
     )
-      .then(({ data, error }) => {
-        if (error || !data) {
-          throw error ?? new Error('Task insert returned no row');
+      .then((payload) => {
+        const taskRow = payload && typeof payload === 'object' ? (payload as { task?: unknown }).task : undefined;
+        if (!taskRow) {
+          throw new Error('Task insert returned no row');
         }
 
-        setTasks(prev => prev.map(task => (task.id === newTask.id ? mapTaskFromDb(data as DbTask) : task)));
+        setTasks(prev => prev.map(task => (task.id === newTask.id ? mapTaskFromDb(taskRow as DbTask) : task)));
         markCloudMutationSuccess(true);
       })
       .catch((error) => {
@@ -1177,19 +1311,15 @@ const App: React.FC = () => {
     setTaskSyncing(taskId, true);
 
     void Promise.resolve(
-      supabase!
-        .from('tasks')
-        .update({ status: updatedTask.status })
-        .eq('id', updatedTask.id)
-        .select('*')
-        .single()
+      adminMutate({ action: 'update_task_status', taskId: updatedTask.id, status: updatedTask.status })
     )
-      .then(({ data, error }) => {
-        if (error || !data) {
-          throw error ?? new Error('Task update returned no row');
+      .then((payload) => {
+        const taskRow = payload && typeof payload === 'object' ? (payload as { task?: unknown }).task : undefined;
+        if (!taskRow) {
+          throw new Error('Task update returned no row');
         }
 
-        setTasks(prev => prev.map(task => (task.id === taskId ? mapTaskFromDb(data as DbTask) : task)));
+        setTasks(prev => prev.map(task => (task.id === taskId ? mapTaskFromDb(taskRow as DbTask) : task)));
         markCloudMutationSuccess(true);
       })
       .catch((error) => {
@@ -1212,13 +1342,9 @@ const App: React.FC = () => {
     setTaskSyncing(taskId, true);
 
     void Promise.resolve(
-      supabase!.from('tasks').delete().eq('id', taskId).select('id').single()
+      adminMutate({ action: 'delete_task', taskId })
     )
-      .then(({ data, error }) => {
-        if (error || !data) {
-          throw error ?? new Error('Task delete returned no row');
-        }
-
+      .then(() => {
         markCloudMutationSuccess(true);
       })
       .catch((error) => {
@@ -1239,16 +1365,54 @@ const App: React.FC = () => {
       });
   };
 
-  const handleAdminAccess = (phone: string) => {
-    try {
-      localStorage.setItem('pawlished_admin', '1');
-      localStorage.setItem('pawlished_admin_phone', phone);
-    } catch {
-      // ignore storage errors
-    }
-    setIsAdminOverride(true);
-    setCurrentView('CALENDAR');
-  };
+  const saveBusinessSchedule = useCallback(
+    async (payload: { weeklySlots: Record<string, string[]>; maxBookingDaysAhead: number }) => {
+      if (!adminSessionToken || isBrowserOffline()) {
+        throw new Error('אין חיבור אינטרנט כרגע.');
+      }
+
+      localMutationSuppressUntilRef.current = Date.now() + 1500;
+      setCloudStatus('syncing');
+
+      await adminMutate({
+        action: 'set_business_schedule',
+        weeklySlots: payload.weeklySlots,
+        maxBookingDaysAhead: payload.maxBookingDaysAhead
+      });
+
+      await loadDataFromCloud('manual');
+    },
+    [adminMutate, adminSessionToken, loadDataFromCloud]
+  );
+
+  if (!adminSessionToken) {
+    return (
+      <div className="min-h-[100dvh] w-full bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 text-gray-800 font-sans">
+        {loadError && (
+          <div className="mx-auto max-w-md pt-10 px-4">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 text-sm px-4 py-3 shadow-sm text-center">
+              {loadError}
+            </div>
+          </div>
+        )}
+
+        <AdminLogin
+          onAuthenticated={({ phone, sessionToken }) => {
+            setAdminPhone(phone);
+            setAdminSessionToken(sessionToken);
+            setLoadError(null);
+            setCloudStatus('connecting');
+            try {
+              localStorage.setItem('pawlished_admin_phone', phone);
+              localStorage.setItem('pawlished_admin_session', sessionToken);
+            } catch {
+              // ignore storage errors
+            }
+          }}
+        />
+      </div>
+    );
+  }
 
   const cloudStatusBadge = (
     <button
@@ -1271,21 +1435,6 @@ const App: React.FC = () => {
       {lastCloudSyncAt && cloudStatus === 'online' ? ` • ${lastCloudSyncAt.toLocaleTimeString('he-IL')}` : ''}
     </button>
   );
-
-  if (isPublicBooking) {
-    return (
-      <>
-        {cloudStatusBadge}
-        <PublicBooking
-          appointments={appointments}
-          customers={customers}
-          onBookingCreated={handlePublicBookingCreated}
-          onCustomerCreated={handlePublicCustomerCreated}
-          onAdminAccess={handleAdminAccess}
-        />
-      </>
-    );
-  }
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 text-gray-800 font-sans overflow-hidden flex-col md:flex-row">
@@ -1312,11 +1461,19 @@ const App: React.FC = () => {
 
       {/* Center Content */}
       <main className="flex-1 min-w-0 min-h-0 flex flex-col relative h-full overflow-hidden pb-16 md:pb-0">
-        {currentView === 'CALENDAR' ? (
-          <Calendar 
-            currentDate={currentDate} 
+        {currentView === 'HOME' ? (
+          <HomeDashboard
+            appointments={appointments}
+            dogs={dogs}
+            customers={customers}
+            tasks={tasks}
+            onOpenDog={handleOpenDog}
+          />
+        ) : currentView === 'CALENDAR' ? (
+          <Calendar
+            currentDate={currentDate}
             summaryReferenceDate={dayPanelDate ?? currentDate}
-            onDateChange={setCurrentDate} 
+            onDateChange={setCurrentDate}
             onOpenMessages={() => setCurrentView('MESSAGES')}
             appointments={appointments}
             calendarEvents={calendarEvents}
@@ -1329,14 +1486,17 @@ const App: React.FC = () => {
             onAppointmentMove={handleMoveAppointment}
           />
         ) : currentView === 'CUSTOMERS' ? (
-          <CustomersView 
+          <CustomersView
             customers={customers}
+            dogs={dogs}
             appointments={appointments}
             onEditCustomer={handleEditCustomer}
             onAddCustomer={handleAddCustomer}
+            onOpenDog={handleOpenDog}
           />
         ) : currentView === 'MESSAGES' ? (
         <MessagesView
+          adminSessionToken={adminSessionToken}
           messages={whatsappMessages}
           customers={customers}
           isTableMissing={whatsappMessagesTableMissing}
@@ -1344,13 +1504,22 @@ const App: React.FC = () => {
           onAddCustomer={(phone) => handleAddCustomer(phone)}
           onOpenCustomer={handleEditCustomer}
         />
+      ) : currentView === 'SETTINGS' ? (
+        <ScheduleSettingsView
+          weeklySlots={businessSchedule.weeklySlots}
+          maxBookingDaysAhead={businessSchedule.maxBookingDaysAhead}
+          onSave={saveBusinessSchedule}
+        />
       ) : (
         <StatsView 
           customers={customers}
             appointments={appointments}
             tasks={tasks}
             syncingTaskIds={syncingTaskIds}
+            onOpenCalendar={() => setCurrentView('CALENDAR')}
+            onOpenCustomers={() => setCurrentView('CUSTOMERS')}
             onOpenMessages={() => setCurrentView('MESSAGES')}
+            onOpenSettings={() => setCurrentView('SETTINGS')}
             onAddTask={handleAddTask}
             onToggleTask={handleToggleTask}
             onDeleteTask={handleDeleteTask}
@@ -1470,9 +1639,10 @@ const App: React.FC = () => {
       )}
 
       {/* Customer Modal */}
-      <CustomerModal 
+      <CustomerModal
         isOpen={isCustomerModalOpen}
         customer={editingCustomer}
+        dogs={editingCustomer ? dogs.filter(d => d.customerId === editingCustomer.id) : []}
         prefillPhone={prefillCustomerPhone}
         onClose={() => {
           setIsCustomerModalOpen(false);
@@ -1480,6 +1650,23 @@ const App: React.FC = () => {
         }}
         onSave={handleSaveCustomer}
         onDelete={handleDeleteCustomer}
+        onOpenDog={handleOpenDog}
+        onAddDog={handleAddDogForCustomer}
+      />
+
+      {/* Dog Card Modal */}
+      <DogCardModal
+        isOpen={Boolean(selectedDogId) || Boolean(newDogForCustomerId)}
+        dog={selectedDogId ? dogs.find(d => d.id === selectedDogId) || null : null}
+        customerId={newDogForCustomerId || dogs.find(d => d.id === selectedDogId)?.customerId || ''}
+        customer={customers.find(c => c.id === (newDogForCustomerId || dogs.find(d => d.id === selectedDogId)?.customerId)) || null}
+        appointments={appointments}
+        onClose={() => {
+          setSelectedDogId(null);
+          setNewDogForCustomerId(null);
+        }}
+        onSave={handleSaveDog}
+        onDelete={handleDeleteDog}
       />
 
       {/* Appointment Modal */}

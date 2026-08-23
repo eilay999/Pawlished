@@ -1,3 +1,5 @@
+import { requireAdminSession } from './_lib/adminAuth.js';
+
 const normalizeDigits = (value = '') => value.replace(/\D/g, '');
 
 const toWhatsAppNumber = (value = '') => {
@@ -138,12 +140,14 @@ const sendManagerApprovalRequest = async ({ date, time, customerName, petName, c
 };
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
+    requireAdminSession(req);
     const {
       phone,
       date,

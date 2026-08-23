@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { Customer, Appointment, Task } from '../types';
-import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity, Trash2, MessageCircle } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity, Trash2, MessageCircle, Calendar, Settings } from 'lucide-react';
 import { analyzeCustomerStatus } from '../utils';
 
 interface StatsViewProps {
   customers: Customer[];
   appointments: Appointment[];
   tasks: Task[];
+  onOpenCalendar?: () => void;
+  onOpenCustomers?: () => void;
   onOpenMessages?: () => void;
+  onOpenSettings?: () => void;
   syncingTaskIds?: ReadonlySet<string>;
   onAddTask: (title: string, startDate: Date) => void;
   onToggleTask: (taskId: string) => void;
@@ -18,7 +21,10 @@ export const StatsView: React.FC<StatsViewProps> = ({
   customers,
   appointments,
   tasks,
+  onOpenCalendar,
+  onOpenCustomers,
   onOpenMessages,
+  onOpenSettings,
   syncingTaskIds,
   onAddTask,
   onToggleTask,
@@ -112,17 +118,49 @@ export const StatsView: React.FC<StatsViewProps> = ({
         <p className="text-gray-500 mt-1">תמונת מצב של הכנסות, לקוחות ושימור</p>
         </div>
 
-        {onOpenMessages && (
-          <button
-            type="button"
-            onClick={onOpenMessages}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-100 transition-all active:scale-95"
-            aria-label="WhatsApp messages"
-          >
-            <MessageCircle className="w-5 h-5" />
-            <span>הודעות WhatsApp</span>
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenCalendar && (
+            <button
+              type="button"
+              onClick={onOpenCalendar}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white/80 hover:bg-white text-gray-800 font-bold shadow-sm border border-white/60 transition-all active:scale-95"
+            >
+              <Calendar className="w-5 h-5 text-blue-700" />
+              <span>יומן</span>
+            </button>
+          )}
+          {onOpenCustomers && (
+            <button
+              type="button"
+              onClick={onOpenCustomers}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white/80 hover:bg-white text-gray-800 font-bold shadow-sm border border-white/60 transition-all active:scale-95"
+            >
+              <Users className="w-5 h-5 text-blue-700" />
+              <span>לקוחות</span>
+            </button>
+          )}
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white/80 hover:bg-white text-gray-800 font-bold shadow-sm border border-white/60 transition-all active:scale-95"
+            >
+              <Settings className="w-5 h-5 text-blue-700" />
+              <span>הגדרות</span>
+            </button>
+          )}
+          {onOpenMessages && (
+            <button
+              type="button"
+              onClick={onOpenMessages}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-100 transition-all active:scale-95"
+              aria-label="WhatsApp messages"
+            >
+              <MessageCircle className="w-5 h-5" />
+              <span>הודעות WhatsApp</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-8 space-y-8">
