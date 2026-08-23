@@ -10,8 +10,10 @@ import {
   Trash2,
   AlertTriangle,
   CalendarClock,
+  Scissors,
+  Plus,
 } from 'lucide-react';
-import { Appointment, AppointmentStatus, Customer, Dog, DogSex, DogSize } from '../types';
+import { Appointment, AppointmentStatus, Customer, Dog, DogSex, DogSize, GroomingRecord } from '../types';
 import { analyzeDogStatus } from '../utils';
 
 interface DogCardModalProps {
@@ -20,9 +22,11 @@ interface DogCardModalProps {
   customerId: string;
   customer: Customer | null;
   appointments: Appointment[];
+  groomingRecords: GroomingRecord[];
   onClose: () => void;
   onSave: (dog: Dog) => void;
   onDelete?: (dogId: string) => void;
+  onOpenGroomingRecord: (appointmentId: string) => void;
 }
 
 const FREQUENCY_OPTIONS = [
@@ -76,9 +80,11 @@ export const DogCardModal: React.FC<DogCardModalProps> = ({
   customerId,
   customer,
   appointments,
+  groomingRecords,
   onClose,
   onSave,
   onDelete,
+  onOpenGroomingRecord,
 }) => {
   const [formData, setFormData] = useState<Partial<Dog>>(() => emptyForm(customerId));
 
@@ -378,15 +384,38 @@ export const DogCardModal: React.FC<DogCardModalProps> = ({
                 </p>
               ) : (
                 <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                  {dogAppointments.map(a => (
-                    <div key={a.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
-                      <span className="text-gray-700 font-medium">{a.service}</span>
-                      <span className="text-gray-500">
-                        {new Date(a.date).toLocaleDateString('he-IL')}
-                        {a.status === AppointmentStatus.CANCELLED ? ' (בוטל)' : ''}
-                      </span>
-                    </div>
-                  ))}
+                  {dogAppointments.map(a => {
+                    const hasRecord = groomingRecords.some(r => r.appointmentId === a.id);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => onOpenGroomingRecord(a.id)}
+                        className="w-full flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2 hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-colors text-right"
+                      >
+                        <span className="text-gray-700 font-medium flex items-center gap-1.5">
+                          <Scissors className="w-3 h-3 text-gray-400 shrink-0 transform -scale-x-100" />
+                          {a.service}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          {hasRecord ? (
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">
+                              יש פרטי תספורת
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium text-gray-400 flex items-center gap-0.5">
+                              <Plus className="w-3 h-3" />
+                              הוסף פרטים
+                            </span>
+                          )}
+                          <span className="text-gray-500">
+                            {new Date(a.date).toLocaleDateString('he-IL')}
+                            {a.status === AppointmentStatus.CANCELLED ? ' (בוטל)' : ''}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

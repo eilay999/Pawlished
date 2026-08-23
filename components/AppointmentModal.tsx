@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Scissors, User, CircleDollarSign, Plus, Phone, Dog, History, AlertCircle, PenLine, List, Trash2, AlertTriangle, CheckCircle2, Search } from 'lucide-react';
-import { Customer, Appointment, AppointmentStatus } from '../types';
+import { X, Calendar, Clock, Scissors, User, CircleDollarSign, Plus, Phone, Dog as DogIcon, History, AlertCircle, PenLine, List, Trash2, AlertTriangle, CheckCircle2, Search } from 'lucide-react';
+import { Customer, Dog, Appointment, AppointmentStatus } from '../types';
 import { APPOINTMENT_DURATION_MINUTES, SERVICE_PRICES } from '../constants';
 import { normalizeDigits, normalizePhoneForCompare } from '../utils';
 
@@ -13,6 +13,7 @@ interface AppointmentModalProps {
   onDelete?: (appointmentId: string) => void;
   initialDate?: Date;
   customers: Customer[];
+  dogs: Dog[];
   appointments: Appointment[];
   preSelectedCustomerId?: string;
   onCreateNewCustomer: () => void;
@@ -25,8 +26,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   onSave,
   onUpdateCustomerNotes,
   onDelete,
-  initialDate, 
+  initialDate,
   customers,
+  dogs,
   appointments,
   preSelectedCustomerId,
   onCreateNewCustomer,
@@ -51,6 +53,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const selectedCustomer = customers.find(c => c.id === formData.customerId);
+  const selectedDog = dogs.find(d => d.customerId === formData.customerId);
   const estimatedEndTimeLabel = (() => {
     const dateMatch = String(formData.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const timeMatch = String(formData.time || '').match(/^(\d{1,2}):(\d{2})$/);
@@ -167,8 +170,10 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         // If customer is pre-selected (e.g. from customer card), apply price logic
         if (preSelectedCustomerId) {
             const cust = customers.find(c => c.id === preSelectedCustomerId);
-            if (cust && cust.defaultPrice) {
-                 setFormData(prev => ({ ...prev, price: cust.defaultPrice! }));
+            const custDog = dogs.find(d => d.customerId === preSelectedCustomerId);
+            const fixedPrice = custDog?.defaultPrice ?? cust?.defaultPrice;
+            if (fixedPrice) {
+                 setFormData(prev => ({ ...prev, price: fixedPrice }));
             }
             setCustomerSearch(cust ? formatCustomerOption(cust) : '');
         } else {
@@ -215,11 +220,12 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   const handleCustomerChange = (newCustomerId: string) => {
       const cust = customers.find(c => c.id === newCustomerId);
+      const custDog = dogs.find(d => d.customerId === newCustomerId);
       let newPrice = formData.price;
-      
-      if (cust && cust.defaultPrice) {
-          // Priority: Customer Fixed Price
-          newPrice = cust.defaultPrice;
+
+      if (custDog?.defaultPrice || cust?.defaultPrice) {
+          // Priority: Dog's Fixed Price (falls back to the legacy Customer field)
+          newPrice = custDog?.defaultPrice ?? cust!.defaultPrice!;
       } else {
           // Fallback: Service Price
           newPrice = SERVICE_PRICES[formData.service] || 0;
@@ -436,15 +442,15 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             {/* Selected Customer Card */}
             {selectedCustomer && (
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-sm space-y-2 animate-in fade-in slide-in-from-top-2 relative">
-                    {selectedCustomer.defaultPrice && (
+                    {(selectedDog?.defaultPrice ?? selectedCustomer.defaultPrice) && (
                         <div className="absolute top-2 left-2 bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            מחיר קבוע: ₪{selectedCustomer.defaultPrice}
+                            מחיר קבוע: ₪{selectedDog?.defaultPrice ?? selectedCustomer.defaultPrice}
                         </div>
                     )}
                     <div className="flex items-center gap-2 text-gray-700 font-medium border-b border-gray-200 pb-2">
-                        <Dog className="w-4 h-4 text-blue-500" />
-                        <span>{selectedCustomer.petName}</span>
-                        <span className="text-gray-400 text-xs font-normal">({selectedCustomer.petType})</span>
+                        <DogIcon className="w-4 h-4 text-blue-500" />
+                        <span>{selectedDog?.name ?? selectedCustomer.petName}</span>
+                        <span className="text-gray-400 text-xs font-normal">({selectedDog?.breed ?? selectedCustomer.petType})</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                         <div className="flex items-center gap-1.5">
@@ -453,7 +459,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                         </div>
                         <div className="flex items-center gap-1.5">
                             <History className="w-3 h-3 text-gray-400" />
-                             ביקור אחרון: {new Date(selectedCustomer.lastVisit).toLocaleDateString('he-IL')}
+                             ביקור אחרון: {new Date(selectedDog?.lastVisit ?? selectedCustomer.lastVisit).toLocaleDateString('he-IL')}
                         </div>
                     <div className="text-xs text-gray-600">
                         <div className="flex items-center justify-between mb-1"><label className="block text-[11px] font-semibold text-gray-700">הערות לקוח</label><button type="button" className="text-[10px] text-red-500 hover:text-red-600 font-semibold" onClick={() => setCustomerNotes('')} disabled={!customerNotes.trim()}>מחק הערות</button></div>

@@ -55,6 +55,21 @@ export interface Dog {
   lifecycleStatus: CustomerLifecycleStatus;
 }
 
+export interface GroomingRecord {
+  id: string;
+  dogId: string;
+  appointmentId?: string;
+  visitDate: Date;
+  bodyNote?: string;
+  legsNote?: string;
+  faceNote?: string;
+  headNote?: string;
+  tailNote?: string;
+  nailsDone: boolean;
+  earsCleaned: boolean;
+  note?: string;
+}
+
 export type TaskStatus = 'OPEN' | 'DONE';
 
 export interface Task {

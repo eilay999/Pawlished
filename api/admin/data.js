@@ -35,6 +35,7 @@ export default async function handler(req, res) {
     const [
       customersRes,
       dogsRes,
+      groomingRecordsRes,
       appointmentsRes,
       calendarEventsRes,
       tasksRes,
@@ -43,6 +44,7 @@ export default async function handler(req, res) {
     ] = await Promise.all([
       supabase.from('customers').select('*').order('id', { ascending: true }),
       supabase.from('dogs').select('*').order('id', { ascending: true }),
+      supabase.from('grooming_records').select('*').order('visit_date', { ascending: false }),
       supabase.from('appointments').select('*').order('date', { ascending: true }),
       supabase.from('calendar_events').select('*').order('starts_at', { ascending: true }),
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
@@ -72,6 +74,17 @@ export default async function handler(req, res) {
 
     if (dogsRes.error && !dogsMissing) {
       throw createHttpError(500, dogsRes.error.message);
+    }
+
+    // grooming_records table is optional until the add_grooming_records migration is applied
+    const groomingRecordsMissing =
+      Boolean(groomingRecordsRes.error) &&
+      typeof groomingRecordsRes.error?.message === 'string' &&
+      groomingRecordsRes.error.message.toLowerCase().includes('relation') &&
+      groomingRecordsRes.error.message.toLowerCase().includes('grooming_records');
+
+    if (groomingRecordsRes.error && !groomingRecordsMissing) {
+      throw createHttpError(500, groomingRecordsRes.error.message);
     }
 
     if (appointmentsRes.error) {
@@ -114,6 +127,8 @@ export default async function handler(req, res) {
       customers: customersRes.data || [],
       dogs: dogsMissing ? [] : dogsRes.data || [],
       dogsMissing,
+      groomingRecords: groomingRecordsMissing ? [] : groomingRecordsRes.data || [],
+      groomingRecordsMissing,
       appointments: appointmentsRes.data || [],
       calendarEvents: calendarEventsRes.data || [],
       tasks: tasksRes.data || [],

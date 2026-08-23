@@ -191,6 +191,28 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (action === 'upsert_grooming_record') {
+      const record = body.record;
+      if (!record || typeof record !== 'object') {
+        throw createHttpError(400, 'Missing record');
+      }
+
+      const { data, error } = await supabase.from('grooming_records').upsert(record).select('*').single();
+      if (error) throw createHttpError(500, error.message);
+      res.status(200).json({ ok: true, record: data });
+      return;
+    }
+
+    if (action === 'delete_grooming_record') {
+      const recordId = String(body.recordId || '').trim();
+      if (!recordId) throw createHttpError(400, 'Missing recordId');
+
+      const { error } = await supabase.from('grooming_records').delete().eq('id', recordId);
+      if (error) throw createHttpError(500, error.message);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     if (action === 'upsert_appointment') {
       const appointment = body.appointment;
       if (!appointment || typeof appointment !== 'object') {

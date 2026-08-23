@@ -12,12 +12,13 @@ import { MessagesView } from './components/MessagesView';
 import { AdminLogin } from './components/AdminLogin';
 import { ScheduleSettingsView } from './components/ScheduleSettingsView';
 import { ThemePanel } from './components/ThemePanel';
-import { ViewType, Appointment, CalendarEvent, Customer, Dog, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
+import { ViewType, Appointment, CalendarEvent, Customer, Dog, GroomingRecord, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
 import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
 import { applyTheme, loadTheme } from './theme';
 import { normalizePhoneForCompare } from './utils';
 import { HomeDashboard } from './components/HomeDashboard';
 import { DogCardModal } from './components/DogCardModal';
+import { GroomingRecordModal } from './components/GroomingRecordModal';
 
 type DbCustomer = {
   id: string;
@@ -61,6 +62,21 @@ type DbDog = {
   visit_frequency_weeks: number;
   default_price: number | null;
   lifecycle_status: 'ACTIVE' | 'ON_HOLD' | null;
+};
+
+type DbGroomingRecord = {
+  id: string;
+  dog_id: string;
+  appointment_id: string | null;
+  visit_date: string;
+  body_note: string | null;
+  legs_note: string | null;
+  face_note: string | null;
+  head_note: string | null;
+  tail_note: string | null;
+  nails_done: boolean;
+  ears_cleaned: boolean;
+  note: string | null;
 };
 
 type DbTask = {
@@ -154,6 +170,36 @@ const mapDogToDb = (dog: Dog): DbDog => ({
   visit_frequency_weeks: dog.visitFrequencyWeeks,
   default_price: dog.defaultPrice ?? null,
   lifecycle_status: dog.lifecycleStatus,
+});
+
+const mapGroomingRecordFromDb = (row: DbGroomingRecord): GroomingRecord => ({
+  id: row.id,
+  dogId: row.dog_id,
+  appointmentId: row.appointment_id ?? undefined,
+  visitDate: new Date(row.visit_date),
+  bodyNote: row.body_note ?? undefined,
+  legsNote: row.legs_note ?? undefined,
+  faceNote: row.face_note ?? undefined,
+  headNote: row.head_note ?? undefined,
+  tailNote: row.tail_note ?? undefined,
+  nailsDone: row.nails_done,
+  earsCleaned: row.ears_cleaned,
+  note: row.note ?? undefined,
+});
+
+const mapGroomingRecordToDb = (record: GroomingRecord): DbGroomingRecord => ({
+  id: record.id,
+  dog_id: record.dogId,
+  appointment_id: record.appointmentId ?? null,
+  visit_date: record.visitDate.toISOString(),
+  body_note: record.bodyNote ?? null,
+  legs_note: record.legsNote ?? null,
+  face_note: record.faceNote ?? null,
+  head_note: record.headNote ?? null,
+  tail_note: record.tailNote ?? null,
+  nails_done: record.nailsDone,
+  ears_cleaned: record.earsCleaned,
+  note: record.note ?? null,
 });
 
 const mapCustomerToDb = (customer: Customer): DbCustomer => ({
@@ -293,6 +339,15 @@ const dogsSignature = (list: Dog[]) =>
     }))
   );
 
+const groomingRecordsSignature = (list: GroomingRecord[]) =>
+  JSON.stringify(
+    sortById(list).map(r => ({
+      ...r,
+      visitDate: r.visitDate.toISOString(),
+      appointmentId: r.appointmentId ?? null,
+    }))
+  );
+
 const tasksSignature = (list: Task[]) =>
   JSON.stringify(
     sortById(list).map(t => ({
@@ -359,6 +414,7 @@ const App: React.FC = () => {
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [dogs, setDogs] = useState<Dog[]>([]);
+  const [groomingRecords, setGroomingRecords] = useState<GroomingRecord[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
   const [whatsappMessagesTableMissing, setWhatsappMessagesTableMissing] = useState(false);
@@ -417,6 +473,7 @@ const App: React.FC = () => {
   const [prefillCustomerPhone, setPrefillCustomerPhone] = useState<string>('');
   const [selectedDogId, setSelectedDogId] = useState<string | null>(null);
   const [newDogForCustomerId, setNewDogForCustomerId] = useState<string | null>(null);
+  const [groomingRecordAppointmentId, setGroomingRecordAppointmentId] = useState<string | null>(null);
 
   // Appointment Modal State
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -434,6 +491,7 @@ const App: React.FC = () => {
   const cloudRetryAttemptRef = useRef(0);
   const customersRef = useRef<Customer[]>([]);
   const dogsRef = useRef<Dog[]>([]);
+  const groomingRecordsRef = useRef<GroomingRecord[]>([]);
   const appointmentsRef = useRef<Appointment[]>([]);
   const calendarEventsRef = useRef<CalendarEvent[]>([]);
   const tasksRef = useRef<Task[]>([]);
@@ -457,6 +515,10 @@ const App: React.FC = () => {
   useEffect(() => {
     dogsRef.current = dogs;
   }, [dogs]);
+
+  useEffect(() => {
+    groomingRecordsRef.current = groomingRecords;
+  }, [groomingRecords]);
 
   useEffect(() => {
     appointmentsRef.current = appointments;
@@ -591,6 +653,8 @@ const App: React.FC = () => {
     const customersRes = { data: payload.customers || [], error: null as any };
     const dogsRes = { data: payload.dogs || [], error: null as any };
     const dogsMissing = Boolean(payload.dogsMissing);
+    const groomingRecordsRes = { data: payload.groomingRecords || [], error: null as any };
+    const groomingRecordsMissing = Boolean(payload.groomingRecordsMissing);
     const appointmentsRes = { data: payload.appointments || [], error: null as any };
     const calendarEventsRes = { data: payload.calendarEvents || [], error: null as any };
     const tasksRes = { data: payload.tasks || [], error: null as any };
@@ -617,6 +681,7 @@ const App: React.FC = () => {
 
     const mappedCustomers = (customersRes.data || []).map(mapCustomerFromDb);
     const mappedDogs = dogsMissing ? [] : (dogsRes.data || []).map(mapDogFromDb);
+    const mappedGroomingRecords = groomingRecordsMissing ? [] : (groomingRecordsRes.data || []).map(mapGroomingRecordFromDb);
     const mappedAppointments = (appointmentsRes.data || []).map(mapAppointmentFromDb);
     const mappedCalendarEvents =
       calendarEventsError && isMissingTableError(calendarEventsError.message)
@@ -633,6 +698,10 @@ const App: React.FC = () => {
 
     if (dogsSignature(dogsRef.current) !== dogsSignature(mappedDogs)) {
       setDogs(mappedDogs);
+    }
+
+    if (groomingRecordsSignature(groomingRecordsRef.current) !== groomingRecordsSignature(mappedGroomingRecords)) {
+      setGroomingRecords(mappedGroomingRecords);
     }
 
     if (appointmentsSignature(appointmentsRef.current) !== appointmentsSignature(mappedAppointments)) {
@@ -1110,6 +1179,36 @@ const App: React.FC = () => {
 
     persistCloudMutation('מחיקת כרטיס הכלב בענן נכשלה', () =>
       adminMutate({ action: 'delete_dog', dogId })
+    );
+  };
+
+  const handleOpenGroomingRecord = (appointmentId: string) => {
+    setGroomingRecordAppointmentId(appointmentId);
+  };
+
+  const handleSaveGroomingRecord = (record: GroomingRecord) => {
+    if (!ensureCloudWritable()) return;
+    setGroomingRecords(prev => {
+      const exists = prev.find(r => r.id === record.id);
+      if (exists) {
+        return prev.map(r => r.id === record.id ? record : r);
+      }
+      return [...prev, record];
+    });
+    setGroomingRecordAppointmentId(null);
+
+    persistCloudMutation('שמירת פרטי התספורת בענן נכשלה', () =>
+      adminMutate({ action: 'upsert_grooming_record', record: mapGroomingRecordToDb(record) })
+    );
+  };
+
+  const handleDeleteGroomingRecord = (recordId: string) => {
+    if (!ensureCloudWritable()) return;
+    setGroomingRecords(prev => prev.filter(r => r.id !== recordId));
+    setGroomingRecordAppointmentId(null);
+
+    persistCloudMutation('מחיקת פרטי התספורת בענן נכשלה', () =>
+      adminMutate({ action: 'delete_grooming_record', recordId })
     );
   };
 
@@ -1661,12 +1760,26 @@ const App: React.FC = () => {
         customerId={newDogForCustomerId || dogs.find(d => d.id === selectedDogId)?.customerId || ''}
         customer={customers.find(c => c.id === (newDogForCustomerId || dogs.find(d => d.id === selectedDogId)?.customerId)) || null}
         appointments={appointments}
+        groomingRecords={groomingRecords}
         onClose={() => {
           setSelectedDogId(null);
           setNewDogForCustomerId(null);
         }}
         onSave={handleSaveDog}
         onDelete={handleDeleteDog}
+        onOpenGroomingRecord={handleOpenGroomingRecord}
+      />
+
+      {/* Grooming Record Modal */}
+      <GroomingRecordModal
+        isOpen={Boolean(groomingRecordAppointmentId)}
+        appointment={appointments.find(a => a.id === groomingRecordAppointmentId) || null}
+        dog={dogs.find(d => d.id === appointments.find(a => a.id === groomingRecordAppointmentId)?.dogId) || null}
+        record={groomingRecords.find(r => r.appointmentId === groomingRecordAppointmentId) || null}
+        groomingRecords={groomingRecords}
+        onClose={() => setGroomingRecordAppointmentId(null)}
+        onSave={handleSaveGroomingRecord}
+        onDelete={handleDeleteGroomingRecord}
       />
 
       {/* Appointment Modal */}
@@ -1681,6 +1794,7 @@ const App: React.FC = () => {
         onDelete={handleDeleteAppointment}
         initialDate={selectedDateForAppointment}
         customers={customers}
+        dogs={dogs}
         appointments={appointments}
         preSelectedCustomerId={preSelectedCustomerId}
         onCreateNewCustomer={handleAddCustomer}
