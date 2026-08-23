@@ -19,6 +19,7 @@ import { normalizePhoneForCompare } from './utils';
 import { HomeDashboard } from './components/HomeDashboard';
 import { DogCardModal } from './components/DogCardModal';
 import { GroomingRecordModal } from './components/GroomingRecordModal';
+import { WhatsAppQuickSendModal } from './components/WhatsAppQuickSendModal';
 
 type DbCustomer = {
   id: string;
@@ -474,6 +475,7 @@ const App: React.FC = () => {
   const [selectedDogId, setSelectedDogId] = useState<string | null>(null);
   const [newDogForCustomerId, setNewDogForCustomerId] = useState<string | null>(null);
   const [groomingRecordAppointmentId, setGroomingRecordAppointmentId] = useState<string | null>(null);
+  const [whatsAppTarget, setWhatsAppTarget] = useState<{ customerId: string; dogId?: string } | null>(null);
 
   // Appointment Modal State
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -934,6 +936,25 @@ const App: React.FC = () => {
     [adminSessionToken, clearAdminSession]
   );
 
+  const handleSendWhatsAppMessage = useCallback(
+    async (phone: string, body: string) => {
+      const response = await fetch('/api/whatsapp-send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminSessionToken ? { 'X-OTP-Token': adminSessionToken } : {})
+        },
+        body: JSON.stringify({ phone, body })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || 'שליחת הודעה נכשלה.');
+      }
+    },
+    [adminSessionToken]
+  );
+
   const persistCloudMutation = (
     fallbackMessage: string,
     writer: () => PromiseLike<unknown>,
@@ -1184,6 +1205,14 @@ const App: React.FC = () => {
 
   const handleOpenGroomingRecord = (appointmentId: string) => {
     setGroomingRecordAppointmentId(appointmentId);
+  };
+
+  const handleOpenWhatsAppForCustomer = (customerId: string) => {
+    setWhatsAppTarget({ customerId });
+  };
+
+  const handleOpenWhatsAppForDog = (customerId: string, dogId: string) => {
+    setWhatsAppTarget({ customerId, dogId });
   };
 
   const handleSaveGroomingRecord = (record: GroomingRecord) => {
@@ -1595,13 +1624,13 @@ const App: React.FC = () => {
           />
         ) : currentView === 'MESSAGES' ? (
         <MessagesView
-          adminSessionToken={adminSessionToken}
           messages={whatsappMessages}
           customers={customers}
           isTableMissing={whatsappMessagesTableMissing}
           onRefresh={() => void loadDataFromCloud('manual')}
           onAddCustomer={(phone) => handleAddCustomer(phone)}
           onOpenCustomer={handleEditCustomer}
+          onSendMessage={handleSendWhatsAppMessage}
         />
       ) : currentView === 'SETTINGS' ? (
         <ScheduleSettingsView
@@ -1751,6 +1780,7 @@ const App: React.FC = () => {
         onDelete={handleDeleteCustomer}
         onOpenDog={handleOpenDog}
         onAddDog={handleAddDogForCustomer}
+        onOpenWhatsApp={handleOpenWhatsAppForCustomer}
       />
 
       {/* Dog Card Modal */}
@@ -1768,6 +1798,7 @@ const App: React.FC = () => {
         onSave={handleSaveDog}
         onDelete={handleDeleteDog}
         onOpenGroomingRecord={handleOpenGroomingRecord}
+        onOpenWhatsApp={handleOpenWhatsAppForDog}
       />
 
       {/* Grooming Record Modal */}
@@ -1780,6 +1811,24 @@ const App: React.FC = () => {
         onClose={() => setGroomingRecordAppointmentId(null)}
         onSave={handleSaveGroomingRecord}
         onDelete={handleDeleteGroomingRecord}
+      />
+
+      {/* WhatsApp Quick Send Modal */}
+      <WhatsAppQuickSendModal
+        isOpen={Boolean(whatsAppTarget)}
+        customer={customers.find(c => c.id === whatsAppTarget?.customerId) || null}
+        dog={whatsAppTarget?.dogId ? dogs.find(d => d.id === whatsAppTarget.dogId) || null : null}
+        nextAppointment={
+          appointments
+            .filter(a =>
+              a.status !== AppointmentStatus.CANCELLED &&
+              new Date(a.date).getTime() >= Date.now() &&
+              (whatsAppTarget?.dogId ? a.dogId === whatsAppTarget.dogId : a.customerId === whatsAppTarget?.customerId)
+            )
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] || null
+        }
+        onClose={() => setWhatsAppTarget(null)}
+        onSend={handleSendWhatsAppMessage}
       />
 
       {/* Appointment Modal */}

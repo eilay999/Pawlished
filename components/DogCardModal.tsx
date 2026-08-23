@@ -12,6 +12,7 @@ import {
   CalendarClock,
   Scissors,
   Plus,
+  MessageCircle,
 } from 'lucide-react';
 import { Appointment, AppointmentStatus, Customer, Dog, DogSex, DogSize, GroomingRecord } from '../types';
 import { analyzeDogStatus } from '../utils';
@@ -27,6 +28,7 @@ interface DogCardModalProps {
   onSave: (dog: Dog) => void;
   onDelete?: (dogId: string) => void;
   onOpenGroomingRecord: (appointmentId: string) => void;
+  onOpenWhatsApp?: (customerId: string, dogId: string) => void;
 }
 
 const FREQUENCY_OPTIONS = [
@@ -85,6 +87,7 @@ export const DogCardModal: React.FC<DogCardModalProps> = ({
   onSave,
   onDelete,
   onOpenGroomingRecord,
+  onOpenWhatsApp,
 }) => {
   const [formData, setFormData] = useState<Partial<Dog>>(() => emptyForm(customerId));
 
@@ -424,18 +427,28 @@ export const DogCardModal: React.FC<DogCardModalProps> = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
-          {dog && onDelete ? (
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              מחק כלב
-            </button>
-          ) : (
-            <span />
-          )}
+          <div className="flex items-center gap-2">
+            {dog && customer && onOpenWhatsApp && (
+              <button
+                type="button"
+                onClick={() => onOpenWhatsApp(customer.id, dog.id)}
+                className="px-4 py-2 text-emerald-600 font-medium hover:bg-emerald-50 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <MessageCircle className="w-4 h-4" />
+                שלח WhatsApp
+              </button>
+            )}
+            {dog && onDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                מחק כלב
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}

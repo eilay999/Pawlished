@@ -4,13 +4,13 @@ import { Customer, WhatsAppMessage } from '../types';
 import { normalizePhoneForCompare } from '../utils';
 
 interface MessagesViewProps {
-  adminSessionToken?: string;
   messages: WhatsAppMessage[];
   customers: Customer[];
   isTableMissing?: boolean;
   onRefresh?: () => void;
   onAddCustomer?: (phone: string) => void;
   onOpenCustomer?: (customer: Customer) => void;
+  onSendMessage: (phone: string, body: string) => Promise<void>;
 }
 
 type Conversation = {
@@ -66,13 +66,13 @@ const groupMessages = (messages: WhatsAppMessage[]): Conversation[] => {
 };
 
 export const MessagesView: React.FC<MessagesViewProps> = ({
-  adminSessionToken,
   messages,
   customers,
   isTableMissing = false,
   onRefresh,
   onAddCustomer,
-  onOpenCustomer
+  onOpenCustomer,
+  onSendMessage
 }) => {
   const conversations = useMemo(() => groupMessages(messages), [messages]);
   const customersByPhone = useMemo(() => {
@@ -112,26 +112,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     setSendError(null);
 
     try {
-      const response = await fetch('/api/whatsapp-send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(adminSessionToken ? { 'X-OTP-Token': adminSessionToken } : {})
-        },
-        body: JSON.stringify({
-          phone: selectedConversation.phone,
-          body: text
-        })
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.error || 'שליחת הודעה נכשלה.');
-      }
-
-      if (!payload?.ok) {
-        throw new Error(payload?.error || 'שליחת הודעה נכשלה.');
-      }
+      await onSendMessage(selectedConversation.phone, text);
 
       setDraftMessage('');
       setSendError(null);

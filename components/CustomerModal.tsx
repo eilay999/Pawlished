@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Dog as DogIcon, Plus, User, Phone, Trash2 } from 'lucide-react';
+import { X, Save, Dog as DogIcon, Plus, User, Phone, Trash2, MessageCircle } from 'lucide-react';
 import { Customer, CustomerLifecycleStatus, Dog } from '../types';
 import { normalizePhoneForCompare } from '../utils';
 
@@ -14,6 +14,7 @@ interface CustomerModalProps {
   onDelete?: (customerId: string) => void;
   onOpenDog?: (dogId: string) => void;
   onAddDog?: (customerId: string) => void;
+  onOpenWhatsApp?: (customerId: string) => void;
 }
 
 const LIFECYCLE_OPTIONS: Array<{
@@ -42,7 +43,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
   onSave,
   onDelete,
   onOpenDog,
-  onAddDog
+  onAddDog,
+  onOpenWhatsApp
 }) => {
   const [formData, setFormData] = useState<Partial<Customer>>({
     name: '',
@@ -236,19 +238,29 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
-          {customer && onDelete ? (
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              מחק לקוח
-            </button>
-          ) : (
-            <span />
-          )}
-          <button 
+          <div className="flex items-center gap-2">
+            {customer && onOpenWhatsApp && (
+              <button
+                type="button"
+                onClick={() => onOpenWhatsApp(customer.id)}
+                className="px-4 py-2 text-emerald-600 font-medium hover:bg-emerald-50 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <MessageCircle className="w-4 h-4" />
+                שלח WhatsApp
+              </button>
+            )}
+            {customer && onDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                מחק לקוח
+              </button>
+            )}
+          </div>
+          <button
             type="button"
             onClick={onClose} 
             className="px-6 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-xl transition-colors"
