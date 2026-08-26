@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Customer, Appointment, Task } from '../types';
-import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity, Trash2, MessageCircle, Calendar, Settings } from 'lucide-react';
+import { Customer, Dog, Appointment, Task } from '../types';
+import { TrendingUp, Users, AlertTriangle, Wallet, CalendarOff, CheckCircle2, XCircle, PieChart, Activity, Trash2, MessageCircle, Calendar, Settings, Dog as DogIcon, Receipt, UserPlus, UserCheck } from 'lucide-react';
 import { analyzeCustomerStatus } from '../utils';
 
 interface StatsViewProps {
   customers: Customer[];
+  dogs: Dog[];
   appointments: Appointment[];
   tasks: Task[];
   onOpenCalendar?: () => void;
@@ -19,6 +20,7 @@ interface StatsViewProps {
 
 export const StatsView: React.FC<StatsViewProps> = ({
   customers,
+  dogs,
   appointments,
   tasks,
   onOpenCalendar,
@@ -70,6 +72,41 @@ export const StatsView: React.FC<StatsViewProps> = ({
   const cancelledCount = cancelledAppointments.length;
   const arrivedCount = activeAppointments.length;
   const cancellationRate = totalAppointmentsCount > 0 ? Math.round((cancelledCount / totalAppointmentsCount) * 100) : 0;
+
+  // Monthly business report additions
+  const completedThisMonth = thisMonthAllAppointments.filter(a => a.status === 'COMPLETED');
+  const noShowThisMonth = thisMonthAllAppointments.filter(a => a.status === 'LATE');
+  const uniqueDogsTreatedThisMonth = new Set(
+    completedThisMonth.map(a => a.dogId).filter((id): id is string => Boolean(id))
+  ).size;
+  const averageTransaction =
+    completedThisMonth.length > 0
+      ? Math.round(completedThisMonth.reduce((sum, a) => sum + (a.price || 0), 0) / completedThisMonth.length)
+      : 0;
+
+  const firstCompletedDateByDog = new Map<string, number>();
+  appointments
+    .filter(a => a.status === 'COMPLETED' && a.dogId)
+    .forEach(a => {
+      const time = a.date.getTime();
+      const existing = firstCompletedDateByDog.get(a.dogId!);
+      if (existing === undefined || time < existing) {
+        firstCompletedDateByDog.set(a.dogId!, time);
+      }
+    });
+
+  const dogIdsTreatedThisMonth = new Set<string>(completedThisMonth.map(a => a.dogId).filter((id): id is string => Boolean(id)));
+  let newDogsThisMonth = 0;
+  let returningDogsThisMonth = 0;
+  dogIdsTreatedThisMonth.forEach(dogId => {
+    const firstVisit = firstCompletedDateByDog.get(dogId);
+    const isFirstEverThisMonth =
+      firstVisit !== undefined &&
+      new Date(firstVisit).getMonth() === currentMonth &&
+      new Date(firstVisit).getFullYear() === currentYear;
+    if (isFirstEverThisMonth) newDogsThisMonth += 1;
+    else returningDogsThisMonth += 1;
+  });
 
   // Customer Analysis
   const analyzedCustomers = customers.map(c => {
@@ -259,6 +296,71 @@ export const StatsView: React.FC<StatsViewProps> = ({
             </div>
             <div className="text-3xl font-bold text-red-600">₪{cancellationLoss.toLocaleString()}</div>
             <div className="text-xs text-red-400 mt-1">פער בין מחיר מלא לדמי ביטול</div>
+          </div>
+        </div>
+
+        {/* Row 2.5: Monthly Business Report */}
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+              <Receipt className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-800">דוח עסקי חודשי</h3>
+              <p className="text-xs text-gray-400">
+                {today.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 text-gray-500 mb-1">
+                <DogIcon className="w-4 h-4" />
+                <span className="text-xs font-bold">כלבים במערכת</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-800">{dogs.length}</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 text-gray-500 mb-1">
+                <DogIcon className="w-4 h-4" />
+                <span className="text-xs font-bold">כלבים שטופלו החודש</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-800">{uniqueDogsTreatedThisMonth}</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 text-gray-500 mb-1">
+                <Wallet className="w-4 h-4" />
+                <span className="text-xs font-bold">ממוצע עסקה</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-800">₪{averageTransaction.toLocaleString()}</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 text-red-500 mb-1">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="text-xs font-bold">לא הגיעו (No Show)</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-800">{noShowThisMonth.length}</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 text-emerald-600 mb-1">
+                <UserPlus className="w-4 h-4" />
+                <span className="text-xs font-bold">כלבים חדשים החודש</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-800">{newDogsThisMonth}</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2 text-blue-600 mb-1">
+                <UserCheck className="w-4 h-4" />
+                <span className="text-xs font-bold">כלבים חוזרים החודש</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-800">{returningDogsThisMonth}</div>
+            </div>
           </div>
         </div>
 

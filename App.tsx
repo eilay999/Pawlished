@@ -1639,8 +1639,9 @@ const App: React.FC = () => {
           onSave={saveBusinessSchedule}
         />
       ) : (
-        <StatsView 
+        <StatsView
           customers={customers}
+            dogs={dogs}
             appointments={appointments}
             tasks={tasks}
             syncingTaskIds={syncingTaskIds}
