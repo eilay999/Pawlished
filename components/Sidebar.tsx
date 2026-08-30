@@ -7,6 +7,7 @@ import {
   Palette,
   Plus,
   Scissors,
+  Search,
   Settings,
   TrendingUp,
   Users
@@ -19,6 +20,7 @@ interface SidebarProps {
   onQuickAdd: () => void;
   onQuickAddEvent: () => void;
   onOpenTheme?: () => void;
+  onOpenSearch: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -26,7 +28,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onChangeView,
   onQuickAdd,
   onQuickAddEvent,
-  onOpenTheme
+  onOpenTheme,
+  onOpenSearch
 }) => {
   const navItems = [
     { id: 'HOME' as ViewType, label: 'היום', icon: Home },
@@ -47,7 +50,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        <nav className="flex-1 py-8 px-4 space-y-3">
+        <div className="px-4 pt-4">
+          <button
+            onClick={onOpenSearch}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            <span className="text-sm">חיפוש כלב, בעלים או טלפון...</span>
+          </button>
+        </div>
+
+        <nav className="flex-1 py-6 px-4 space-y-3">
           {navItems.map((item) => {
             const isActive = currentView === item.id;
             return (
@@ -124,6 +137,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="md:hidden fixed bottom-20 right-4 z-50 flex flex-col gap-3">
+        <button
+          onClick={onOpenSearch}
+          className="bg-white border border-gray-200 text-gray-600 p-3.5 rounded-full shadow-xl active:scale-90 transition-transform flex items-center justify-center"
+          aria-label="חיפוש"
+        >
+          <Search className="w-6 h-6" />
+        </button>
         <button
           onClick={onQuickAddEvent}
           className="bg-gradient-to-l from-orange-500 to-amber-500 text-white p-3.5 rounded-full shadow-xl shadow-orange-200 active:scale-90 transition-transform flex items-center justify-center"

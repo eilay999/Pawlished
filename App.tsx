@@ -20,6 +20,7 @@ import { HomeDashboard } from './components/HomeDashboard';
 import { DogCardModal } from './components/DogCardModal';
 import { GroomingRecordModal } from './components/GroomingRecordModal';
 import { WhatsAppQuickSendModal } from './components/WhatsAppQuickSendModal';
+import { SmartSearchModal } from './components/SmartSearchModal';
 
 type DbCustomer = {
   id: string;
@@ -476,6 +477,7 @@ const App: React.FC = () => {
   const [newDogForCustomerId, setNewDogForCustomerId] = useState<string | null>(null);
   const [groomingRecordAppointmentId, setGroomingRecordAppointmentId] = useState<string | null>(null);
   const [whatsAppTarget, setWhatsAppTarget] = useState<{ customerId: string; dogId?: string } | null>(null);
+  const [isSmartSearchOpen, setIsSmartSearchOpen] = useState(false);
 
   // Appointment Modal State
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -1585,6 +1587,7 @@ const App: React.FC = () => {
         }}
         onQuickAddEvent={() => openCalendarEventModal(dayPanelDate || new Date())}
         onOpenTheme={() => setIsThemePanelOpen(true)}
+        onOpenSearch={() => setIsSmartSearchOpen(true)}
       />
 
       {/* Center Content */}
@@ -1830,6 +1833,16 @@ const App: React.FC = () => {
         }
         onClose={() => setWhatsAppTarget(null)}
         onSend={handleSendWhatsAppMessage}
+      />
+
+      {/* Smart Search Modal */}
+      <SmartSearchModal
+        isOpen={isSmartSearchOpen}
+        dogs={dogs}
+        customers={customers}
+        appointments={appointments}
+        onClose={() => setIsSmartSearchOpen(false)}
+        onOpenDog={handleOpenDog}
       />
 
       {/* Appointment Modal */}
