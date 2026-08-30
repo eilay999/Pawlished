@@ -1,7 +1,8 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build && npm run build:client && node scripts/copy-client-build.mjs",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/booking", "destination": "/" }
+    { "source": "/booking", "destination": "/booking/index.html" },
+    { "source": "/booking/", "destination": "/booking/index.html" }
   ]
 }

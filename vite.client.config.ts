@@ -7,8 +7,14 @@ export default defineConfig(({ mode }) => {
   const projectRoot = __dirname;
   const clientRoot = path.resolve(projectRoot, 'apps/client');
 
+  // On Vercel this build is copied into dist/booking (see scripts/copy-client-build.mjs)
+  // and served under /booking, so asset URLs need that prefix. Local/Capacitor builds
+  // (no VERCEL env var) keep the default root-relative base.
+  const base = process.env.VERCEL ? '/booking/' : '/';
+
   return {
     root: clientRoot,
+    base,
     publicDir: path.resolve(projectRoot, 'public'),
     server: {
       port: 3001,
