@@ -107,21 +107,20 @@ const buildPhoneVariants = (value = '') => {
 const ownerPhoneRecipients = Array.from(new Set(ownerPhoneNumbers.map(toWhatsAppNumber).filter(Boolean)));
 const ownerPhoneNumberSet = new Set(ownerPhoneNumbers.flatMap(buildPhoneVariants).filter(Boolean));
 
-const isOwnerConversation = (phone = '', body = {}) => {
-  if (body?.ownerMode === true || body?.isOwner === true || body?.forceOwner === true) {
-    return true;
-  }
-
+// Owner/customer conversation mode is determined ONLY by the verified sender phone
+// number, never by client-supplied body flags — this request body is untrusted
+// input from whoever can reach this endpoint, not something to branch security
+// decisions on. (A previous version trusted body.isOwner/ownerMode/forceOwner and
+// body.customerMode/clientMode/publicBooking directly, which let anyone claim owner
+// privileges — e.g. sending arbitrary WhatsApp messages as the business — just by
+// setting a JSON field. Removed.)
+const isOwnerConversation = (phone = '') => {
   const phoneKey = normalizeWhatsAppNumber(phone);
   return Boolean(phoneKey && ownerPhoneNumberSet.has(phoneKey));
 };
 
 const isPublicCustomerConversation = (phone = '', body = {}) => {
-  if (body?.customerMode === true || body?.clientMode === true || body?.publicBooking === true) {
-    return true;
-  }
-
-  if (isOwnerConversation(phone, body)) {
+  if (isOwnerConversation(phone)) {
     return false;
   }
 
@@ -1834,6 +1833,7 @@ const handlePublicCustomerMessage = async ({ req, res, incoming, conversationPho
 };
 
 const getProvidedSecret = (req) =>
+  req.query?.secret ||
   req.headers['x-webhook-secret'] ||
   req.headers['x-api-secret'] ||
   req.body?.secret ||
@@ -1880,7 +1880,11 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (webhookSecret && !isMetaPayload(req.body)) {
+  // Applies to every POST regardless of payload shape — a request "shaped like" a
+  // genuine Meta payload is trivial for anyone to forge, so payload shape must never
+  // be treated as proof of origin. Configure the webhook URL in Meta's App Dashboard
+  // as `<url>?secret=<WHATSAPP_WEBHOOK_SECRET>` so real deliveries carry it too.
+  if (webhookSecret) {
     const providedSecret = String(getProvidedSecret(req));
     if (!providedSecret || providedSecret !== webhookSecret) {
       res.status(401).json({ ok: false, error: 'Unauthorized webhook call' });
@@ -1932,7 +1936,7 @@ export default async function handler(req, res) {
       text: incoming.text
     }).catch(() => null);
 
-    const ownerHumanReply = isOwnerConversation(conversationPhone, req.body || {})
+    const ownerHumanReply = isOwnerConversation(conversationPhone)
       ? parseOwnerHumanReplyCommand(incoming.text)
       : null;
     if (ownerHumanReply) {
