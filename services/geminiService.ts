@@ -1,20 +1,11 @@
-import { GoogleGenAI } from '@google/genai';
 import { Appointment, Customer } from '../types';
 
-const getAiClient = () => {
-  const nodeEnv = typeof process !== 'undefined' ? process.env : undefined;
-  const apiKey =
-    import.meta.env.VITE_GEMINI_API_KEY ||
-    import.meta.env.VITE_API_KEY ||
-    nodeEnv?.GEMINI_API_KEY ||
-    nodeEnv?.API_KEY;
-
-  if (!apiKey) {
-    console.error('API Key not found in environment variables');
-    return null;
+const getAdminSessionToken = () => {
+  try {
+    return localStorage.getItem('pawlished_admin_session') || '';
+  } catch {
+    return '';
   }
-
-  return new GoogleGenAI({ apiKey });
 };
 
 export const analyzeSchedule = async (
@@ -22,9 +13,6 @@ export const analyzeSchedule = async (
   appointments: Appointment[],
   customers: Customer[]
 ): Promise<string> => {
-  const ai = getAiClient();
-  if (!ai) return 'שירות ה-AI לא זמין.';
-
   const daysAppointments = appointments.filter(
     app =>
       app.date.getDate() === date.getDate() &&
@@ -45,27 +33,26 @@ export const analyzeSchedule = async (
     })
     .join('\n');
 
-  const prompt = `
-Analyze the pet grooming schedule for the selected date.
-Here are the appointments (${date.toLocaleDateString('he-IL')}):
-${formattedData || 'No appointments scheduled for this date.'}
-
-Provide 3 concise, practical insights.
-  `;
-
   try {
-    const nodeEnv = typeof process !== 'undefined' ? process.env : undefined;
-    const model =
-      import.meta.env.VITE_GEMINI_MODEL ||
-      nodeEnv?.GEMINI_MODEL ||
-      'gemini-1.5-flash';
-
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
+    const token = getAdminSessionToken();
+    const response = await fetch('/api/analyze-schedule', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-OTP-Token': token } : {})
+      },
+      body: JSON.stringify({
+        dateLabel: date.toLocaleDateString('he-IL'),
+        formattedData
+      })
     });
 
-    return response.text || 'No response received.';
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || 'Request failed');
+    }
+
+    return payload.text || 'No response received.';
   } catch (error) {
     console.error('Gemini API Error:', error);
     return 'לא ניתן לנתח את הלו"ז. נסה שוב בעוד רגע.';
