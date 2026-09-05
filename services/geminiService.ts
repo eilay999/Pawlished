@@ -35,13 +35,14 @@ export const analyzeSchedule = async (
 
   try {
     const token = getAdminSessionToken();
-    const response = await fetch('/api/analyze-schedule', {
+    const response = await fetch('/api/admin/mutate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { 'X-OTP-Token': token } : {})
       },
       body: JSON.stringify({
+        action: 'analyze_schedule',
         dateLabel: date.toLocaleDateString('he-IL'),
         formattedData
       })

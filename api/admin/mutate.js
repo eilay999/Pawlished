@@ -1,7 +1,32 @@
+import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminSession } from '../_lib/adminAuth.js';
 import { buildSlotDateFromLocal } from '../_lib/appointments.js';
 import { cancelPendingRemindersForSource, createReminder } from '../_lib/reminders.js';
+
+const getGeminiApiKeys = () =>
+  Array.from(
+    new Set(
+      [
+        process.env.VITE_GEMINI_API_KEY,
+        process.env.GEMINI_API_KEY,
+        process.env.API_KEY,
+        process.env.VITE_API_KEY
+      ]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+  );
+
+const geminiModel = (process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash').trim();
+
+const buildScheduleAnalysisPrompt = (dateLabel, formattedData) => `
+Analyze the pet grooming schedule for the selected date.
+Here are the appointments (${dateLabel}):
+${formattedData || 'No appointments scheduled for this date.'}
+
+Provide 3 concise, practical insights.
+`;
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -137,6 +162,35 @@ export default async function handler(req, res) {
 
     if (!action) {
       res.status(400).json({ ok: false, error: 'Missing action' });
+      return;
+    }
+
+    if (action === 'analyze_schedule') {
+      const apiKeys = getGeminiApiKeys();
+      if (!apiKeys.length) {
+        res.status(200).json({ ok: true, text: 'שירות ה-AI לא זמין.' });
+        return;
+      }
+
+      const prompt = buildScheduleAnalysisPrompt(
+        String(body.dateLabel || ''),
+        String(body.formattedData || '')
+      );
+
+      for (const apiKey of apiKeys) {
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          const response = await ai.models.generateContent({ model: geminiModel, contents: prompt });
+          if (response.text) {
+            res.status(200).json({ ok: true, text: response.text });
+            return;
+          }
+        } catch {
+          // try the next key, if any
+        }
+      }
+
+      res.status(200).json({ ok: true, text: 'לא ניתן לנתח את הלו"ז. נסה שוב בעוד רגע.' });
       return;
     }
 
