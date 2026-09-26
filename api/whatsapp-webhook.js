@@ -1892,6 +1892,17 @@ export default async function handler(req, res) {
     }
   }
 
+  // Kill switch: the AI assistant is retired (2026-09-19) — its "Bako" branding
+  // collided with the unrelated personal-finance assistant of the same name and
+  // confused the owner. Acknowledge silently (200) so Meta doesn't disable the
+  // webhook subscription or retry delivery, but do nothing else — no logging, no
+  // reply — so a customer's message looks exactly like it never arrived, per the
+  // owner's explicit choice over a "we're closed" auto-reply.
+  if (String(process.env.WHATSAPP_ASSISTANT_DISABLED || '').toLowerCase() === 'true') {
+    res.status(200).json({ ok: true, disabled: true });
+    return;
+  }
+
   try {
     await loadBusinessSchedule().catch(() => null);
     const incoming = extractIncomingMessage(req.body || {});
