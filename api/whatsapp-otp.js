@@ -274,28 +274,43 @@ export default async function handler(req, res) {
         return;
       }
 
-      if (channel === 'whatsapp-freeform') {
+      const otpMessageText = `קוד האימות שלך: ${otpCode}. תקף ל-${otpTtlMin} דקות.`;
+
+      const sendFreeformOrRespondError = async () => {
         try {
-          await sendWhatsAppFreeformText(
-            waPhone,
-            `קוד האימות שלך: ${otpCode}. תקף ל-${otpTtlMin} דקות.`
-          );
+          await sendWhatsAppFreeformText(waPhone, otpMessageText);
         } catch (err) {
           if (err instanceof WhatsAppWindowClosedError) {
             res.status(400).json({
               error:
                 'כדי לקבל קוד בוואטסאפ, שלחו קודם הודעה כלשהי (למשל "היי") למספר העסק בוואטסאפ, ואז לחצו "שלח קוד" שוב.'
             });
-            return;
+            return false;
           }
           throw err;
         }
-        res.status(200).json({ ok: true, channel: 'whatsapp' });
+        return true;
+      };
+
+      if (channel === 'whatsapp-freeform') {
+        if (await sendFreeformOrRespondError()) {
+          res.status(200).json({ ok: true, channel: 'whatsapp' });
+        }
         return;
       }
 
-      await sendWhatsAppTemplate(waPhone, otpTemplate, otpLang, [otpCode]);
-      res.status(200).json({ ok: true, channel: 'whatsapp' });
+      // channel === 'whatsapp' (template). The approved template can go stale (renamed,
+      // rejected, or — as happened here — never approved because Business Verification
+      // got stuck) without WHATSAPP_OTP_TEMPLATE being unset, so a template send failure
+      // falls back to the free-form service-window send instead of just erroring out.
+      try {
+        await sendWhatsAppTemplate(waPhone, otpTemplate, otpLang, [otpCode]);
+        res.status(200).json({ ok: true, channel: 'whatsapp' });
+      } catch {
+        if (await sendFreeformOrRespondError()) {
+          res.status(200).json({ ok: true, channel: 'whatsapp' });
+        }
+      }
       return;
     }
 
