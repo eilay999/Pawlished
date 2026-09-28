@@ -130,12 +130,14 @@ const sendWhatsAppFreeformText = async (to, bodyText) => {
     })
   });
 
+  const rawBody = await resp.text();
+  console.log('[whatsapp-otp] freeform send response', resp.status, rawBody);
+
   if (!resp.ok) {
-    const errorBody = await resp.text();
-    if (errorBody.includes('131047') || /re-?engagement/i.test(errorBody)) {
-      throw new WhatsAppWindowClosedError(errorBody);
+    if (rawBody.includes('131047') || /re-?engagement/i.test(rawBody)) {
+      throw new WhatsAppWindowClosedError(rawBody);
     }
-    throw new Error(`WhatsApp API error: ${errorBody}`);
+    throw new Error(`WhatsApp API error: ${rawBody}`);
   }
 };
 
