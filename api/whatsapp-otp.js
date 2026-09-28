@@ -5,7 +5,12 @@ import { createOtpSessionToken } from './_lib/otpSession.js';
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const messagingChannel = (process.env.MESSAGING_CHANNEL || 'auto').toLowerCase().trim();
+// OTP_CHANNEL overrides MESSAGING_CHANNEL for login codes only, so OTP can go over SMS
+// while booking confirmations stay on WhatsApp (authentication templates need Meta
+// business verification; utility templates don't).
+const messagingChannel = (process.env.OTP_CHANNEL || process.env.MESSAGING_CHANNEL || 'auto')
+  .toLowerCase()
+  .trim();
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -54,13 +59,22 @@ const hashCode = (code) => {
   return crypto.createHash('sha256').update(`${code}:${otpSecret}`).digest('hex');
 };
 
-const canUseWhatsApp = () => Boolean(whatsappToken && whatsappPhoneId && otpTemplate);
+const canUseWhatsAppTemplate = () => Boolean(whatsappToken && whatsappPhoneId && otpTemplate);
+// Free-form fallback: WhatsApp lets a business send free-text replies at no cost for 24h
+// after the customer last messaged it ("service window") — no approved template or
+// Business Verification required. Needs only the token/phone id, not the template.
+const canUseWhatsAppFreeform = () => Boolean(whatsappToken && whatsappPhoneId);
 const canUseSms = () => Boolean(twilioAccountSid && twilioAuthToken && twilioFromNumber);
 
 const resolveChannel = () => {
   if (messagingChannel === 'sms') return 'sms';
-  if (messagingChannel === 'whatsapp') return 'whatsapp';
-  if (canUseWhatsApp()) return 'whatsapp';
+  if (messagingChannel === 'whatsapp') {
+    if (canUseWhatsAppTemplate()) return 'whatsapp';
+    if (canUseWhatsAppFreeform()) return 'whatsapp-freeform';
+    return 'none';
+  }
+  if (canUseWhatsAppTemplate()) return 'whatsapp';
+  if (canUseWhatsAppFreeform()) return 'whatsapp-freeform';
   if (canUseSms()) return 'sms';
   return 'none';
 };
@@ -93,6 +107,34 @@ const sendWhatsAppTemplate = async (to, templateName, lang, params) => {
 
   if (!resp.ok) {
     const errorBody = await resp.text();
+    throw new Error(`WhatsApp API error: ${errorBody}`);
+  }
+};
+
+// Thrown when Meta rejects a free-form send because the 24h service window is closed
+// (the phone hasn't messaged the business recently) — code 131047 / "re-engagement message".
+class WhatsAppWindowClosedError extends Error {}
+
+const sendWhatsAppFreeformText = async (to, bodyText) => {
+  const resp = await fetch(`https://graph.facebook.com/v19.0/${whatsappPhoneId}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${whatsappToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { preview_url: false, body: bodyText }
+    })
+  });
+
+  if (!resp.ok) {
+    const errorBody = await resp.text();
+    if (errorBody.includes('131047') || /re-?engagement/i.test(errorBody)) {
+      throw new WhatsAppWindowClosedError(errorBody);
+    }
     throw new Error(`WhatsApp API error: ${errorBody}`);
   }
 };
@@ -169,8 +211,13 @@ export default async function handler(req, res) {
         return;
       }
 
-      if (channel === 'whatsapp' && !canUseWhatsApp()) {
+      if (channel === 'whatsapp' && !canUseWhatsAppTemplate()) {
         res.status(500).json({ error: 'Missing WHATSAPP_OTP_TEMPLATE or WhatsApp credentials' });
+        return;
+      }
+
+      if (channel === 'whatsapp-freeform' && !canUseWhatsAppFreeform()) {
+        res.status(500).json({ error: 'Missing WhatsApp credentials' });
         return;
       }
 
@@ -224,6 +271,26 @@ export default async function handler(req, res) {
       if (channel === 'sms') {
         await sendSmsMessage(smsPhone, `קוד האימות שלך: ${otpCode}. תקף ל-${otpTtlMin} דקות.`);
         res.status(200).json({ ok: true, channel: 'sms' });
+        return;
+      }
+
+      if (channel === 'whatsapp-freeform') {
+        try {
+          await sendWhatsAppFreeformText(
+            waPhone,
+            `קוד האימות שלך: ${otpCode}. תקף ל-${otpTtlMin} דקות.`
+          );
+        } catch (err) {
+          if (err instanceof WhatsAppWindowClosedError) {
+            res.status(400).json({
+              error:
+                'כדי לקבל קוד בוואטסאפ, שלחו קודם הודעה כלשהי (למשל "היי") למספר העסק בוואטסאפ, ואז לחצו "שלח קוד" שוב.'
+            });
+            return;
+          }
+          throw err;
+        }
+        res.status(200).json({ ok: true, channel: 'whatsapp' });
         return;
       }
 
