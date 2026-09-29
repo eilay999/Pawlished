@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { AlertCircle, BellRing, ListChecks, Send, Sparkles, CalendarDays, CheckCircle2, Check, Hourglass } from 'lucide-react';
-import { Appointment, Customer, AppointmentStatus } from '../types';
+import { Appointment, Customer, Dog, AppointmentStatus } from '../types';
 import { AppointmentModal } from './AppointmentModal';
 import { analyzeCustomerStatus, CustomerAnalysis } from '../utils';
 
 interface NotificationsPanelProps {
   appointments: Appointment[];
   customers: Customer[];
+  dogs: Dog[];
   onAppointmentCreate: (appointment: Appointment) => void;
   onCreateNewCustomer: () => void;
   onCustomerClick: (customer: Customer) => void;
@@ -18,6 +19,7 @@ type AnalyzedCustomer = Customer & CustomerAnalysis;
 export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
   customers,
   appointments,
+  dogs,
   onAppointmentCreate,
   onCreateNewCustomer,
   onCustomerClick,
@@ -319,6 +321,7 @@ export const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
           setSelectedCustomerForAppt(null);
         }}
         customers={customers}
+        dogs={dogs}
         appointments={appointments}
         initialDate={selectedCustomerForAppt?.dueDate}
         preSelectedCustomerId={selectedCustomerForAppt?.customer.id}

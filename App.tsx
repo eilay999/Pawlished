@@ -1661,9 +1661,10 @@ const App: React.FC = () => {
 
       {/* Notifications Panel - Only visible on Large screens to avoid squashing the calendar */}
       {currentView === 'CALENDAR' && (
-        <NotificationsPanel 
-          appointments={appointments} 
-          customers={customers} 
+        <NotificationsPanel
+          appointments={appointments}
+          customers={customers}
+          dogs={dogs}
           onAppointmentCreate={handleSaveAppointment}
           onCreateNewCustomer={handleAddCustomer}
           onCustomerClick={handleEditCustomer}
