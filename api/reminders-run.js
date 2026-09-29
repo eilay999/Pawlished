@@ -1,9 +1,13 @@
 import { listDueReminders, markReminderSent } from './_lib/reminders.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
+import { issuePendingInvoices } from './_lib/invoices.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const cronSecret = (process.env.CRON_SECRET || process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
+
+const bitPaymentLink = (process.env.BIT_PAYMENT_LINK || '').trim();
+const depositAmount = Number(process.env.DEPOSIT_AMOUNT || 50);
 
 const reminderProviderLabel = (process.env.REMINDER_PROVIDER_LABEL || 'Pawlished').trim();
 
@@ -64,7 +68,11 @@ const buildDayBeforeAppointmentText = (reminder) => {
   return (
     `היי ${customerLabel}${petLabel} 😊\n` +
     `תזכורת ליום מחר${appointmentDate}: יש לך תור ${providerLabel}${timePart}.` +
-    `\nאם צריך שינוי או ביטול — אפשר פשוט לענות להודעה הזו.`
+    `\nנשמח לאישור הגעה — השיבו *1* לאישור.` +
+    `\nלשינוי או ביטול אפשר לענות להודעה הזו.` +
+    (bitPaymentLink
+      ? `\n\nהזכרה: דמי קביעה/ביטול של ₪${depositAmount} (יקוזזו מהתשלום) בביט: ${bitPaymentLink}`
+      : '')
   );
 };
 
@@ -137,10 +145,33 @@ export default async function handler(req, res) {
       }
     }
 
+    const invoices = [];
+    try {
+      const issued = await issuePendingInvoices();
+      for (const doc of issued) {
+        let sent = false;
+        if (doc.phone && doc.url) {
+          const text =
+            `היי ${doc.customerName || ''} 😊 תודה שבחרתם ב${reminderProviderLabel}!\n` +
+            `החשבונית שלכם${doc.number ? ` (מס' ${doc.number})` : ''}: ${doc.url}`;
+          try {
+            await sendWhatsAppTextReply(doc.phone, text);
+            sent = true;
+          } catch {
+            // invoice exists; delivery can be retried manually
+          }
+        }
+        invoices.push({ appointmentId: doc.appointmentId, number: doc.number, sent });
+      }
+    } catch (invoiceError) {
+      invoices.push({ error: invoiceError?.message || 'Invoice run failed' });
+    }
+
     res.status(200).json({
       ok: true,
       processed: dueReminders.length,
-      results
+      results,
+      invoices
     });
   } catch (error) {
     res.status(500).json({

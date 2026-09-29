@@ -53,6 +53,7 @@ import {
   saveWhatsAppContext
 } from './_lib/whatsappContext.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
+import { confirmArrivalByPhone, isArrivalConfirmationText } from './_lib/arrivalConfirmation.js';
 
 const verifyToken = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
 const webhookSecret = (process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
@@ -1930,6 +1931,18 @@ export default async function handler(req, res) {
         isMetaPayload: isMetaPayload(req.body || {})
       }
     }).catch(() => null);
+
+    if (!isOwnerConversation(conversationPhone) && isArrivalConfirmationText(incoming.text)) {
+      const confirmed = await confirmArrivalByPhone(conversationPhone).catch(() => null);
+      if (confirmed) {
+        const replyText = 'מעולים, התור אושר ✅ מחכים לראות אתכם! 🐶';
+        const reply = await sendReplySafely(conversationPhone, replyText, {
+          intentKind: 'arrival_confirmed'
+        });
+        res.status(200).json({ ok: true, accepted: true, kind: 'arrival_confirmed', text: replyText, reply });
+        return;
+      }
+    }
 
     if (isPublicCustomerConversation(conversationPhone, req.body || {})) {
       await handlePublicCustomerMessage({
