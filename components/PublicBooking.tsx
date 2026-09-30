@@ -92,6 +92,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
+  const [activeDate, setActiveDate] = useState('');
   const [confirmationStatus, setConfirmationStatus] = useState<BookingConfirmationStatus | null>(
     null
   );
@@ -106,6 +107,24 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     });
     return map;
   }, [availabilityDays]);
+
+  // Only days with at least one free slot; times sorted and free-only, so the page stays short.
+  const openDays = useMemo(
+    () => availabilityDays.filter((day) => (day.times || []).some((time) => time.available)),
+    [availabilityDays]
+  );
+  const activeDay = useMemo(
+    () => openDays.find((day) => day.date === activeDate) ?? openDays[0] ?? null,
+    [openDays, activeDate]
+  );
+  const activeTimes = useMemo(
+    () =>
+      (activeDay?.times || [])
+        .filter((time) => time.available)
+        .slice()
+        .sort((a, b) => a.time.localeCompare(b.time)),
+    [activeDay]
+  );
 
   const bookingProgress = useMemo(() => {
     const labelByStep: Record<BookingStep, string> = {
@@ -768,51 +787,85 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 <div className="text-sm text-gray-600">אין זמינות להצגה כרגע.</div>
               ) : null}
 
-              <div className="space-y-3">
-                {availabilityDays.map((day) => (
+              {openDays.length > 0 && (
+                <>
                   <div
-                    key={day.date}
-                    className="border border-gray-100 bg-white rounded-2xl p-4 shadow-sm shadow-blue-100/20"
+                    role="group"
+                    aria-label="בחירת תאריך"
+                    className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 snap-x"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-semibold text-gray-800">
-                        {DAY_NAMES[day.weekdayIndex ?? 0]} - {toDisplayDateLabel(day.date)}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        {availableSlotCountByDate.get(day.date) ?? 0} זמינים
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {day.times.map((slotTime) => {
-                        const available = slotTime.available;
-                        const isSelected =
-                          Boolean(selectedSlot) &&
-                          selectedSlot!.time === slotTime.time &&
-                          selectedSlot!.date === day.date;
-
-                        return (
-                          <button
-                            key={slotTime.time}
-                            disabled={!available || isSubmittingBooking}
-                            aria-pressed={isSelected}
-                            aria-label={`${DAY_NAMES[day.weekdayIndex ?? 0]} ${toDisplayDateLabel(day.date)} בשעה ${slotTime.time}${available ? '' : ', לא זמין'}`}
-                            onClick={() => setSelectedSlot({ date: day.date, time: slotTime.time })}
-                            className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
-                              isSelected
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : available
-                                  ? 'border-blue-100 text-blue-700 hover:bg-blue-50'
-                                  : 'border-gray-100 text-gray-300 cursor-not-allowed'
-                            }`}
-                          >
-                            {slotTime.time}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {openDays.map((day) => {
+                      const isActive = day.date === activeDay?.date;
+                      const dayDate = new Date(`${day.date}T12:00:00`);
+                      return (
+                        <button
+                          key={day.date}
+                          type="button"
+                          aria-pressed={isActive}
+                          aria-label={`${DAY_NAMES[day.weekdayIndex ?? 0]} ${toDisplayDateLabel(day.date)}, ${availableSlotCountByDate.get(day.date) ?? 0} שעות פנויות`}
+                          onClick={() => setActiveDate(day.date)}
+                          className={`snap-start shrink-0 w-[4.5rem] rounded-2xl border px-2 py-2.5 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                            isActive
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white text-gray-800 border-gray-200 hover:bg-blue-50'
+                          }`}
+                        >
+                          <div className="text-xs">{DAY_NAMES[day.weekdayIndex ?? 0]}</div>
+                          <div className="text-xl font-bold leading-tight">{dayDate.getDate()}</div>
+                          <div className="text-xs">{dayDate.toLocaleDateString('he-IL', { month: 'short' })}</div>
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
+
+                  {activeDay && (
+                    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <div className="font-semibold text-gray-800 mb-3">
+                        יום {DAY_NAMES[activeDay.weekdayIndex ?? 0]}, {toDisplayDateLabel(activeDay.date)}
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {activeTimes.map((slotTime) => {
+                          const isSelected =
+                            Boolean(selectedSlot) &&
+                            selectedSlot!.time === slotTime.time &&
+                            selectedSlot!.date === activeDay.date;
+                          return (
+                            <button
+                              key={slotTime.time}
+                              type="button"
+                              disabled={isSubmittingBooking}
+                              aria-pressed={isSelected}
+                              aria-label={`${DAY_NAMES[activeDay.weekdayIndex ?? 0]} ${toDisplayDateLabel(activeDay.date)} בשעה ${slotTime.time}`}
+                              onClick={() => setSelectedSlot({ date: activeDay.date, time: slotTime.time })}
+                              className={`py-3 rounded-xl text-base font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'border-blue-100 text-blue-700 hover:bg-blue-50'
+                              }`}
+                            >
+                              {slotTime.time}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className={`rounded-xl px-4 py-3 text-sm border ${
+                      selectedSlot
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium'
+                        : 'bg-gray-50 border-gray-200 text-gray-600'
+                    }`}
+                  >
+                    {selectedSlot
+                      ? `נבחר: יום ${DAY_NAMES[new Date(`${selectedSlot.date}T12:00:00`).getDay()]}, ${toDisplayDateLabel(selectedSlot.date)} בשעה ${selectedSlot.time}`
+                      : 'בחר/י יום ואז שעה'}
+                  </div>
+                </>
+              )}
               <div className="flex items-start gap-2">
                 <input
                   id="booking-terms"
