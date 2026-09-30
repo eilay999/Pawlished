@@ -117,3 +117,7 @@ To send them automatically, schedule a job to hit `GET /api/reminders-run`:
 - `ADMIN_PHONES`, `OTP_SECRET` (>= 32 bytes) and `CRON_SECRET` must be set; rotate any secret that was ever shared in chat.
 - OTP sends are limited per phone (`OTP_MAX_10MIN`) and per IP (`OTP_MAX_10MIN_PER_IP`, default 10); needs migration `20260930110000_otp_ip_rate_limit.sql`.
 - Security headers (nosniff, frame deny, HSTS, referrer, permissions) are set in `vercel.json`. A Content-Security-Policy is intentionally not set yet (needs testing against Google Fonts/Supabase).
+
+## 9) Cron (Vercel)
+
+`vercel.json` runs `/api/reminders-run` once a day at 16:30 UTC (19:30/18:30 Israel time, after the 18:00 "day before" reminders are due in both summer and winter time). Vercel sends `Authorization: Bearer $CRON_SECRET` automatically; `CRON_SECRET` is set in Production (sensitive). Hobby plans allow only daily crons and hourly precision; for faster runs (1-hour-before reminders, invoices within minutes) use Pro or an external scheduler.

@@ -10,13 +10,14 @@
 - [x] `WHATSAPP_WEBHOOK_SECRET` מוגדר ב-Production (נבדק ב-Vercel, בלי לקרוא ערך)
 - [ ] לוודא ש-`?secret=...` מופיע בכתובת ה-webhook ב-Meta (אם לא, ה-webhook יחזיר 401)
 - [x] `OTP_SECRET`, `ADMIN_PHONES` מוגדרים ב-Production
-- [ ] `CRON_SECRET` (לא מוגדר; בינתיים `/api/reminders-run` משתמש ב-`WHATSAPP_WEBHOOK_SECRET`)
+- [x] `CRON_SECRET` הוגדר ב-Production (sensitive)
 - [ ] `BIT_PAYMENT_LINK`, `DEPOSIT_AMOUNT=50`
 - [ ] `INVOICE_API_URL`, `INVOICE_API_KEY` (אחרי שיש ספק)
 - [ ] `INVOICE_START_DATE` (חובה — מתי מתחילים להנפיק; בלי זה לא מונפקת אף חשבונית, כדי לא להנפיק על תורים היסטוריים)
 
 ## ג. תזמון
-- [ ] מתזמן חיצוני (למשל cron-job.org) שקורא כל 5–10 דקות ל-`/api/reminders-run` עם `Authorization: Bearer <CRON_SECRET>`
+- [x] Vercel Cron יומי (16:30 UTC) ל-`/api/reminders-run`, עם `CRON_SECRET` ב-Production — יופעל אחרי מיזוג
+- [ ] (אופציונלי) מתזמן תכוף יותר לתזכורות "שעה לפני" וחשבוניות מהירות (דורש Vercel Pro או שירות חיצוני)
 
 ## ד. משפטי ותוכן (להשלים לפני פרסום)
 - [ ] `public/terms.html` — השלמת שדות בסוגריים + עבירה עם יועץ
