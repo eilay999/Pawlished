@@ -30,6 +30,9 @@ const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
 const otpMaxPer10Min = Number(process.env.OTP_MAX_10MIN || 5);
 const otpMaxPer10MinPerIp = Number(process.env.OTP_MAX_10MIN_PER_IP || 10);
+// Circuit breaker across all phones and IPs (a botnet defeats the per-IP limit). Admin phones are
+// exempt so the owner can always sign in.
+const otpMaxPer10MinGlobal = Number(process.env.OTP_MAX_10MIN_GLOBAL || 60);
 // "Stay signed in" length for admin phones only (customers booking keep the short session).
 const adminRememberDays = Number(process.env.ADMIN_REMEMBER_DAYS || 30);
 const otpMaxVerifyAttempts = Number(process.env.OTP_MAX_VERIFY_ATTEMPTS || 5);
@@ -285,6 +288,19 @@ export default async function handler(req, res) {
 
         if ((ipCount || 0) >= otpMaxPer10MinPerIp) {
           res.status(429).json({ error: 'Too many OTP requests. Try again later.' });
+          return;
+        }
+      }
+
+      if (!isAdminPhone(waPhone) && otpMaxPer10MinGlobal > 0) {
+        const { count: globalCount } = await supabase
+          .from('wa_otp')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', windowSince);
+
+        if ((globalCount || 0) >= otpMaxPer10MinGlobal) {
+          console.error('[whatsapp-otp] global OTP limit reached');
+          res.status(429).json({ error: 'השירות עמוס כרגע. נסו שוב בעוד כמה דקות.' });
           return;
         }
       }
