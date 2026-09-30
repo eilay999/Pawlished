@@ -121,3 +121,9 @@ To send them automatically, schedule a job to hit `GET /api/reminders-run`:
 ## 9) Cron (Vercel)
 
 `vercel.json` runs `/api/reminders-run` once a day at 16:30 UTC (19:30/18:30 Israel time, after the 18:00 "day before" reminders are due in both summer and winter time). Vercel sends `Authorization: Bearer $CRON_SECRET` automatically; `CRON_SECRET` is set in Production (sensitive). Hobby plans allow only daily crons and hourly precision; for faster runs (1-hour-before reminders, invoices within minutes) use Pro or an external scheduler.
+
+## 10) Grow deposit payment links
+
+The day-before reminder includes a Grow payment link (card/Bit) for the ₪`DEPOSIT_AMOUNT` deposit when `GROW_USER_ID`, `GROW_PAGE_CODE`, `GROW_NOTIFY_SECRET` and `PUBLIC_BASE_URL` (https) are set; otherwise it falls back to `BIT_PAYMENT_LINK`. Grow calls `/api/grow-webhook?a=<appointment>&k=DEPOSIT&t=<hmac>` after payment; the HMAC (not the body) authenticates it, the paid sum must be at least the deposit, and then `deposit_paid_at` is set and `approveTransaction` is called.
+
+**Not yet validated against a real Grow account**: test in the sandbox (`GROW_BASE_URL=https://sandbox.meshulam.co.il`) and confirm the request encoding, the `data.url` response field and the callback payload (see `api/_lib/grow.js`) before enabling in production. Balance (remaining amount) links are not implemented yet.

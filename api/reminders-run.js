@@ -2,13 +2,13 @@ import { safeEqual } from './_lib/safeCompare.js';
 import { listDueReminders, markReminderSent } from './_lib/reminders.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import { issuePendingInvoices } from './_lib/invoices.js';
+import { depositAmount, getDepositLinkForAppointment } from './_lib/grow.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const cronSecret = (process.env.CRON_SECRET || process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
 
 const bitPaymentLink = (process.env.BIT_PAYMENT_LINK || '').trim();
-const depositAmount = Number(process.env.DEPOSIT_AMOUNT || 50);
 
 const reminderProviderLabel = (process.env.REMINDER_PROVIDER_LABEL || 'Pawlished').trim();
 
@@ -58,7 +58,7 @@ const sendWhatsAppTextReply = async (to, bodyText) => {
   }
 };
 
-const buildDayBeforeAppointmentText = (reminder) => {
+const buildDayBeforeAppointmentText = (reminder, paymentLink = '') => {
   const appointmentTime = reminder.payload?.time ? `בשעה ${reminder.payload.time}` : '';
   const appointmentDate = reminder.payload?.date ? ` (${reminder.payload.date})` : '';
   const customerLabel = reminder.payload?.customerName || reminder.title;
@@ -71,17 +71,17 @@ const buildDayBeforeAppointmentText = (reminder) => {
     `תזכורת ליום מחר${appointmentDate}: יש לך תור ${providerLabel}${timePart}.` +
     `\nנשמח לאישור הגעה — השיבו *1* לאישור.` +
     `\nלשינוי או ביטול אפשר לענות להודעה הזו.` +
-    (bitPaymentLink
-      ? `\n\nהזכרה: דמי קביעה/ביטול של ₪${depositAmount} (יקוזזו מהתשלום) בביט: ${bitPaymentLink}`
+    (paymentLink
+      ? `\n\nדמי קביעה וביטול של ₪${depositAmount()} (יקוזזו מהתשלום) — אפשר לשלם בכרטיס או בביט: ${paymentLink}`
       : '')
   );
 };
 
-const buildReminderText = (reminder) => {
+const buildReminderText = (reminder, paymentLink = '') => {
   if (reminder.source_kind === 'APPOINTMENT') {
     const reminderKind = String(reminder.payload?.reminderKind || '').trim().toUpperCase();
     if (reminderKind === 'DAY_BEFORE') {
-      return buildDayBeforeAppointmentText(reminder);
+      return buildDayBeforeAppointmentText(reminder, paymentLink);
     }
 
     const appointmentTime = reminder.payload?.time ? ` בשעה ${reminder.payload.time}` : '';
@@ -125,7 +125,12 @@ export default async function handler(req, res) {
 
     for (const reminder of dueReminders) {
       try {
-        const text = buildReminderText(reminder);
+        let paymentLink = '';
+        if (reminder.source_kind === 'APPOINTMENT' && reminder.payload?.reminderKind === 'DAY_BEFORE') {
+          // Grow payment link (card/Bit) when configured; otherwise the static Bit link, if any.
+          paymentLink = await getDepositLinkForAppointment(reminder.source_id).catch(() => null) || bitPaymentLink;
+        }
+        const text = buildReminderText(reminder, paymentLink);
         await sendWhatsAppTextReply(reminder.phone, text);
         await logWhatsAppMessage({
           phone: reminder.phone,
