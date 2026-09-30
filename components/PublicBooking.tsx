@@ -570,7 +570,12 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                 {isSendingOtp ? 'שולח קוד...' : 'שלח קוד אימות'}
               </button>
               <div id="booking-phone-hint" className="text-xs text-gray-600">
-                נשלח אליך קוד אימות בהודעה (WhatsApp או SMS) לפני קביעת התור.
+                נשלח אליך קוד אימות בהודעה (WhatsApp או SMS) לפני קביעת התור. מסירת מספר הטלפון נדרשת לקביעת
+                תור, והוא משמש לקביעת התור ולתזכורות בלבד. לפרטים:{' '}
+                <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-blue-700">
+                  מדיניות פרטיות
+                </a>
+                .
               </div>
             </div>
           )}
@@ -668,6 +673,12 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           {step === 'DETAILS' && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600">לקוח חדש - מלא פרטים</div>
+              <div className="text-xs text-gray-600">
+                הפרטים נדרשים לפתיחת כרטיס לקוח ומשמשים לניהול התור בלבד.{' '}
+                <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-blue-700">
+                  מדיניות פרטיות
+                </a>
+              </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="booking-name" className="text-xs text-gray-600 flex items-center gap-2">
