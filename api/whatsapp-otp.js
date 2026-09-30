@@ -2,6 +2,7 @@ import './_lib/dryRun.js';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createOtpSessionToken } from './_lib/otpSession.js';
+import { isAdminPhone } from './_lib/adminAuth.js';
 import { safeEqual } from './_lib/safeCompare.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -29,6 +30,8 @@ const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
 const otpMaxPer10Min = Number(process.env.OTP_MAX_10MIN || 5);
 const otpMaxPer10MinPerIp = Number(process.env.OTP_MAX_10MIN_PER_IP || 10);
+// "Stay signed in" length for admin phones only (customers booking keep the short session).
+const adminRememberDays = Number(process.env.ADMIN_REMEMBER_DAYS || 30);
 const otpMaxVerifyAttempts = Number(process.env.OTP_MAX_VERIFY_ATTEMPTS || 5);
 
 const normalizeDigits = (value = '') => value.replace(/\D/g, '');
@@ -194,7 +197,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { action, phone, code } = req.body || {};
+    const { action, phone, code, remember } = req.body || {};
     if (!action) {
       res.status(400).json({ error: 'Missing action' });
       return;
@@ -408,7 +411,9 @@ export default async function handler(req, res) {
 
       await supabase.from('wa_otp').update({ used_at: new Date().toISOString() }).eq('id', data.id);
 
-      const sessionToken = createOtpSessionToken(waPhone);
+      const extendedMinutes =
+        remember === true && isAdminPhone(waPhone) && adminRememberDays > 0 ? adminRememberDays * 24 * 60 : undefined;
+      const sessionToken = createOtpSessionToken(waPhone, extendedMinutes);
       res.status(200).json({ ok: true, sessionToken });
       return;
     }

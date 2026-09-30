@@ -35,7 +35,8 @@ const timingSafeEqualString = (a, b) => {
   return crypto.timingSafeEqual(bufA, bufB);
 };
 
-export const createOtpSessionToken = (phone) => {
+// ttlMinutes is optional: the default is OTP_SESSION_TTL_MIN (customers booking a slot).
+export const createOtpSessionToken = (phone, ttlMinutes) => {
   if (!otpSecret || Buffer.byteLength(otpSecret, 'utf8') < minOtpSecretBytes) {
     throw createHttpError(500, 'OTP_SECRET not configured (or too weak)');
   }
@@ -45,7 +46,8 @@ export const createOtpSessionToken = (phone) => {
     throw createHttpError(400, 'Invalid phone');
   }
 
-  const ttlMs = (Number.isFinite(otpSessionTtlMin) ? otpSessionTtlMin : 20) * 60 * 1000;
+  const minutes = Number.isFinite(ttlMinutes) && ttlMinutes > 0 ? ttlMinutes : Number.isFinite(otpSessionTtlMin) ? otpSessionTtlMin : 20;
+  const ttlMs = minutes * 60 * 1000;
   const payload = {
     v: 1,
     phone: waPhone,

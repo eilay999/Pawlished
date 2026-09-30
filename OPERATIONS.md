@@ -135,3 +135,7 @@ The day-before reminder includes a Grow payment link (card/Bit) for the ₪`DEPO
 ## 12) Local testing
 
 See `LOCAL_TESTING.md`: `MESSAGING_DRY_RUN=true` logs instead of sending WhatsApp/SMS/Grow/invoice requests, refuses a non-local database, is ignored on Vercel production, and `npm run dev:api` serves `/api` locally without the Vercel CLI.
+
+## 13) "Stay signed in" (admin)
+
+The admin login has a "הישאר מחובר (30 יום)" checkbox. It only extends the session for phones in `ADMIN_PHONES` (length: `ADMIN_REMEMBER_DAYS`, default 30); customers booking a slot keep the short `OTP_SESSION_TTL_MIN` session. Sessions are signed tokens (not stored server side), so they cannot be revoked one by one: to sign out every device immediately, change `OTP_SECRET` in Vercel and redeploy (this also signs out customers mid-booking). Use it only on personal devices.

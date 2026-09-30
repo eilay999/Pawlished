@@ -32,6 +32,8 @@ const parseAdminPhones = () => {
   return set;
 };
 
+export const isAdminPhone = (phone = '') => parseAdminPhones().has(toWhatsAppNumber(phone));
+
 export const requireAdminSession = (req) => {
   const session = requireOtpSession(req);
   const allowedPhones = parseAdminPhones();
