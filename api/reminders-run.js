@@ -171,7 +171,7 @@ export default async function handler(req, res) {
         if (doc.phone && doc.url) {
           const text =
             `היי ${doc.customerName || ''} 😊 תודה שבחרתם ב${reminderProviderLabel}!\n` +
-            `החשבונית שלכם${doc.number ? ` (מס' ${doc.number})` : ''}: ${doc.url}`;
+            `הקבלה שלכם${doc.number ? ` (מס' ${doc.number})` : ''}: ${doc.url}`;
           try {
             await sendWhatsAppTextReply(doc.phone, text);
             sent = true;
