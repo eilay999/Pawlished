@@ -60,3 +60,14 @@
 - [ ] לשמור עותק מחוץ ל-Supabase מדי פעם (או לעבור ל-Supabase Pro)
 - [ ] (מומלץ) ב-GitHub: להגן על `main` ("Require a pull request before merging")
 - [ ] לנסות את `LOCAL_TESTING.md` במחשב שלך
+
+## יב. יציבות ואפס השבתות (נבדק ב-30.9.2026)
+נבדק ותקין: Supabase `ACTIVE_HEALTHY`, אין שגיאות Postgres ב-24 שעות; 5 הפריסות האחרונות לפרודקשן `READY`; שגיאת זמן ריצה יחידה ב-7 ימים היא אזהרת Node לא מזיקה.
+
+סיכונים להשבתה (לפי חומרה):
+- [ ] **השהיית Supabase (Free):** פרויקט לא פעיל שבוע מושהה וההזמנות נופלות. ה-Cron היומי (אחרי מיזוג) נוגע במסד כל יום; פתרון מלא: Supabase Pro (גם גיבוי יומי).
+- [ ] **תנאי Vercel Hobby:** שימוש מסחרי (כולל אתר הזמנת תורים) דורש Pro; סיכון להשעיית חשבון. פתרון: Vercel Pro.
+- [ ] **ניטור זמינות:** להגדיר בדיקה חיצונית חינמית (למשל UptimeRobot, כל 5 דקות) על `https://pawlished.vercel.app/api/public-booking/availability` ועל `/booking/`, עם התראה לטלפון.
+- [ ] **חזרה אחורה מהירה:** ב-Vercel ← Deployments ← הפריסה הקודמת ← Promote to Production. (אפשר גם לבקש ממני.)
+- [ ] **דומיין משלכם:** כרגע רק `pawlished.vercel.app`.
+- [ ] **הגנה על `main`** ב-GitHub + אימות דו-שלבי בכל החשבונות.
