@@ -115,4 +115,5 @@ To send them automatically, schedule a job to hit `GET /api/reminders-run`:
 - OTP verification allows `OTP_MAX_VERIFY_ATTEMPTS` (default 5) wrong guesses per code, then the code is burned. Requires migration `20260930100000_otp_verify_attempts.sql`; without it the code is burned on the first wrong guess (fail closed).
 - **Set `WHATSAPP_WEBHOOK_SECRET` in production and add `?secret=...` to the Meta webhook URL.** If it is unset, `/api/whatsapp-webhook` accepts unauthenticated requests.
 - `ADMIN_PHONES`, `OTP_SECRET` (>= 32 bytes) and `CRON_SECRET` must be set; rotate any secret that was ever shared in chat.
+- OTP sends are limited per phone (`OTP_MAX_10MIN`) and per IP (`OTP_MAX_10MIN_PER_IP`, default 10); needs migration `20260930110000_otp_ip_rate_limit.sql`.
 - Security headers (nosniff, frame deny, HSTS, referrer, permissions) are set in `vercel.json`. A Content-Security-Policy is intentionally not set yet (needs testing against Google Fonts/Supabase).

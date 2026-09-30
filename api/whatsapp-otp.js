@@ -27,6 +27,7 @@ const minOtpSecretBytes = Number(process.env.OTP_SECRET_MIN_BYTES || 32);
 const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
 const otpMaxPer10Min = Number(process.env.OTP_MAX_10MIN || 5);
+const otpMaxPer10MinPerIp = Number(process.env.OTP_MAX_10MIN_PER_IP || 10);
 const otpMaxVerifyAttempts = Number(process.env.OTP_MAX_VERIFY_ATTEMPTS || 5);
 
 const normalizeDigits = (value = '') => value.replace(/\D/g, '');
@@ -45,6 +46,15 @@ const toE164 = (value = '') => {
   if (digits.startsWith('0')) return `+972${digits.slice(1)}`;
   if (value.startsWith('+')) return value;
   return `+${digits}`;
+};
+
+// Vercel sets x-real-ip / x-forwarded-for itself, so these are not client-spoofable there.
+// The IP is stored only as a keyed hash.
+const getClientIpHash = (req) => {
+  const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  const ip = String(req.headers?.['x-real-ip'] || forwarded || '').trim();
+  if (!ip) return null;
+  return crypto.createHmac('sha256', otpSecret).update(`ip:${ip}`).digest('hex');
 };
 
 const getSupabaseClient = () => {
@@ -259,14 +269,37 @@ export default async function handler(req, res) {
         return;
       }
 
+      const ipHash = getClientIpHash(req);
+      if (ipHash) {
+        // If the ip_hash column doesn't exist yet (migration pending) the query errors
+        // and count stays null, i.e. the per-IP limit is simply skipped.
+        const { count: ipCount } = await supabase
+          .from('wa_otp')
+          .select('*', { count: 'exact', head: true })
+          .eq('ip_hash', ipHash)
+          .gte('created_at', windowSince);
+
+        if ((ipCount || 0) >= otpMaxPer10MinPerIp) {
+          res.status(429).json({ error: 'Too many OTP requests. Try again later.' });
+          return;
+        }
+      }
+
       const otpCode = crypto.randomInt(100000, 999999).toString();
       const expiresAt = new Date(now + otpTtlMin * 60 * 1000).toISOString();
 
-      const { error: insertError } = await supabase.from('wa_otp').insert({
+      const otpRow = {
         phone: waPhone,
         code_hash: hashCode(otpCode),
         expires_at: expiresAt
-      });
+      };
+      let { error: insertError } = await supabase
+        .from('wa_otp')
+        .insert(ipHash ? { ...otpRow, ip_hash: ipHash } : otpRow);
+      if (insertError && ipHash) {
+        // Column missing (migration not applied yet): store without the IP hash.
+        ({ error: insertError } = await supabase.from('wa_otp').insert(otpRow));
+      }
 
       if (insertError) {
         res.status(500).json({ error: 'Failed to store OTP' });
