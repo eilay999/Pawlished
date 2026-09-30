@@ -489,27 +489,35 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 p-4 md:p-8">
+    <main className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 p-4 md:p-8">
       <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur rounded-3xl shadow-xl border border-white/70 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-gray-900">קביעת תור</h1>
-              <p className="text-sm text-gray-500">אפשר לקבוע עד חודש מראש</p>
+              <p className="text-sm text-gray-600">אפשר לקבוע עד חודש מראש</p>
             </div>
             <div className="shrink-0 rounded-2xl bg-blue-50 border border-blue-100 p-2">
-              <Calendar className="w-6 h-6 text-blue-700" />
+              <Calendar className="w-6 h-6 text-blue-700" aria-hidden="true" />
             </div>
           </div>
 
           <div className="mt-4">
-            <div className="flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center justify-between text-xs text-gray-600">
               <span>
                 שלב {bookingProgress.current} מתוך {bookingProgress.total}
               </span>
               <span className="font-medium text-gray-600">{bookingProgress.label}</span>
             </div>
-            <div className="mt-2 h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div
+              role="progressbar"
+              aria-label="התקדמות בקביעת התור"
+              aria-valuemin={1}
+              aria-valuemax={bookingProgress.total}
+              aria-valuenow={bookingProgress.current}
+              aria-valuetext={`שלב ${bookingProgress.current} מתוך ${bookingProgress.total}: ${bookingProgress.label}`}
+              className="mt-2 h-2 w-full rounded-full bg-gray-100 overflow-hidden"
+            >
               <div
                 className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out"
                 style={{
@@ -524,7 +532,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
         </div>
 
         {error && (
-          <div className="mx-6 mt-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-sm px-4 py-3">
+          <div role="alert" className="mx-6 mt-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">
             {error}
           </div>
         )}
@@ -532,15 +540,21 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
         <div className="p-6 space-y-6">
           {step === 'PHONE' && (
             <div className="space-y-3">
-              <label className="text-sm text-gray-600 flex items-center gap-2">
-                <Phone className="w-4 h-4" /> מספר טלפון
+              <label htmlFor="booking-phone" className="text-sm text-gray-700 flex items-center gap-2">
+                <Phone className="w-4 h-4" aria-hidden="true" /> מספר טלפון
               </label>
               <input
+                id="booking-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                aria-required="true"
+                aria-describedby="booking-phone-hint"
                 value={phone}
                 onChange={event => setPhone(event.target.value)}
                 dir="ltr"
                 placeholder='לדוגמה: 050-1234567'
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
               />
               <button
                 onClick={() => void handleSendOtp()}
@@ -549,7 +563,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               >
                 {isSendingOtp ? 'שולח קוד...' : 'שלח קוד אימות'}
               </button>
-              <div className="text-xs text-gray-500">
+              <div id="booking-phone-hint" className="text-xs text-gray-600">
                 נשלח אליך קוד אימות בהודעה (WhatsApp או SMS) לפני קביעת התור.
               </div>
             </div>
@@ -559,7 +573,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
             <div className="space-y-4">
               <div className="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs text-gray-500">אימות לטלפון</div>
+                  <div className="text-xs text-gray-600">אימות לטלפון</div>
                   <div dir="ltr" className="text-sm font-semibold text-gray-900 truncate">
                     {otpPendingPhone ? maskPhoneForDisplay(otpPendingPhone) : ''}
                   </div>
@@ -570,8 +584,10 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">קוד אימות (6 ספרות)</label>
+                <label htmlFor="booking-otp" className="text-xs text-gray-600">קוד אימות (6 ספרות)</label>
                 <input
+                  id="booking-otp"
+                  aria-required="true"
                   ref={otpInputRef}
                   value={otpCode}
                   onChange={(event) => {
@@ -586,9 +602,9 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                   autoComplete="one-time-code"
                   maxLength={OTP_CODE_LENGTH}
                   placeholder="123456"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-semibold tracking-[0.55em] text-center bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-semibold tracking-[0.55em] text-center bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                 />
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-gray-600" aria-live="polite">
                   לא קיבלת קוד?{' '}
                   {otpSecondsUntilResend > 0
                     ? `אפשר לשלוח שוב בעוד ${otpSecondsUntilResend} שנ׳.`
@@ -648,39 +664,45 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               <div className="text-sm text-gray-600">לקוח חדש - מלא פרטים</div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <User className="w-4 h-4" /> שם מלא
+                  <label htmlFor="booking-name" className="text-xs text-gray-600 flex items-center gap-2">
+                    <User className="w-4 h-4" aria-hidden="true" /> שם מלא
                   </label>
                   <input
+                    id="booking-name"
+                    autoComplete="name"
+                    aria-required="true"
                     value={newCustomer.name}
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, name: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <Dog className="w-4 h-4" /> שם הכלב
+                  <label htmlFor="booking-pet-name" className="text-xs text-gray-600 flex items-center gap-2">
+                    <Dog className="w-4 h-4" aria-hidden="true" /> שם הכלב
                   </label>
                   <input
+                    id="booking-pet-name"
+                    aria-required="true"
                     value={newCustomer.petName}
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, petName: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
+                  <label htmlFor="booking-pet-type" className="text-xs text-gray-600 flex items-center gap-2">
                     סוג הכלב
                   </label>
                   <input
+                    id="booking-pet-type"
                     value={newCustomer.petType}
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, petType: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                   />
                 </div>
               </div>
@@ -718,15 +740,15 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               </div>
 
               {availabilityError && (
-                <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">
+                <div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">
                   {availabilityError}
                 </div>
               )}
 
               {isLoadingAvailability ? (
-                <div className="text-sm text-gray-500">טוען זמינות...</div>
+                <div role="status" className="text-sm text-gray-600">טוען זמינות...</div>
               ) : availabilityDays.length === 0 ? (
-                <div className="text-sm text-gray-500">אין זמינות להצגה כרגע.</div>
+                <div className="text-sm text-gray-600">אין זמינות להצגה כרגע.</div>
               ) : null}
 
               <div className="space-y-3">
@@ -739,7 +761,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                       <div className="font-semibold text-gray-800">
                         {DAY_NAMES[day.weekdayIndex ?? 0]} - {toDisplayDateLabel(day.date)}
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-600">
                         {availableSlotCountByDate.get(day.date) ?? 0} זמינים
                       </div>
                     </div>
@@ -755,8 +777,10 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                           <button
                             key={slotTime.time}
                             disabled={!available || isSubmittingBooking}
+                            aria-pressed={isSelected}
+                            aria-label={`${DAY_NAMES[day.weekdayIndex ?? 0]} ${toDisplayDateLabel(day.date)} בשעה ${slotTime.time}${available ? '' : ', לא זמין'}`}
                             onClick={() => setSelectedSlot({ date: day.date, time: slotTime.time })}
-                            className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition focus:outline-none focus:ring-2 focus:ring-blue-100 ${
+                            className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                               isSelected
                                 ? 'bg-blue-600 text-white border-blue-600'
                                 : available
@@ -783,13 +807,13 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           )}
 
           {step === 'DONE' && (
-            <div className="text-center space-y-3 py-6">
-              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
+            <div className="text-center space-y-3 py-6" role="status" aria-live="polite">
+              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" aria-hidden="true" />
               <div className="text-lg font-bold text-gray-800">
                 {doneKind === 'CUSTOMER_CREATED' ? 'כרטיס הלקוח נשמר בהצלחה!' : 'התור נקבע בהצלחה!'}
               </div>
               {doneKind !== 'CUSTOMER_CREATED' && selectedSlot && (
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-600">
                   {toDisplayDateLabel(selectedSlot.date)} בשעה {selectedSlot.time}
                 </div>
               )}
@@ -808,7 +832,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               )}
               {doneKind === 'CUSTOMER_CREATED' && (
                 <div className="space-y-2 pt-3">
-                  <div className="text-sm text-gray-500">אפשר עכשיו לקבוע תור או לחזור באיזה זמן.</div>
+                  <div className="text-sm text-gray-600">אפשר עכשיו לקבוע תור או לחזור באיזה זמן.</div>
                   <button
                     type="button"
                     onClick={() => {
@@ -824,7 +848,11 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
             </div>
           )}
         </div>
+        <footer className="px-6 pb-6 text-xs text-gray-600 flex gap-4">
+          <a href="/accessibility.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">הצהרת נגישות</a>
+          <a href="/privacy-policy.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">מדיניות פרטיות</a>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 };
