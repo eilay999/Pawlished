@@ -1,0 +1,31 @@
+name: CI
+
+# Runs on every pull request and every push to main. Together with branch protection on
+# `main` (require a pull request + passing checks) nothing broken can reach production.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit tests (includes the Vercel Hobby 12-function guard)
+        run: npm test
+      - name: Build admin app
+        run: npm run build
+      - name: Build booking app
+        run: npm run build:client
