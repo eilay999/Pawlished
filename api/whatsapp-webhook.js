@@ -1901,6 +1901,25 @@ export default async function handler(req, res) {
     }
   }
 
+  // Narrow exception to the kill switch below: a customer replying "1"/"מאשר" to the
+  // day-before reminder that this system sent. Only acts when a DAY_BEFORE reminder was
+  // actually sent to that phone in the last 48h; every other message still falls through
+  // to the silent kill-switch behaviour.
+  try {
+    const early = extractIncomingMessage(req.body || {});
+    if (early.text && early.from && !isOwnerConversation(early.from) && isArrivalConfirmationText(early.text)) {
+      const confirmed = await confirmArrivalByPhone(early.from).catch(() => null);
+      if (confirmed) {
+        const replyText = 'מעולים, התור אושר ✅ מחכים לראות אתכם! 🐶';
+        const reply = await sendReplySafely(early.from, replyText, { intentKind: 'arrival_confirmed' });
+        res.status(200).json({ ok: true, accepted: true, kind: 'arrival_confirmed', reply });
+        return;
+      }
+    }
+  } catch {
+    // never let this shortcut break normal webhook handling
+  }
+
   // Kill switch: the AI assistant is retired (2026-09-19) — its "Bako" branding
   // collided with the unrelated personal-finance assistant of the same name and
   // confused the owner. Acknowledge silently (200) so Meta doesn't disable the
@@ -1939,18 +1958,6 @@ export default async function handler(req, res) {
         isMetaPayload: isMetaPayload(req.body || {})
       }
     }).catch(() => null);
-
-    if (!isOwnerConversation(conversationPhone) && isArrivalConfirmationText(incoming.text)) {
-      const confirmed = await confirmArrivalByPhone(conversationPhone).catch(() => null);
-      if (confirmed) {
-        const replyText = 'מעולים, התור אושר ✅ מחכים לראות אתכם! 🐶';
-        const reply = await sendReplySafely(conversationPhone, replyText, {
-          intentKind: 'arrival_confirmed'
-        });
-        res.status(200).json({ ok: true, accepted: true, kind: 'arrival_confirmed', text: replyText, reply });
-        return;
-      }
-    }
 
     if (isPublicCustomerConversation(conversationPhone, req.body || {})) {
       await handlePublicCustomerMessage({
