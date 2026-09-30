@@ -408,7 +408,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
       const customer: Customer = {
         ...payload.customer,
-        lastVisit: new Date(payload.customer.lastVisit)
+        lastVisit: payload.customer?.lastVisit ? new Date(payload.customer.lastVisit) : new Date()
       };
 
       onCustomerCreated?.(customer);
@@ -484,7 +484,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
 
       const customer: Customer = {
         ...payload.customer,
-        lastVisit: new Date(payload.customer.lastVisit)
+        lastVisit: payload.customer?.lastVisit ? new Date(payload.customer.lastVisit) : new Date()
       };
 
       const appointment: Appointment = {

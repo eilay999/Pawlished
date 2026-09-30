@@ -11,10 +11,6 @@ export default defineConfig(({ mode }) => {
         proxy: { '/api': 'http://127.0.0.1:3100' },
       },
       plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
