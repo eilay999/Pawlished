@@ -7,8 +7,10 @@
 - [x] `20260930110000_otp_ip_rate_limit.sql` (הגבלת קצב לפי IP)
 
 ## ב. משתני סביבה (Vercel → Production + Preview)
-- [ ] `WHATSAPP_WEBHOOK_SECRET` + `?secret=...` בכתובת ה-webhook ב-Meta (**חובה** — בלעדיו ה-webhook פתוח)
-- [ ] `CRON_SECRET`, `OTP_SECRET` (32+ תווים), `ADMIN_PHONES`
+- [x] `WHATSAPP_WEBHOOK_SECRET` מוגדר ב-Production (נבדק ב-Vercel, בלי לקרוא ערך)
+- [ ] לוודא ש-`?secret=...` מופיע בכתובת ה-webhook ב-Meta (אם לא, ה-webhook יחזיר 401)
+- [x] `OTP_SECRET`, `ADMIN_PHONES` מוגדרים ב-Production
+- [ ] `CRON_SECRET` (לא מוגדר; בינתיים `/api/reminders-run` משתמש ב-`WHATSAPP_WEBHOOK_SECRET`)
 - [ ] `BIT_PAYMENT_LINK`, `DEPOSIT_AMOUNT=50`
 - [ ] `INVOICE_API_URL`, `INVOICE_API_KEY` (אחרי שיש ספק)
 - [ ] `INVOICE_START_DATE` (חובה — מתי מתחילים להנפיק; בלי זה לא מונפקת אף חשבונית, כדי לא להנפיק על תורים היסטוריים)
