@@ -120,10 +120,20 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Stop taking new work before the function time limit (vercel.json maxDuration: 60s);
+    // anything left stays unsent in the DB and is picked up by the next run.
+    const startedAt = Date.now();
+    const timeBudgetMs = 45 * 1000;
+    const hasTimeLeft = () => Date.now() - startedAt < timeBudgetMs;
+
     const dueReminders = await listDueReminders();
     const results = [];
 
     for (const reminder of dueReminders) {
+      if (!hasTimeLeft()) {
+        results.push({ id: reminder.id, sent: false, reason: 'deferred: time budget reached' });
+        continue;
+      }
       try {
         let paymentLink = '';
         if (reminder.source_kind === 'APPOINTMENT' && reminder.payload?.reminderKind === 'DAY_BEFORE') {
@@ -153,7 +163,7 @@ export default async function handler(req, res) {
 
     const invoices = [];
     try {
-      const issued = await issuePendingInvoices();
+      const issued = hasTimeLeft() ? await issuePendingInvoices() : [];
       for (const doc of issued) {
         let sent = false;
         if (doc.phone && doc.url) {
