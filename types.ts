@@ -31,6 +31,11 @@ export interface Appointment {
   notes?: string;
   price: number; // Added price field
   cancellationFee?: number;
+  arrivalConfirmedAt?: Date;
+  depositPaidAt?: Date;
+  invoiceNumber?: string;
+  invoiceUrl?: string;
+  invoiceIssuedAt?: Date;
 }
 
 export type DogSex = 'MALE' | 'FEMALE';

@@ -341,6 +341,20 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (action === 'set_deposit_paid') {
+      const appointmentId = String(body.appointmentId || '').trim();
+      if (!appointmentId) throw createHttpError(400, 'Missing appointmentId');
+      const paid = body.paid === true;
+
+      const { error } = await supabase
+        .from('appointments')
+        .update({ deposit_paid_at: paid ? new Date().toISOString() : null })
+        .eq('id', appointmentId);
+      if (error) throw createHttpError(500, error.message);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     if (action === 'delete_appointment') {
       const appointmentId = String(body.appointmentId || '').trim();
       if (!appointmentId) throw createHttpError(400, 'Missing appointmentId');

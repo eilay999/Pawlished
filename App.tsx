@@ -45,6 +45,11 @@ type DbAppointment = {
   notes: string | null;
   price: number;
   cancellation_fee?: number | null;
+  arrival_confirmed_at?: string | null;
+  deposit_paid_at?: string | null;
+  invoice_number?: string | null;
+  invoice_url?: string | null;
+  invoice_issued_at?: string | null;
 };
 
 type DbDog = {
@@ -133,7 +138,12 @@ const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
   status: row.status,
   notes: row.notes ?? undefined,
   price: row.price,
-  cancellationFee: row.cancellation_fee ?? undefined
+  cancellationFee: row.cancellation_fee ?? undefined,
+  arrivalConfirmedAt: row.arrival_confirmed_at ? new Date(row.arrival_confirmed_at) : undefined,
+  depositPaidAt: row.deposit_paid_at ? new Date(row.deposit_paid_at) : undefined,
+  invoiceNumber: row.invoice_number ?? undefined,
+  invoiceUrl: row.invoice_url ?? undefined,
+  invoiceIssuedAt: row.invoice_issued_at ? new Date(row.invoice_issued_at) : undefined
 });
 
 const mapDogFromDb = (row: DbDog): Dog => ({
@@ -1360,6 +1370,22 @@ const App: React.FC = () => {
     );
   };
 
+  const handleSetDepositPaid = (appointmentId: string, paid: boolean) => {
+    if (!ensureCloudWritable()) return;
+
+    const paidAt = paid ? new Date() : undefined;
+    setAppointments(prev =>
+      prev.map(appt => (appt.id === appointmentId ? { ...appt, depositPaidAt: paidAt } : appt))
+    );
+    setEditingAppointment(prev =>
+      prev && prev.id === appointmentId ? { ...prev, depositPaidAt: paidAt } : prev
+    );
+
+    persistCloudMutation('עדכון תשלום מקדמה בענן נכשל', () =>
+      adminMutate({ action: 'set_deposit_paid', appointmentId, paid })
+    );
+  };
+
   const handleSaveCalendarEvent = (savedEvent: CalendarEvent) => {
     if (!ensureCloudWritable()) return;
 
@@ -1856,6 +1882,7 @@ const App: React.FC = () => {
         onSave={handleSaveAppointment}
         onUpdateCustomerNotes={handleUpdateCustomerNotes}
         onDelete={handleDeleteAppointment}
+        onSetDepositPaid={handleSetDepositPaid}
         initialDate={selectedDateForAppointment}
         customers={customers}
         dogs={dogs}

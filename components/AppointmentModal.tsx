@@ -11,6 +11,7 @@ interface AppointmentModalProps {
   onSave: (appointment: Appointment) => void;
   onUpdateCustomerNotes?: (customerId: string, notes: string) => void;
   onDelete?: (appointmentId: string) => void;
+  onSetDepositPaid?: (appointmentId: string, paid: boolean) => void;
   initialDate?: Date;
   customers: Customer[];
   dogs: Dog[];
@@ -26,6 +27,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
   onSave,
   onUpdateCustomerNotes,
   onDelete,
+  onSetDepositPaid,
   initialDate,
   customers,
   dogs,
@@ -532,6 +534,45 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
               )}
             </div>
           </div>
+
+          {appointment && appointment.status !== AppointmentStatus.CANCELLED && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 space-y-2" aria-label="סטטוס הגעה ותשלום">
+              <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                <span className={`px-2 py-1 rounded-full border ${appointment.arrivalConfirmedAt ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-white text-gray-600 border-gray-200'}`}>
+                  {appointment.arrivalConfirmedAt ? 'הגעה אושרה ✓' : 'הגעה לא אושרה'}
+                </span>
+                <span className={`px-2 py-1 rounded-full border ${appointment.depositPaidAt ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                  {appointment.depositPaidAt ? 'מקדמה שולמה ✓' : 'מקדמה לא שולמה'}
+                </span>
+                {appointment.invoiceNumber && (
+                  <span className="px-2 py-1 rounded-full border bg-blue-50 text-blue-800 border-blue-200">
+                    חשבונית {appointment.invoiceNumber}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {onSetDepositPaid && (
+                  <button
+                    type="button"
+                    onClick={() => onSetDepositPaid(appointment.id, !appointment.depositPaidAt)}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-100 font-medium"
+                  >
+                    {appointment.depositPaidAt ? 'בטל סימון מקדמה' : 'סמן מקדמה כשולמה'}
+                  </button>
+                )}
+                {appointment.invoiceUrl && /^https:\/\//i.test(appointment.invoiceUrl) && (
+                  <a
+                    href={appointment.invoiceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs px-3 py-1.5 rounded-lg border border-blue-300 bg-white text-blue-800 hover:bg-blue-50 font-medium"
+                  >
+                    פתח חשבונית
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Service and Price */}
           <div className="grid grid-cols-2 gap-4">
