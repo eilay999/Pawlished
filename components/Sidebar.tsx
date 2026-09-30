@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Calendar,
   CalendarDays,
+  FileText,
   Home,
   MessageCircle,
   Palette,
@@ -37,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'CALENDAR' as ViewType, label: 'יומן', icon: Calendar },
     { id: 'CUSTOMERS' as ViewType, label: 'לקוחות', icon: Users },
     { id: 'MESSAGES' as ViewType, label: 'הודעות', icon: MessageCircle },
+    { id: 'REPORTS' as ViewType, label: 'דוחות', icon: FileText },
     { id: 'SETTINGS' as ViewType, label: 'הגדרות', icon: Settings }
   ];
 

@@ -11,8 +11,10 @@ import { StatsView } from './components/StatsView';
 import { MessagesView } from './components/MessagesView';
 import { AdminLogin } from './components/AdminLogin';
 import { ScheduleSettingsView } from './components/ScheduleSettingsView';
+import { ReportsView } from './components/ReportsView';
+import { DEFAULT_TAX_SETTINGS, normalizeTaxSettings } from './services/reports.js';
 import { ThemePanel } from './components/ThemePanel';
-import { ViewType, Appointment, CalendarEvent, Customer, Dog, GroomingRecord, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
+import { TaxSettings, ViewType, Appointment, CalendarEvent, Customer, Dog, GroomingRecord, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
 import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
 import { applyTheme, loadTheme } from './theme';
 import { normalizePhoneForCompare } from './utils';
@@ -47,6 +49,7 @@ type DbAppointment = {
   cancellation_fee?: number | null;
   arrival_confirmed_at?: string | null;
   deposit_paid_at?: string | null;
+  deposit_amount?: number | string | null;
   invoice_number?: string | null;
   invoice_url?: string | null;
   invoice_issued_at?: string | null;
@@ -141,6 +144,7 @@ const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
   cancellationFee: row.cancellation_fee ?? undefined,
   arrivalConfirmedAt: row.arrival_confirmed_at ? new Date(row.arrival_confirmed_at) : undefined,
   depositPaidAt: row.deposit_paid_at ? new Date(row.deposit_paid_at) : undefined,
+  depositAmount: row.deposit_amount == null ? undefined : Number(row.deposit_amount),
   invoiceNumber: row.invoice_number ?? undefined,
   invoiceUrl: row.invoice_url ?? undefined,
   invoiceIssuedAt: row.invoice_issued_at ? new Date(row.invoice_issued_at) : undefined
@@ -430,6 +434,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
   const [whatsappMessagesTableMissing, setWhatsappMessagesTableMissing] = useState(false);
+  const [taxSettings, setTaxSettings] = useState<TaxSettings>(DEFAULT_TAX_SETTINGS as TaxSettings);
   const [businessSchedule, setBusinessSchedule] = useState<{
     weeklySlots: Record<string, string[]>;
     maxBookingDaysAhead: number;
@@ -618,6 +623,9 @@ const App: React.FC = () => {
     }
 
     setWhatsappMessagesTableMissing(Boolean(payload.whatsappMessagesMissing));
+    if (Array.isArray(payload.businessSettings)) {
+      setTaxSettings(normalizeTaxSettings(payload.businessSettings) as TaxSettings);
+    }
     {
       const scheduleRow =
         payload.businessSchedule && typeof payload.businessSchedule === 'object'
@@ -1541,6 +1549,20 @@ const App: React.FC = () => {
     [adminMutate, adminSessionToken, loadDataFromCloud]
   );
 
+  const saveTaxSettings = useCallback(
+    async (payload: Partial<TaxSettings>) => {
+      if (!adminSessionToken || isBrowserOffline()) {
+        throw new Error('אין חיבור אינטרנט כרגע.');
+      }
+
+      localMutationSuppressUntilRef.current = Date.now() + 1500;
+      await adminMutate({ action: 'set_business_settings', ...payload });
+      setTaxSettings((previous) => ({ ...previous, ...payload }));
+      await loadDataFromCloud('manual');
+    },
+    [adminMutate, adminSessionToken, loadDataFromCloud]
+  );
+
   if (!adminSessionToken) {
     return (
       <div className="min-h-[100dvh] w-full bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 text-gray-800 font-sans">
@@ -1660,6 +1682,14 @@ const App: React.FC = () => {
           onAddCustomer={(phone) => handleAddCustomer(phone)}
           onOpenCustomer={handleEditCustomer}
           onSendMessage={handleSendWhatsAppMessage}
+        />
+      ) : currentView === 'REPORTS' ? (
+        <ReportsView
+          appointments={appointments}
+          customers={customers}
+          dogs={dogs}
+          taxSettings={taxSettings}
+          onSaveTaxSettings={saveTaxSettings}
         />
       ) : currentView === 'SETTINGS' ? (
         <ScheduleSettingsView

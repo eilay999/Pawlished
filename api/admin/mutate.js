@@ -438,6 +438,39 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (action === 'set_business_settings') {
+      const updates = [];
+      if (body.taxStatus !== undefined) {
+        if (body.taxStatus !== 'EXEMPT' && body.taxStatus !== 'LICENSED') {
+          throw createHttpError(400, 'Invalid taxStatus');
+        }
+        updates.push({ key: 'tax_status', value: body.taxStatus });
+      }
+      if (body.vatRate !== undefined) {
+        const vatRate = Number(body.vatRate);
+        if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 0.3) {
+          throw createHttpError(400, 'Invalid vatRate');
+        }
+        updates.push({ key: 'vat_rate', value: vatRate });
+      }
+      if (body.exemptCeiling !== undefined) {
+        const ceiling = Number(body.exemptCeiling);
+        if (!Number.isFinite(ceiling) || ceiling <= 0 || ceiling > 10000000) {
+          throw createHttpError(400, 'Invalid exemptCeiling');
+        }
+        updates.push({ key: 'exempt_ceiling', value: ceiling });
+      }
+      if (updates.length === 0) throw createHttpError(400, 'Nothing to update');
+
+      const { data, error } = await supabase
+        .from('business_settings')
+        .upsert(updates.map((row) => ({ ...row, updated_at: new Date().toISOString() })))
+        .select('key, value');
+      if (error) throw createHttpError(500, error.message);
+      res.status(200).json({ ok: true, businessSettings: data || [] });
+      return;
+    }
+
     if (action === 'set_business_schedule') {
       const weeklySlots = normalizeWeeklySlots(body.weeklySlots);
       const maxBookingDaysAhead = normalizeMaxBookingDaysAhead(body.maxBookingDaysAhead);

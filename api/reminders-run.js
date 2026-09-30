@@ -5,6 +5,7 @@ import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import { issuePendingInvoices } from './_lib/invoices.js';
 import { depositAmount, getDepositLinkForAppointment } from './_lib/grow.js';
 import { runDailyBackup } from './_lib/backup.js';
+import { documentLabel, getTaxSettings } from './_lib/taxSettings.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -166,12 +167,13 @@ export default async function handler(req, res) {
     const invoices = [];
     try {
       const issued = hasTimeLeft() ? await issuePendingInvoices() : [];
+      const docLabel = documentLabel(issued.length > 0 ? await getTaxSettings() : null);
       for (const doc of issued) {
         let sent = false;
         if (doc.phone && doc.url) {
           const text =
             `היי ${doc.customerName || ''} 😊 תודה שבחרתם ב${reminderProviderLabel}!\n` +
-            `הקבלה שלכם${doc.number ? ` (מס' ${doc.number})` : ''}: ${doc.url}`;
+            `${docLabel} שלכם${doc.number ? ` (מס' ${doc.number})` : ''}: ${doc.url}`;
           try {
             await sendWhatsAppTextReply(doc.phone, text);
             sent = true;

@@ -1,4 +1,5 @@
 import './dryRun.js';
+import { getTaxSettings } from './taxSettings.js';
 import { createClient } from '@supabase/supabase-js';
 
 // Automatic invoice/receipt issuing for completed appointments.
@@ -18,6 +19,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const invoiceApiUrl = (process.env.INVOICE_API_URL || '').trim();
 const invoiceApiKey = (process.env.INVOICE_API_KEY || '').trim();
 const invoiceDocumentType = (process.env.INVOICE_DOCUMENT_TYPE || 'receipt').trim();
+// Used instead once the business is switched to licensed dealer (settings: tax_status = LICENSED).
+const invoiceDocumentTypeLicensed = (process.env.INVOICE_DOCUMENT_TYPE_LICENSED || 'tax_invoice_receipt').trim();
 
 const invoiceStartDate = (() => {
   const parsed = new Date((process.env.INVOICE_START_DATE || '').trim());
@@ -34,7 +37,8 @@ const getSupabaseClient = () => {
   return createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
 };
 
-const callInvoiceProvider = async ({ customerName, phone, description, amount, reference }) => {
+const callInvoiceProvider = async ({ customerName, phone, description, amount, reference, tax }) => {
+  const licensed = tax?.taxStatus === 'LICENSED';
   const response = await fetch(invoiceApiUrl, {
     method: 'POST',
     headers: {
@@ -42,10 +46,11 @@ const callInvoiceProvider = async ({ customerName, phone, description, amount, r
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      type: invoiceDocumentType,
+      type: licensed ? invoiceDocumentTypeLicensed : invoiceDocumentType,
       client: { name: customerName, phone },
       items: [{ description, quantity: 1, price: amount }],
       reference,
+      ...(licensed ? { vatRate: tax.vatRate, vatIncluded: true } : { vatExempt: true }),
       send: false
     })
   });
@@ -72,6 +77,7 @@ const callInvoiceProvider = async ({ customerName, phone, description, amount, r
 export const issuePendingInvoices = async (limit = 20) => {
   if (!isInvoicingConfigured()) return [];
 
+  const tax = await getTaxSettings();
   const supabase = getSupabaseClient();
   const { data: rows, error } = await supabase
     .from('appointments')
@@ -100,7 +106,8 @@ export const issuePendingInvoices = async (limit = 20) => {
         phone: customer?.phone || '',
         description: row.service || 'טיפוח כלב',
         amount,
-        reference: row.id
+        reference: row.id,
+        tax
       });
 
       await supabase

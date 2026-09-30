@@ -33,6 +33,7 @@ export interface Appointment {
   cancellationFee?: number;
   arrivalConfirmedAt?: Date;
   depositPaidAt?: Date;
+  depositAmount?: number;
   invoiceNumber?: string;
   invoiceUrl?: string;
   invoiceIssuedAt?: Date;
@@ -116,4 +117,10 @@ export interface DayCell {
   holiday?: string | null; // Added holiday field
 }
 
-export type ViewType = 'HOME' | 'DASHBOARD' | 'CALENDAR' | 'CUSTOMERS' | 'MESSAGES' | 'SETTINGS';
+export type ViewType = 'HOME' | 'DASHBOARD' | 'CALENDAR' | 'CUSTOMERS' | 'MESSAGES' | 'REPORTS' | 'SETTINGS';
+
+export interface TaxSettings {
+  taxStatus: 'EXEMPT' | 'LICENSED';
+  vatRate: number;
+  exemptCeiling: number;
+}

@@ -121,9 +121,13 @@ export default async function handler(req, res) {
       throw createHttpError(500, businessScheduleRes.error.message);
     }
 
+    // Optional table (older DBs): tax status etc. Never fails the whole load.
+    const settingsRes = await supabase.from('business_settings').select('key, value');
+
     res.status(200).json({
       ok: true,
       serverTime: new Date().toISOString(),
+      businessSettings: settingsRes.error ? [] : settingsRes.data || [],
       customers: customersRes.data || [],
       dogs: dogsMissing ? [] : dogsRes.data || [],
       dogsMissing,

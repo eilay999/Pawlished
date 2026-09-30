@@ -139,3 +139,9 @@ See `LOCAL_TESTING.md`: `MESSAGING_DRY_RUN=true` logs instead of sending WhatsAp
 ## 13) "Stay signed in" (admin)
 
 The admin login has a "הישאר מחובר (30 יום)" checkbox. It only extends the session for phones in `ADMIN_PHONES` (length: `ADMIN_REMEMBER_DAYS`, default 30); customers booking a slot keep the short `OTP_SESSION_TTL_MIN` session. Sessions are signed tokens (not stored server side), so they cannot be revoked one by one: to sign out every device immediately, change `OTP_SECRET` in Vercel and redeploy (this also signs out customers mid-booking). Use it only on personal devices.
+
+## 14) Reports, yearly tables and tax status
+
+Admin → "דוחות" (REPORTS): income/receipts report by period (this month, last month, this year, last 12 months, custom range), a yearly table by month, "save as PDF" (print view) and CSV export for the accountant, plus the exempt-dealer ceiling indicator (last 12 months vs `exempt_ceiling`, default 120,000, editable; verify the real figure with the accountant).
+
+Tax status lives in `business_settings` (`tax_status` EXEMPT/LICENSED, `vat_rate`, `exempt_ceiling`; migration `20260930130000_add_business_settings.sql`). The "הכן מעבר לעוסק מורשה" button flips it: reports add VAT columns, the invoice request uses `INVOICE_DOCUMENT_TYPE_LICENSED` (default `tax_invoice_receipt`) with `vatIncluded`, and WhatsApp says "החשבונית" instead of "הקבלה". It does NOT change the static legal pages (`public/terms.html`, `public/privacy-policy.html`) or the WhatsApp template wording: those are manual steps listed in the confirmation box. Income = completed treatments (price) + collected cancellation fees; expenses are not tracked yet.
