@@ -54,6 +54,7 @@ import {
   saveWhatsAppContext
 } from './_lib/whatsappContext.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
+import handleGrowWebhook from './_lib/growWebhook.js';
 import { confirmArrivalByPhone, isArrivalConfirmationText } from './_lib/arrivalConfirmation.js';
 
 const verifyToken = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
@@ -1862,6 +1863,12 @@ const extractIncomingMessage = (body) => {
 };
 
 export default async function handler(req, res) {
+  // Payment callbacks from Grow share this function (Hobby plan: max 12 functions).
+  if (String(req.query?.source || '') === 'grow') {
+    await handleGrowWebhook(req, res);
+    return;
+  }
+
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];

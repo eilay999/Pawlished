@@ -5,15 +5,17 @@ import {
   isGrowConfigured,
   parseGrowCallback,
   verifyNotifyToken
-} from './_lib/grow.js';
+} from './grow.js';
 
 // Server-to-server callback from Grow after a payment. Authenticity comes from the signed
 // notify URL (appointment id + kind + HMAC) created in api/_lib/grow.js, never from the body.
+// Served through api/whatsapp-webhook.js (?source=grow) because the Vercel Hobby plan allows at
+// most 12 serverless functions per deployment (tests/function-limit.test.mjs guards this).
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export default async function handler(req, res) {
+export default async function handleGrowWebhook(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');

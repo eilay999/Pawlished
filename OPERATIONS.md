@@ -124,6 +124,6 @@ To send them automatically, schedule a job to hit `GET /api/reminders-run`:
 
 ## 10) Grow deposit payment links
 
-The day-before reminder includes a Grow payment link (card/Bit) for the ₪`DEPOSIT_AMOUNT` deposit when `GROW_USER_ID`, `GROW_PAGE_CODE`, `GROW_NOTIFY_SECRET` and `PUBLIC_BASE_URL` (https) are set; otherwise it falls back to `BIT_PAYMENT_LINK`. Grow calls `/api/grow-webhook?a=<appointment>&k=DEPOSIT&t=<hmac>` after payment; the HMAC (not the body) authenticates it, the paid sum must be at least the deposit, and then `deposit_paid_at` is set and `approveTransaction` is called.
+The day-before reminder includes a Grow payment link (card/Bit) for the ₪`DEPOSIT_AMOUNT` deposit when `GROW_USER_ID`, `GROW_PAGE_CODE`, `GROW_NOTIFY_SECRET` and `PUBLIC_BASE_URL` (https) are set; otherwise it falls back to `BIT_PAYMENT_LINK`. Grow calls `/api/whatsapp-webhook?source=grow&a=<appointment>&k=DEPOSIT&t=<hmac>` (routed to `api/_lib/growWebhook.js`) after payment; the HMAC (not the body) authenticates it, the paid sum must be at least the deposit, and then `deposit_paid_at` is set and `approveTransaction` is called.
 
 **Not yet validated against a real Grow account**: test in the sandbox (`GROW_BASE_URL=https://sandbox.meshulam.co.il`) and confirm the request encoding, the `data.url` response field and the callback payload (see `api/_lib/grow.js`) before enabling in production. Balance (remaining amount) links are not implemented yet.

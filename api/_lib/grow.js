@@ -57,7 +57,7 @@ export const createGrowPaymentLink = async ({ appointmentId, kind = 'DEPOSIT', s
   if (!isGrowConfigured()) throw new Error('Grow is not configured');
 
   const notifyUrl =
-    `${publicBaseUrl}/api/grow-webhook?a=${encodeURIComponent(appointmentId)}` +
+    `${publicBaseUrl}/api/whatsapp-webhook?source=grow&a=${encodeURIComponent(appointmentId)}` +
     `&k=${encodeURIComponent(kind)}&t=${signNotifyToken(appointmentId, kind)}`;
 
   const form = new FormData();
