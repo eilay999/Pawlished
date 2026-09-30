@@ -1,5 +1,6 @@
 import { createCustomerFromStructuredInput, toApiError } from '../_lib/appointments.js';
 import { requireOtpSession } from '../_lib/otpSession.js';
+import { publicCustomerView, sanitizePublicCustomer } from '../_lib/publicBookingInput.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -11,18 +12,19 @@ export default async function handler(req, res) {
 
   try {
     const otpSession = requireOtpSession(req);
-    const { customer } = req.body || {};
+    const customer = sanitizePublicCustomer(req.body?.customer);
 
     const result = await createCustomerFromStructuredInput({
-      customerName: customer?.name,
+      customerName: customer.name,
       phone: otpSession.phone,
-      petName: customer?.petName,
-      petType: customer?.petType
+      petName: customer.petName,
+      petType: customer.petType,
+      phoneOnly: true
     });
 
     res.status(200).json({
       ok: true,
-      ...result
+      customer: publicCustomerView(result?.customer)
     });
   } catch (error) {
     const apiError = toApiError(error);

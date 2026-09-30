@@ -581,7 +581,22 @@ export const findCustomerByPhone = async (phone) => {
   return customerRow ? mapCustomerResponse(customerRow) : null;
 };
 
-const findExistingCustomer = async (supabase, { existingCustomerId, phone, customerName, petName }) => {
+// How many future, still-scheduled appointments this phone already holds (anti slot-hoarding).
+export const countUpcomingScheduledForPhone = async (phone) => {
+  const supabase = getSupabaseClient();
+  const customerRow = await findCustomerRowByPhone(supabase, phone);
+  if (!customerRow) return 0;
+  const { count, error } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('customer_id', customerRow.id)
+    .eq('status', 'SCHEDULED')
+    .gte('date', new Date().toISOString());
+  if (error) throw createHttpError(500, 'Failed to check existing appointments');
+  return count || 0;
+};
+
+const findExistingCustomer = async (supabase, { existingCustomerId, phone, customerName, petName, phoneOnly = false }) => {
   if (existingCustomerId) {
     const { data, error } = await supabase
       .from('customers')
@@ -598,6 +613,10 @@ const findExistingCustomer = async (supabase, { existingCustomerId, phone, custo
 
   const customerByPhone = await findCustomerRowByPhone(supabase, phone);
   if (customerByPhone) return customerByPhone;
+
+  // Public callers may only ever match their own (OTP-verified) phone; matching by name
+  // would attach the booking to, and reveal, somebody else's customer record.
+  if (phoneOnly) return null;
 
   const normalizedName = String(customerName || '').trim();
   const normalizedPetName = String(petName || '').trim();
@@ -763,7 +782,8 @@ export const createAppointmentRecord = async ({
   notes,
   price,
   visitFrequencyWeeks,
-  allowNewCustomerDefaults = false
+  allowNewCustomerDefaults = false,
+  phoneOnly = false
 }) => {
   const supabase = getSupabaseClient();
   const parsedSlotDate = slotDate instanceof Date ? slotDate : new Date(slotDate);
@@ -822,7 +842,8 @@ export const createAppointmentRecord = async ({
     existingCustomerId,
     phone: phone || customer?.phone,
     customerName: customerName || customer?.name,
-    petName: customer?.petName
+    petName: customer?.petName,
+    phoneOnly
   });
   let createdCustomer = false;
 
@@ -992,7 +1013,8 @@ export const createCustomerFromStructuredInput = async ({
   defaultPrice,
   visitFrequencyWeeks,
   lifecycleStatus,
-  lastVisit
+  lastVisit,
+  phoneOnly = false
 }) => {
   if (!customerName) {
     throw createHttpError(400, 'Missing customer name');
@@ -1009,7 +1031,8 @@ export const createCustomerFromStructuredInput = async ({
   const supabase = getSupabaseClient();
   const existingCustomer = await findExistingCustomer(supabase, {
     phone,
-    customerName
+    customerName: phoneOnly ? undefined : customerName,
+    phoneOnly
   });
 
   if (existingCustomer) {

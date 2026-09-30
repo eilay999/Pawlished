@@ -1894,6 +1894,11 @@ export default async function handler(req, res) {
   // genuine Meta payload is trivial for anyone to forge, so payload shape must never
   // be treated as proof of origin. Configure the webhook URL in Meta's App Dashboard
   // as `<url>?secret=<WHATSAPP_WEBHOOK_SECRET>` so real deliveries carry it too.
+  // Fail closed in production: a missing secret must never mean "accept anything".
+  if (!webhookSecret && process.env.VERCEL_ENV === 'production') {
+    res.status(401).json({ ok: false, error: 'Webhook secret not configured' });
+    return;
+  }
   if (webhookSecret) {
     const providedSecret = String(getProvidedSecret(req));
     if (!providedSecret || !safeEqual(providedSecret, webhookSecret)) {

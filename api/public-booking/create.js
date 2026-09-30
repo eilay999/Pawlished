@@ -1,8 +1,16 @@
 import {
   buildSlotDateFromLocal,
+  countUpcomingScheduledForPhone,
   createAppointmentRecord,
   toApiError
 } from '../_lib/appointments.js';
+import {
+  MAX_UPCOMING_PER_PHONE,
+  publicAppointmentView,
+  publicCustomerView,
+  sanitizePublicCustomer,
+  sanitizePublicNotes
+} from '../_lib/publicBookingInput.js';
 import { requireOtpSession } from '../_lib/otpSession.js';
 import { sendBookingConfirmation } from '../_lib/bookingConfirmation.js';
 
@@ -52,16 +60,18 @@ export default async function handler(req, res) {
 
   try {
     const otpSession = requireOtpSession(req);
-    const {
-      slotDate,
-      date,
-      time,
-      customer,
-      service,
-      notes,
-      price,
-      visitFrequencyWeeks
-    } = req.body || {};
+    // Price, service and visit frequency are decided by the business, never by the customer.
+    const { slotDate, date, time } = req.body || {};
+    const customer = sanitizePublicCustomer(req.body?.customer);
+    const notes = sanitizePublicNotes(req.body?.notes);
+
+    if ((await countUpcomingScheduledForPhone(otpSession.phone)) >= MAX_UPCOMING_PER_PHONE) {
+      res.status(429).json({
+        ok: false,
+        error: 'יש לך כבר כמה תורים עתידיים. כדי לשנות או לבטל אפשר לשלוח הודעה לאגם בוואטסאפ.'
+      });
+      return;
+    }
 
     const resolvedSlotDate =
       date && time
@@ -72,13 +82,14 @@ export default async function handler(req, res) {
       phone: otpSession.phone,
       slotDate: resolvedSlotDate,
       existingCustomerId: undefined,
-      customer: customer ? { ...customer, phone: otpSession.phone } : undefined,
-      customerName: customer?.name,
-      service,
+      customer: { ...customer, phone: otpSession.phone },
+      customerName: customer.name,
+      service: undefined,
       notes,
-      price,
-      visitFrequencyWeeks,
-      allowNewCustomerDefaults: true
+      price: undefined,
+      visitFrequencyWeeks: undefined,
+      allowNewCustomerDefaults: true,
+      phoneOnly: true
     });
 
     const confirmationDateTime = deriveConfirmationDateTime({
@@ -104,8 +115,10 @@ export default async function handler(req, res) {
 
     res.status(200).json({
       ok: true,
-      ...result,
-      confirmation
+      createdCustomer: result?.createdCustomer,
+      customer: publicCustomerView(result?.customer),
+      appointment: publicAppointmentView(result?.appointment),
+      confirmation: { ok: confirmation?.ok !== false, channel: confirmation?.channel }
     });
   } catch (error) {
     const apiError = toApiError(error);
