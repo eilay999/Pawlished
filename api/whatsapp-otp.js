@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createOtpSessionToken } from './_lib/otpSession.js';
+import { safeEqual } from './_lib/safeCompare.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,6 +27,7 @@ const minOtpSecretBytes = Number(process.env.OTP_SECRET_MIN_BYTES || 32);
 const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
 const otpMaxPer10Min = Number(process.env.OTP_MAX_10MIN || 5);
+const otpMaxVerifyAttempts = Number(process.env.OTP_MAX_VERIFY_ATTEMPTS || 5);
 
 const normalizeDigits = (value = '') => value.replace(/\D/g, '');
 
@@ -131,7 +133,8 @@ const sendWhatsAppFreeformText = async (to, bodyText) => {
   });
 
   const rawBody = await resp.text();
-  console.log('[whatsapp-otp] freeform send response', resp.status, rawBody);
+  // Never log rawBody on success: it contains the recipient's phone number.
+  console.log('[whatsapp-otp] freeform send status', resp.status);
 
   if (!resp.ok) {
     if (rawBody.includes('131047') || /re-?engagement/i.test(rawBody)) {
@@ -337,7 +340,34 @@ export default async function handler(req, res) {
         return;
       }
 
-      if (hashCode(code) !== data.code_hash) {
+      if (!safeEqual(hashCode(String(code)), data.code_hash)) {
+        // Brute-force protection: a 6-digit code has only 900k values, so each OTP
+        // gets a limited number of guesses and is then burned. If the `attempts`
+        // column is missing (migration not applied) or the optimistic update loses a
+        // race with a parallel guess, fail closed and burn the code immediately.
+        const previousAttempts = Number(data.attempts);
+        const nextAttempts = previousAttempts + 1;
+        let burn = !Number.isFinite(previousAttempts) || nextAttempts >= otpMaxVerifyAttempts;
+
+        if (!burn) {
+          const { data: updated, error: updateError } = await supabase
+            .from('wa_otp')
+            .update({ attempts: nextAttempts })
+            .eq('id', data.id)
+            .eq('attempts', previousAttempts)
+            .select('id');
+          burn = Boolean(updateError) || !updated || updated.length === 0;
+        }
+
+        if (burn) {
+          await supabase
+            .from('wa_otp')
+            .update({ used_at: new Date().toISOString() })
+            .eq('id', data.id);
+          res.status(429).json({ error: 'Too many wrong attempts. Request a new code.' });
+          return;
+        }
+
         res.status(400).json({ error: 'Invalid code' });
         return;
       }
@@ -351,6 +381,8 @@ export default async function handler(req, res) {
 
     res.status(400).json({ error: 'Unknown action' });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    // Provider errors can include account details; log them, don't return them.
+    console.error('[whatsapp-otp] unexpected error', err?.message || err);
+    res.status(500).json({ error: 'Server error' });
   }
 }

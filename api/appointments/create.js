@@ -1,3 +1,4 @@
+import { safeEqual } from '../_lib/safeCompare.js';
 import {
   createAppointmentFromStructuredInput,
   toApiError
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
   }
 
   const providedSecret = String(getProvidedSecret(req));
-  if (!providedSecret || providedSecret !== apiSecret) {
+  if (!providedSecret || !safeEqual(providedSecret, apiSecret)) {
     res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }

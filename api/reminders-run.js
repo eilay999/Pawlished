@@ -1,3 +1,4 @@
+import { safeEqual } from './_lib/safeCompare.js';
 import { listDueReminders, markReminderSent } from './_lib/reminders.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import { issuePendingInvoices } from './_lib/invoices.js';
@@ -103,7 +104,7 @@ const isAuthorized = (req) => {
   }
 
   const authHeader = String(req.headers.authorization || '');
-  return authHeader === `Bearer ${cronSecret}`;
+  return safeEqual(authHeader, `Bearer ${cronSecret}`);
 };
 
 export default async function handler(req, res) {

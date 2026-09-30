@@ -109,3 +109,10 @@ To send them automatically, schedule a job to hit `GET /api/reminders-run`:
 - The provider request/response mapping is in `callInvoiceProvider` (`api/_lib/invoices.js`) and must be aligned with the provider's API docs.
 - Run migration `20260929120000_add_arrival_confirmation_deposit_invoice.sql` (`npm run supabase:push`).
 - The cron must actually run: schedule an external job hitting `/api/reminders-run` every 5-10 minutes with `Authorization: Bearer <CRON_SECRET>`.
+
+## 8) Security notes
+
+- OTP verification allows `OTP_MAX_VERIFY_ATTEMPTS` (default 5) wrong guesses per code, then the code is burned. Requires migration `20260930100000_otp_verify_attempts.sql`; without it the code is burned on the first wrong guess (fail closed).
+- **Set `WHATSAPP_WEBHOOK_SECRET` in production and add `?secret=...` to the Meta webhook URL.** If it is unset, `/api/whatsapp-webhook` accepts unauthenticated requests.
+- `ADMIN_PHONES`, `OTP_SECRET` (>= 32 bytes) and `CRON_SECRET` must be set; rotate any secret that was ever shared in chat.
+- Security headers (nosniff, frame deny, HSTS, referrer, permissions) are set in `vercel.json`. A Content-Security-Policy is intentionally not set yet (needs testing against Google Fonts/Supabase).

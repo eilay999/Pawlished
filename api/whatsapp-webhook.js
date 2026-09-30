@@ -1,3 +1,4 @@
+import { safeEqual } from './_lib/safeCompare.js';
 import {
   createAppointmentFromStructuredInput,
   findCustomerByPhone,
@@ -1887,7 +1888,7 @@ export default async function handler(req, res) {
   // as `<url>?secret=<WHATSAPP_WEBHOOK_SECRET>` so real deliveries carry it too.
   if (webhookSecret) {
     const providedSecret = String(getProvidedSecret(req));
-    if (!providedSecret || providedSecret !== webhookSecret) {
+    if (!providedSecret || !safeEqual(providedSecret, webhookSecret)) {
       res.status(401).json({ ok: false, error: 'Unauthorized webhook call' });
       return;
     }
