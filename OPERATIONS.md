@@ -127,3 +127,11 @@ To send them automatically, schedule a job to hit `GET /api/reminders-run`:
 The day-before reminder includes a Grow payment link (card/Bit) for the ₪`DEPOSIT_AMOUNT` deposit when `GROW_USER_ID`, `GROW_PAGE_CODE`, `GROW_NOTIFY_SECRET` and `PUBLIC_BASE_URL` (https) are set; otherwise it falls back to `BIT_PAYMENT_LINK`. Grow calls `/api/whatsapp-webhook?source=grow&a=<appointment>&k=DEPOSIT&t=<hmac>` (routed to `api/_lib/growWebhook.js`) after payment; the HMAC (not the body) authenticates it, the paid sum must be at least the deposit, and then `deposit_paid_at` is set and `approveTransaction` is called.
 
 **Not yet validated against a real Grow account**: test in the sandbox (`GROW_BASE_URL=https://sandbox.meshulam.co.il`) and confirm the request encoding, the `data.url` response field and the callback payload (see `api/_lib/grow.js`) before enabling in production. Balance (remaining amount) links are not implemented yet.
+
+## 11) Daily backup
+
+`/api/reminders-run` (daily cron) also writes a JSON snapshot of the business tables (`appointments`, `customers`, `dogs`, ...) to the private Supabase Storage bucket `backups` (`pawlished-backup-YYYY-MM-DD.json`). It keeps the last 30 days plus the first snapshot of each month for a year, and never overwrites a snapshot when appointments and customers are both empty. It is **not off-site**: download a copy now and then, or use Supabase Pro daily backups. The repository is public, so never commit backups. Needs migration `20260930120000_add_backups_bucket.sql` (already applied to production).
+
+## 12) Local testing
+
+See `LOCAL_TESTING.md`: `MESSAGING_DRY_RUN=true` logs instead of sending WhatsApp/SMS/Grow/invoice requests, refuses a non-local database, is ignored on Vercel production, and `npm run dev:api` serves `/api` locally without the Vercel CLI.

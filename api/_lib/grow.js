@@ -1,3 +1,4 @@
+import './dryRun.js';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { safeEqual } from './safeCompare.js';

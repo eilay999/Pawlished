@@ -1,3 +1,4 @@
+import './_lib/dryRun.js';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createOtpSessionToken } from './_lib/otpSession.js';

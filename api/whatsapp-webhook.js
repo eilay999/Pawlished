@@ -1,3 +1,4 @@
+import './_lib/dryRun.js';
 import { safeEqual } from './_lib/safeCompare.js';
 import {
   createAppointmentFromStructuredInput,

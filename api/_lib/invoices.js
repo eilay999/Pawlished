@@ -1,3 +1,4 @@
+import './dryRun.js';
 import { createClient } from '@supabase/supabase-js';
 
 // Automatic invoice/receipt issuing for completed appointments.

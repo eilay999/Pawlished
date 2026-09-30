@@ -1,8 +1,10 @@
+import './_lib/dryRun.js';
 import { safeEqual } from './_lib/safeCompare.js';
 import { listDueReminders, markReminderSent } from './_lib/reminders.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import { issuePendingInvoices } from './_lib/invoices.js';
 import { depositAmount, getDepositLinkForAppointment } from './_lib/grow.js';
+import { runDailyBackup } from './_lib/backup.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
@@ -183,11 +185,24 @@ export default async function handler(req, res) {
       invoices.push({ error: invoiceError?.message || 'Invoice run failed' });
     }
 
+    // Daily snapshot of the business tables (see api/_lib/backup.js). Never blocks the run.
+    let backup = null;
+    if (hasTimeLeft()) {
+      try {
+        const done = await runDailyBackup();
+        backup = { ok: true, name: done.name, bytes: done.bytes, counts: done.counts, pruned: done.pruned };
+      } catch (backupError) {
+        console.error('[backup] failed', backupError?.message || backupError);
+        backup = { ok: false, error: 'Backup failed, see logs' };
+      }
+    }
+
     res.status(200).json({
       ok: true,
       processed: dueReminders.length,
       results,
-      invoices
+      invoices,
+      backup
     });
   } catch (error) {
     res.status(500).json({
