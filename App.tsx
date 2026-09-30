@@ -11,8 +11,10 @@ import { StatsView } from './components/StatsView';
 import { MessagesView } from './components/MessagesView';
 import { AdminLogin } from './components/AdminLogin';
 import { ScheduleSettingsView } from './components/ScheduleSettingsView';
+import { ReportsView } from './components/ReportsView';
+import { DEFAULT_TAX_SETTINGS, normalizeTaxSettings } from './services/reports.js';
 import { ThemePanel } from './components/ThemePanel';
-import { ViewType, Appointment, CalendarEvent, Customer, Dog, GroomingRecord, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
+import { TaxSettings, ViewType, Appointment, CalendarEvent, Customer, Dog, GroomingRecord, AppointmentStatus, Task, TaskStatus, WhatsAppMessage } from './types';
 import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './constants';
 import { applyTheme, loadTheme } from './theme';
 import { normalizePhoneForCompare } from './utils';
@@ -45,6 +47,12 @@ type DbAppointment = {
   notes: string | null;
   price: number;
   cancellation_fee?: number | null;
+  arrival_confirmed_at?: string | null;
+  deposit_paid_at?: string | null;
+  deposit_amount?: number | string | null;
+  invoice_number?: string | null;
+  invoice_url?: string | null;
+  invoice_issued_at?: string | null;
 };
 
 type DbDog = {
@@ -133,7 +141,13 @@ const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
   status: row.status,
   notes: row.notes ?? undefined,
   price: row.price,
-  cancellationFee: row.cancellation_fee ?? undefined
+  cancellationFee: row.cancellation_fee ?? undefined,
+  arrivalConfirmedAt: row.arrival_confirmed_at ? new Date(row.arrival_confirmed_at) : undefined,
+  depositPaidAt: row.deposit_paid_at ? new Date(row.deposit_paid_at) : undefined,
+  depositAmount: row.deposit_amount == null ? undefined : Number(row.deposit_amount),
+  invoiceNumber: row.invoice_number ?? undefined,
+  invoiceUrl: row.invoice_url ?? undefined,
+  invoiceIssuedAt: row.invoice_issued_at ? new Date(row.invoice_issued_at) : undefined
 });
 
 const mapDogFromDb = (row: DbDog): Dog => ({
@@ -420,6 +434,9 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
   const [whatsappMessagesTableMissing, setWhatsappMessagesTableMissing] = useState(false);
+  const [taxSettings, setTaxSettings] = useState<TaxSettings>(DEFAULT_TAX_SETTINGS as TaxSettings);
+  const [expenses, setExpenses] = useState<Record<string, unknown>[]>([]);
+  const [refunds, setRefunds] = useState<Record<string, unknown>[]>([]);
   const [businessSchedule, setBusinessSchedule] = useState<{
     weeklySlots: Record<string, string[]>;
     maxBookingDaysAhead: number;
@@ -608,6 +625,11 @@ const App: React.FC = () => {
     }
 
     setWhatsappMessagesTableMissing(Boolean(payload.whatsappMessagesMissing));
+    if (Array.isArray(payload.expenses)) setExpenses(payload.expenses as Record<string, unknown>[]);
+    if (Array.isArray(payload.refunds)) setRefunds(payload.refunds as Record<string, unknown>[]);
+    if (Array.isArray(payload.businessSettings)) {
+      setTaxSettings(normalizeTaxSettings(payload.businessSettings) as TaxSettings);
+    }
     {
       const scheduleRow =
         payload.businessSchedule && typeof payload.businessSchedule === 'object'
@@ -1360,6 +1382,22 @@ const App: React.FC = () => {
     );
   };
 
+  const handleSetDepositPaid = (appointmentId: string, paid: boolean) => {
+    if (!ensureCloudWritable()) return;
+
+    const paidAt = paid ? new Date() : undefined;
+    setAppointments(prev =>
+      prev.map(appt => (appt.id === appointmentId ? { ...appt, depositPaidAt: paidAt } : appt))
+    );
+    setEditingAppointment(prev =>
+      prev && prev.id === appointmentId ? { ...prev, depositPaidAt: paidAt } : prev
+    );
+
+    persistCloudMutation('עדכון תשלום מקדמה בענן נכשל', () =>
+      adminMutate({ action: 'set_deposit_paid', appointmentId, paid })
+    );
+  };
+
   const handleSaveCalendarEvent = (savedEvent: CalendarEvent) => {
     if (!ensureCloudWritable()) return;
 
@@ -1515,6 +1553,50 @@ const App: React.FC = () => {
     [adminMutate, adminSessionToken, loadDataFromCloud]
   );
 
+  const saveTaxSettings = useCallback(
+    async (payload: Partial<TaxSettings>) => {
+      if (!adminSessionToken || isBrowserOffline()) {
+        throw new Error('אין חיבור אינטרנט כרגע.');
+      }
+
+      localMutationSuppressUntilRef.current = Date.now() + 1500;
+      await adminMutate({ action: 'set_business_settings', ...payload });
+      setTaxSettings((previous) => ({ ...previous, ...payload }));
+      await loadDataFromCloud('manual');
+    },
+    [adminMutate, adminSessionToken, loadDataFromCloud]
+  );
+
+  const bookkeeping = useMemo(
+    () => ({
+      onSaveExpense: async (expense: Record<string, unknown>, file: { name: string; dataBase64: string } | null) => {
+        const saved = await adminMutate({ action: 'upsert_expense', expense });
+        const id = String((saved.expense as { id?: string } | undefined)?.id || expense.id || '');
+        if (file && id) {
+          await adminMutate({ action: 'upload_expense_receipt', expenseId: id, fileName: file.name, dataBase64: file.dataBase64 });
+        }
+        await loadDataFromCloud('manual');
+      },
+      onDeleteExpense: async (expenseId: string) => {
+        await adminMutate({ action: 'delete_expense', expenseId });
+        await loadDataFromCloud('manual');
+      },
+      onSaveRefund: async (refund: Record<string, unknown>) => {
+        await adminMutate({ action: 'upsert_refund', refund });
+        await loadDataFromCloud('manual');
+      },
+      onDeleteRefund: async (refundId: string) => {
+        await adminMutate({ action: 'delete_refund', refundId });
+        await loadDataFromCloud('manual');
+      },
+      onGetReceiptUrl: async (expenseId: string) => {
+        const result = await adminMutate({ action: 'get_expense_receipt_url', expenseId });
+        return String(result.url || '');
+      }
+    }),
+    [adminMutate, loadDataFromCloud]
+  );
+
   if (!adminSessionToken) {
     return (
       <div className="min-h-[100dvh] w-full bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 text-gray-800 font-sans">
@@ -1634,6 +1716,17 @@ const App: React.FC = () => {
           onAddCustomer={(phone) => handleAddCustomer(phone)}
           onOpenCustomer={handleEditCustomer}
           onSendMessage={handleSendWhatsAppMessage}
+        />
+      ) : currentView === 'REPORTS' ? (
+        <ReportsView
+          appointments={appointments}
+          customers={customers}
+          dogs={dogs}
+          taxSettings={taxSettings}
+          onSaveTaxSettings={saveTaxSettings}
+          expenses={expenses}
+          refunds={refunds}
+          bookkeeping={bookkeeping}
         />
       ) : currentView === 'SETTINGS' ? (
         <ScheduleSettingsView
@@ -1856,6 +1949,7 @@ const App: React.FC = () => {
         onSave={handleSaveAppointment}
         onUpdateCustomerNotes={handleUpdateCustomerNotes}
         onDelete={handleDeleteAppointment}
+        onSetDepositPaid={handleSetDepositPaid}
         initialDate={selectedDateForAppointment}
         customers={customers}
         dogs={dogs}

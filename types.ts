@@ -31,6 +31,12 @@ export interface Appointment {
   notes?: string;
   price: number; // Added price field
   cancellationFee?: number;
+  arrivalConfirmedAt?: Date;
+  depositPaidAt?: Date;
+  depositAmount?: number;
+  invoiceNumber?: string;
+  invoiceUrl?: string;
+  invoiceIssuedAt?: Date;
 }
 
 export type DogSex = 'MALE' | 'FEMALE';
@@ -111,4 +117,10 @@ export interface DayCell {
   holiday?: string | null; // Added holiday field
 }
 
-export type ViewType = 'HOME' | 'DASHBOARD' | 'CALENDAR' | 'CUSTOMERS' | 'MESSAGES' | 'SETTINGS';
+export type ViewType = 'HOME' | 'DASHBOARD' | 'CALENDAR' | 'CUSTOMERS' | 'MESSAGES' | 'REPORTS' | 'SETTINGS';
+
+export interface TaxSettings {
+  taxStatus: 'EXEMPT' | 'LICENSED';
+  vatRate: number;
+  exemptCeiling: number;
+}

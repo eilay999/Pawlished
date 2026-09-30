@@ -1,3 +1,5 @@
+import './_lib/dryRun.js';
+import { safeEqual } from './_lib/safeCompare.js';
 import {
   createAppointmentFromStructuredInput,
   findCustomerByPhone,
@@ -53,6 +55,8 @@ import {
   saveWhatsAppContext
 } from './_lib/whatsappContext.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
+import handleGrowWebhook from './_lib/growWebhook.js';
+import { confirmArrivalByPhone, isArrivalConfirmationText } from './_lib/arrivalConfirmation.js';
 
 const verifyToken = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
 const webhookSecret = (process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
@@ -1860,6 +1864,12 @@ const extractIncomingMessage = (body) => {
 };
 
 export default async function handler(req, res) {
+  // Payment callbacks from Grow share this function (Hobby plan: max 12 functions).
+  if (String(req.query?.source || '') === 'grow') {
+    await handleGrowWebhook(req, res);
+    return;
+  }
+
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -1886,10 +1896,29 @@ export default async function handler(req, res) {
   // as `<url>?secret=<WHATSAPP_WEBHOOK_SECRET>` so real deliveries carry it too.
   if (webhookSecret) {
     const providedSecret = String(getProvidedSecret(req));
-    if (!providedSecret || providedSecret !== webhookSecret) {
+    if (!providedSecret || !safeEqual(providedSecret, webhookSecret)) {
       res.status(401).json({ ok: false, error: 'Unauthorized webhook call' });
       return;
     }
+  }
+
+  // Narrow exception to the kill switch below: a customer replying "1"/"מאשר" to the
+  // day-before reminder that this system sent. Only acts when a DAY_BEFORE reminder was
+  // actually sent to that phone in the last 48h; every other message still falls through
+  // to the silent kill-switch behaviour.
+  try {
+    const early = extractIncomingMessage(req.body || {});
+    if (early.text && early.from && !isOwnerConversation(early.from) && isArrivalConfirmationText(early.text)) {
+      const confirmed = await confirmArrivalByPhone(early.from).catch(() => null);
+      if (confirmed) {
+        const replyText = 'מעולים, התור אושר ✅ מחכים לראות אתכם! 🐶';
+        const reply = await sendReplySafely(early.from, replyText, { intentKind: 'arrival_confirmed' });
+        res.status(200).json({ ok: true, accepted: true, kind: 'arrival_confirmed', reply });
+        return;
+      }
+    }
+  } catch {
+    // never let this shortcut break normal webhook handling
   }
 
   // Kill switch: the AI assistant is retired (2026-09-19) — its "Bako" branding

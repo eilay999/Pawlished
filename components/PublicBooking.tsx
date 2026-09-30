@@ -63,6 +63,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const [step, setStep] = useState<BookingStep>('PHONE');
   const [doneKind, setDoneKind] = useState<'BOOKED' | 'CUSTOMER_CREATED' | null>(null);
   const [phone, setPhone] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState('');
   const [otpSessionToken, setOtpSessionToken] = useState('');
@@ -91,6 +92,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
+  const [activeDate, setActiveDate] = useState('');
   const [confirmationStatus, setConfirmationStatus] = useState<BookingConfirmationStatus | null>(
     null
   );
@@ -105,6 +107,24 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     });
     return map;
   }, [availabilityDays]);
+
+  // Only days with at least one free slot; times sorted and free-only, so the page stays short.
+  const openDays = useMemo(
+    () => availabilityDays.filter((day) => (day.times || []).some((time) => time.available)),
+    [availabilityDays]
+  );
+  const activeDay = useMemo(
+    () => openDays.find((day) => day.date === activeDate) ?? openDays[0] ?? null,
+    [openDays, activeDate]
+  );
+  const activeTimes = useMemo(
+    () =>
+      (activeDay?.times || [])
+        .filter((time) => time.available)
+        .slice()
+        .sort((a, b) => a.time.localeCompare(b.time)),
+    [activeDay]
+  );
 
   const bookingProgress = useMemo(() => {
     const labelByStep: Record<BookingStep, string> = {
@@ -415,6 +435,11 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
       return;
     }
 
+    if (!acceptedTerms) {
+      setError('יש לאשר את התקנון ומדיניות הביטולים לפני קביעת התור.');
+      return;
+    }
+
     const day = availabilityDays.find((item) => item.date === selectedSlot.date);
     const slot = day?.times?.find((item) => item.time === selectedSlot.time) || null;
     if (!slot?.available) {
@@ -489,27 +514,35 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 p-4 md:p-8">
+    <main className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 p-4 md:p-8">
       <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur rounded-3xl shadow-xl border border-white/70 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-gray-900">קביעת תור</h1>
-              <p className="text-sm text-gray-500">אפשר לקבוע עד חודש מראש</p>
+              <p className="text-sm text-gray-600">אפשר לקבוע עד חודש מראש</p>
             </div>
             <div className="shrink-0 rounded-2xl bg-blue-50 border border-blue-100 p-2">
-              <Calendar className="w-6 h-6 text-blue-700" />
+              <Calendar className="w-6 h-6 text-blue-700" aria-hidden="true" />
             </div>
           </div>
 
           <div className="mt-4">
-            <div className="flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center justify-between text-xs text-gray-600">
               <span>
                 שלב {bookingProgress.current} מתוך {bookingProgress.total}
               </span>
               <span className="font-medium text-gray-600">{bookingProgress.label}</span>
             </div>
-            <div className="mt-2 h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div
+              role="progressbar"
+              aria-label="התקדמות בקביעת התור"
+              aria-valuemin={1}
+              aria-valuemax={bookingProgress.total}
+              aria-valuenow={bookingProgress.current}
+              aria-valuetext={`שלב ${bookingProgress.current} מתוך ${bookingProgress.total}: ${bookingProgress.label}`}
+              className="mt-2 h-2 w-full rounded-full bg-gray-100 overflow-hidden"
+            >
               <div
                 className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out"
                 style={{
@@ -524,7 +557,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
         </div>
 
         {error && (
-          <div className="mx-6 mt-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-sm px-4 py-3">
+          <div role="alert" className="mx-6 mt-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">
             {error}
           </div>
         )}
@@ -532,15 +565,21 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
         <div className="p-6 space-y-6">
           {step === 'PHONE' && (
             <div className="space-y-3">
-              <label className="text-sm text-gray-600 flex items-center gap-2">
-                <Phone className="w-4 h-4" /> מספר טלפון
+              <label htmlFor="booking-phone" className="text-sm text-gray-700 flex items-center gap-2">
+                <Phone className="w-4 h-4" aria-hidden="true" /> מספר טלפון
               </label>
               <input
+                id="booking-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                aria-required="true"
+                aria-describedby="booking-phone-hint"
                 value={phone}
                 onChange={event => setPhone(event.target.value)}
                 dir="ltr"
                 placeholder='לדוגמה: 050-1234567'
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
               />
               <button
                 onClick={() => void handleSendOtp()}
@@ -549,8 +588,13 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               >
                 {isSendingOtp ? 'שולח קוד...' : 'שלח קוד אימות'}
               </button>
-              <div className="text-xs text-gray-500">
-                נשלח אליך קוד אימות בהודעה (WhatsApp או SMS) לפני קביעת התור.
+              <div id="booking-phone-hint" className="text-xs text-gray-600">
+                נשלח אליך קוד אימות בהודעה (WhatsApp או SMS) לפני קביעת התור. מסירת מספר הטלפון נדרשת לקביעת
+                תור, והוא משמש לקביעת התור ולתזכורות בלבד. לפרטים:{' '}
+                <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-blue-700">
+                  מדיניות פרטיות
+                </a>
+                .
               </div>
             </div>
           )}
@@ -559,7 +603,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
             <div className="space-y-4">
               <div className="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs text-gray-500">אימות לטלפון</div>
+                  <div className="text-xs text-gray-600">אימות לטלפון</div>
                   <div dir="ltr" className="text-sm font-semibold text-gray-900 truncate">
                     {otpPendingPhone ? maskPhoneForDisplay(otpPendingPhone) : ''}
                   </div>
@@ -570,8 +614,10 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">קוד אימות (6 ספרות)</label>
+                <label htmlFor="booking-otp" className="text-xs text-gray-600">קוד אימות (6 ספרות)</label>
                 <input
+                  id="booking-otp"
+                  aria-required="true"
                   ref={otpInputRef}
                   value={otpCode}
                   onChange={(event) => {
@@ -586,9 +632,9 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                   autoComplete="one-time-code"
                   maxLength={OTP_CODE_LENGTH}
                   placeholder="123456"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-semibold tracking-[0.55em] text-center bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-semibold tracking-[0.55em] text-center bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                 />
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-gray-600" aria-live="polite">
                   לא קיבלת קוד?{' '}
                   {otpSecondsUntilResend > 0
                     ? `אפשר לשלוח שוב בעוד ${otpSecondsUntilResend} שנ׳.`
@@ -646,41 +692,53 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           {step === 'DETAILS' && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600">לקוח חדש - מלא פרטים</div>
+              <div className="text-xs text-gray-600">
+                הפרטים נדרשים לפתיחת כרטיס לקוח ומשמשים לניהול התור בלבד.{' '}
+                <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" className="underline text-blue-700">
+                  מדיניות פרטיות
+                </a>
+              </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <User className="w-4 h-4" /> שם מלא
+                  <label htmlFor="booking-name" className="text-xs text-gray-600 flex items-center gap-2">
+                    <User className="w-4 h-4" aria-hidden="true" /> שם מלא
                   </label>
                   <input
+                    id="booking-name"
+                    autoComplete="name"
+                    aria-required="true"
                     value={newCustomer.name}
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, name: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
-                    <Dog className="w-4 h-4" /> שם הכלב
+                  <label htmlFor="booking-pet-name" className="text-xs text-gray-600 flex items-center gap-2">
+                    <Dog className="w-4 h-4" aria-hidden="true" /> שם הכלב
                   </label>
                   <input
+                    id="booking-pet-name"
+                    aria-required="true"
                     value={newCustomer.petName}
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, petName: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="text-xs text-gray-500 flex items-center gap-2">
+                  <label htmlFor="booking-pet-type" className="text-xs text-gray-600 flex items-center gap-2">
                     סוג הכלב
                   </label>
                   <input
+                    id="booking-pet-type"
                     value={newCustomer.petType}
                     onChange={event =>
                       setNewCustomer(previous => ({ ...previous, petType: event.target.value }))
                     }
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:border-blue-600"
                   />
                 </div>
               </div>
@@ -718,59 +776,112 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               </div>
 
               {availabilityError && (
-                <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">
+                <div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3">
                   {availabilityError}
                 </div>
               )}
 
               {isLoadingAvailability ? (
-                <div className="text-sm text-gray-500">טוען זמינות...</div>
+                <div role="status" className="text-sm text-gray-600">טוען זמינות...</div>
               ) : availabilityDays.length === 0 ? (
-                <div className="text-sm text-gray-500">אין זמינות להצגה כרגע.</div>
+                <div className="text-sm text-gray-600">אין זמינות להצגה כרגע.</div>
               ) : null}
 
-              <div className="space-y-3">
-                {availabilityDays.map((day) => (
+              {openDays.length > 0 && (
+                <>
                   <div
-                    key={day.date}
-                    className="border border-gray-100 bg-white rounded-2xl p-4 shadow-sm shadow-blue-100/20"
+                    role="group"
+                    aria-label="בחירת תאריך"
+                    className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 snap-x"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-semibold text-gray-800">
-                        {DAY_NAMES[day.weekdayIndex ?? 0]} - {toDisplayDateLabel(day.date)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {availableSlotCountByDate.get(day.date) ?? 0} זמינים
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {day.times.map((slotTime) => {
-                        const available = slotTime.available;
-                        const isSelected =
-                          Boolean(selectedSlot) &&
-                          selectedSlot!.time === slotTime.time &&
-                          selectedSlot!.date === day.date;
-
-                        return (
-                          <button
-                            key={slotTime.time}
-                            disabled={!available || isSubmittingBooking}
-                            onClick={() => setSelectedSlot({ date: day.date, time: slotTime.time })}
-                            className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition focus:outline-none focus:ring-2 focus:ring-blue-100 ${
-                              isSelected
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : available
-                                  ? 'border-blue-100 text-blue-700 hover:bg-blue-50'
-                                  : 'border-gray-100 text-gray-300 cursor-not-allowed'
-                            }`}
-                          >
-                            {slotTime.time}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {openDays.map((day) => {
+                      const isActive = day.date === activeDay?.date;
+                      const dayDate = new Date(`${day.date}T12:00:00`);
+                      return (
+                        <button
+                          key={day.date}
+                          type="button"
+                          aria-pressed={isActive}
+                          aria-label={`${DAY_NAMES[day.weekdayIndex ?? 0]} ${toDisplayDateLabel(day.date)}, ${availableSlotCountByDate.get(day.date) ?? 0} שעות פנויות`}
+                          onClick={() => setActiveDate(day.date)}
+                          className={`snap-start shrink-0 w-[4.5rem] rounded-2xl border px-2 py-2.5 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                            isActive
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white text-gray-800 border-gray-200 hover:bg-blue-50'
+                          }`}
+                        >
+                          <div className="text-xs">{DAY_NAMES[day.weekdayIndex ?? 0]}</div>
+                          <div className="text-xl font-bold leading-tight">{dayDate.getDate()}</div>
+                          <div className="text-xs">{dayDate.toLocaleDateString('he-IL', { month: 'short' })}</div>
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
+
+                  {activeDay && (
+                    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <div className="font-semibold text-gray-800 mb-3">
+                        יום {DAY_NAMES[activeDay.weekdayIndex ?? 0]}, {toDisplayDateLabel(activeDay.date)}
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {activeTimes.map((slotTime) => {
+                          const isSelected =
+                            Boolean(selectedSlot) &&
+                            selectedSlot!.time === slotTime.time &&
+                            selectedSlot!.date === activeDay.date;
+                          return (
+                            <button
+                              key={slotTime.time}
+                              type="button"
+                              disabled={isSubmittingBooking}
+                              aria-pressed={isSelected}
+                              aria-label={`${DAY_NAMES[activeDay.weekdayIndex ?? 0]} ${toDisplayDateLabel(activeDay.date)} בשעה ${slotTime.time}`}
+                              onClick={() => setSelectedSlot({ date: activeDay.date, time: slotTime.time })}
+                              className={`py-3 rounded-xl text-base font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'border-blue-100 text-blue-700 hover:bg-blue-50'
+                              }`}
+                            >
+                              {slotTime.time}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className={`rounded-xl px-4 py-3 text-sm border ${
+                      selectedSlot
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium'
+                        : 'bg-gray-50 border-gray-200 text-gray-600'
+                    }`}
+                  >
+                    {selectedSlot
+                      ? `נבחר: יום ${DAY_NAMES[new Date(`${selectedSlot.date}T12:00:00`).getDay()]}, ${toDisplayDateLabel(selectedSlot.date)} בשעה ${selectedSlot.time}`
+                      : 'בחר/י יום ואז שעה'}
+                  </div>
+                </>
+              )}
+              <div className="flex items-start gap-2">
+                <input
+                  id="booking-terms"
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(event) => setAcceptedTerms(event.target.checked)}
+                  aria-required="true"
+                  className="mt-1 h-5 w-5 focus-visible:ring-2 focus-visible:ring-blue-600"
+                />
+                <label htmlFor="booking-terms" className="text-sm text-gray-700">
+                  קראתי ואני מאשר/ת את{' '}
+                  <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="underline text-blue-700">
+                    התקנון ומדיניות הביטולים
+                  </a>{' '}
+                  ואת קבלת הודעות שירות בוואטסאפ/SMS.
+                </label>
               </div>
               <button
                 onClick={handleConfirmBooking}
@@ -783,13 +894,13 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
           )}
 
           {step === 'DONE' && (
-            <div className="text-center space-y-3 py-6">
-              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
+            <div className="text-center space-y-3 py-6" role="status" aria-live="polite">
+              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" aria-hidden="true" />
               <div className="text-lg font-bold text-gray-800">
                 {doneKind === 'CUSTOMER_CREATED' ? 'כרטיס הלקוח נשמר בהצלחה!' : 'התור נקבע בהצלחה!'}
               </div>
               {doneKind !== 'CUSTOMER_CREATED' && selectedSlot && (
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-600">
                   {toDisplayDateLabel(selectedSlot.date)} בשעה {selectedSlot.time}
                 </div>
               )}
@@ -808,7 +919,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
               )}
               {doneKind === 'CUSTOMER_CREATED' && (
                 <div className="space-y-2 pt-3">
-                  <div className="text-sm text-gray-500">אפשר עכשיו לקבוע תור או לחזור באיזה זמן.</div>
+                  <div className="text-sm text-gray-600">אפשר עכשיו לקבוע תור או לחזור באיזה זמן.</div>
                   <button
                     type="button"
                     onClick={() => {
@@ -824,7 +935,12 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
             </div>
           )}
         </div>
+        <footer className="px-6 pb-6 text-xs text-gray-600 flex gap-4">
+          <a href="/accessibility.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">הצהרת נגישות</a>
+          <a href="/terms.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">תקנון וביטולים</a>
+          <a href="/privacy-policy.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">מדיניות פרטיות</a>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 };

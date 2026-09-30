@@ -1,6 +1,9 @@
+import './_lib/dryRun.js';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createOtpSessionToken } from './_lib/otpSession.js';
+import { isAdminPhone } from './_lib/adminAuth.js';
+import { safeEqual } from './_lib/safeCompare.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,6 +29,10 @@ const minOtpSecretBytes = Number(process.env.OTP_SECRET_MIN_BYTES || 32);
 const otpTtlMin = Number(process.env.OTP_TTL_MIN || 10);
 const otpCooldownSec = Number(process.env.OTP_COOLDOWN_SEC || 60);
 const otpMaxPer10Min = Number(process.env.OTP_MAX_10MIN || 5);
+const otpMaxPer10MinPerIp = Number(process.env.OTP_MAX_10MIN_PER_IP || 10);
+// "Stay signed in" length for admin phones only (customers booking keep the short session).
+const adminRememberDays = Number(process.env.ADMIN_REMEMBER_DAYS || 30);
+const otpMaxVerifyAttempts = Number(process.env.OTP_MAX_VERIFY_ATTEMPTS || 5);
 
 const normalizeDigits = (value = '') => value.replace(/\D/g, '');
 
@@ -43,6 +50,15 @@ const toE164 = (value = '') => {
   if (digits.startsWith('0')) return `+972${digits.slice(1)}`;
   if (value.startsWith('+')) return value;
   return `+${digits}`;
+};
+
+// Vercel sets x-real-ip / x-forwarded-for itself, so these are not client-spoofable there.
+// The IP is stored only as a keyed hash.
+const getClientIpHash = (req) => {
+  const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  const ip = String(req.headers?.['x-real-ip'] || forwarded || '').trim();
+  if (!ip) return null;
+  return crypto.createHmac('sha256', otpSecret).update(`ip:${ip}`).digest('hex');
 };
 
 const getSupabaseClient = () => {
@@ -131,7 +147,8 @@ const sendWhatsAppFreeformText = async (to, bodyText) => {
   });
 
   const rawBody = await resp.text();
-  console.log('[whatsapp-otp] freeform send response', resp.status, rawBody);
+  // Never log rawBody on success: it contains the recipient's phone number.
+  console.log('[whatsapp-otp] freeform send status', resp.status);
 
   if (!resp.ok) {
     if (rawBody.includes('131047') || /re-?engagement/i.test(rawBody)) {
@@ -180,7 +197,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { action, phone, code } = req.body || {};
+    const { action, phone, code, remember } = req.body || {};
     if (!action) {
       res.status(400).json({ error: 'Missing action' });
       return;
@@ -256,14 +273,37 @@ export default async function handler(req, res) {
         return;
       }
 
+      const ipHash = getClientIpHash(req);
+      if (ipHash) {
+        // If the ip_hash column doesn't exist yet (migration pending) the query errors
+        // and count stays null, i.e. the per-IP limit is simply skipped.
+        const { count: ipCount } = await supabase
+          .from('wa_otp')
+          .select('*', { count: 'exact', head: true })
+          .eq('ip_hash', ipHash)
+          .gte('created_at', windowSince);
+
+        if ((ipCount || 0) >= otpMaxPer10MinPerIp) {
+          res.status(429).json({ error: 'Too many OTP requests. Try again later.' });
+          return;
+        }
+      }
+
       const otpCode = crypto.randomInt(100000, 999999).toString();
       const expiresAt = new Date(now + otpTtlMin * 60 * 1000).toISOString();
 
-      const { error: insertError } = await supabase.from('wa_otp').insert({
+      const otpRow = {
         phone: waPhone,
         code_hash: hashCode(otpCode),
         expires_at: expiresAt
-      });
+      };
+      let { error: insertError } = await supabase
+        .from('wa_otp')
+        .insert(ipHash ? { ...otpRow, ip_hash: ipHash } : otpRow);
+      if (insertError && ipHash) {
+        // Column missing (migration not applied yet): store without the IP hash.
+        ({ error: insertError } = await supabase.from('wa_otp').insert(otpRow));
+      }
 
       if (insertError) {
         res.status(500).json({ error: 'Failed to store OTP' });
@@ -337,20 +377,51 @@ export default async function handler(req, res) {
         return;
       }
 
-      if (hashCode(code) !== data.code_hash) {
+      if (!safeEqual(hashCode(String(code)), data.code_hash)) {
+        // Brute-force protection: a 6-digit code has only 900k values, so each OTP
+        // gets a limited number of guesses and is then burned. If the `attempts`
+        // column is missing (migration not applied) or the optimistic update loses a
+        // race with a parallel guess, fail closed and burn the code immediately.
+        const previousAttempts = Number(data.attempts);
+        const nextAttempts = previousAttempts + 1;
+        let burn = !Number.isFinite(previousAttempts) || nextAttempts >= otpMaxVerifyAttempts;
+
+        if (!burn) {
+          const { data: updated, error: updateError } = await supabase
+            .from('wa_otp')
+            .update({ attempts: nextAttempts })
+            .eq('id', data.id)
+            .eq('attempts', previousAttempts)
+            .select('id');
+          burn = Boolean(updateError) || !updated || updated.length === 0;
+        }
+
+        if (burn) {
+          await supabase
+            .from('wa_otp')
+            .update({ used_at: new Date().toISOString() })
+            .eq('id', data.id);
+          res.status(429).json({ error: 'Too many wrong attempts. Request a new code.' });
+          return;
+        }
+
         res.status(400).json({ error: 'Invalid code' });
         return;
       }
 
       await supabase.from('wa_otp').update({ used_at: new Date().toISOString() }).eq('id', data.id);
 
-      const sessionToken = createOtpSessionToken(waPhone);
+      const extendedMinutes =
+        remember === true && isAdminPhone(waPhone) && adminRememberDays > 0 ? adminRememberDays * 24 * 60 : undefined;
+      const sessionToken = createOtpSessionToken(waPhone, extendedMinutes);
       res.status(200).json({ ok: true, sessionToken });
       return;
     }
 
     res.status(400).json({ error: 'Unknown action' });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    // Provider errors can include account details; log them, don't return them.
+    console.error('[whatsapp-otp] unexpected error', err?.message || err);
+    res.status(500).json({ error: 'Server error' });
   }
 }

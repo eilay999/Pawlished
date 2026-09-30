@@ -41,6 +41,7 @@ export const AdminLogin: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [remember, setRemember] = useState(false);
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
   const codeRef = useRef<HTMLInputElement | null>(null);
@@ -131,7 +132,7 @@ export const AdminLogin: React.FC<{
       const response = await fetch('/api/whatsapp-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify', phone: pendingPhone, code: digits })
+        body: JSON.stringify({ action: 'verify', phone: pendingPhone, code: digits, remember })
       });
 
       const payload = await response.json().catch(() => ({}));
@@ -221,6 +222,20 @@ export const AdminLogin: React.FC<{
                 placeholder="123456"
                 className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-200 tracking-widest text-center text-lg font-semibold"
               />
+
+              <div className="mt-4 flex items-start gap-2">
+                <input
+                  id="admin-remember"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="mt-1 h-5 w-5 accent-rose-600"
+                />
+                <label htmlFor="admin-remember" className="text-sm text-gray-700">
+                  הישאר מחובר במכשיר הזה (30 יום)
+                  <span className="block text-xs text-gray-600">מומלץ רק במכשיר אישי. אפשר להתנתק בכל רגע.</span>
+                </label>
+              </div>
 
               <button
                 type="button"

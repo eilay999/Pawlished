@@ -1,3 +1,4 @@
+import './dryRun.js';
 const normalizeDigits = (value = '') => String(value || '').replace(/\D/g, '');
 
 const toWhatsAppNumber = (value = '') => {

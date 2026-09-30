@@ -1,9 +1,17 @@
+import './_lib/dryRun.js';
+import { safeEqual } from './_lib/safeCompare.js';
 import { listDueReminders, markReminderSent } from './_lib/reminders.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
+import { issuePendingInvoices } from './_lib/invoices.js';
+import { depositAmount, getDepositLinkForAppointment } from './_lib/grow.js';
+import { runDailyBackup } from './_lib/backup.js';
+import { documentLabel, getTaxSettings } from './_lib/taxSettings.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const cronSecret = (process.env.CRON_SECRET || process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
+
+const bitPaymentLink = (process.env.BIT_PAYMENT_LINK || '').trim();
 
 const reminderProviderLabel = (process.env.REMINDER_PROVIDER_LABEL || 'Pawlished').trim();
 
@@ -53,7 +61,7 @@ const sendWhatsAppTextReply = async (to, bodyText) => {
   }
 };
 
-const buildDayBeforeAppointmentText = (reminder) => {
+const buildDayBeforeAppointmentText = (reminder, paymentLink = '') => {
   const appointmentTime = reminder.payload?.time ? `בשעה ${reminder.payload.time}` : '';
   const appointmentDate = reminder.payload?.date ? ` (${reminder.payload.date})` : '';
   const customerLabel = reminder.payload?.customerName || reminder.title;
@@ -64,15 +72,19 @@ const buildDayBeforeAppointmentText = (reminder) => {
   return (
     `היי ${customerLabel}${petLabel} 😊\n` +
     `תזכורת ליום מחר${appointmentDate}: יש לך תור ${providerLabel}${timePart}.` +
-    `\nאם צריך שינוי או ביטול — אפשר פשוט לענות להודעה הזו.`
+    `\nנשמח לאישור הגעה — השיבו *1* לאישור.` +
+    `\nלשינוי או ביטול אפשר לענות להודעה הזו.` +
+    (paymentLink
+      ? `\n\nדמי קביעה וביטול של ₪${depositAmount()} (יקוזזו מהתשלום) — אפשר לשלם בכרטיס או בביט: ${paymentLink}`
+      : '')
   );
 };
 
-const buildReminderText = (reminder) => {
+const buildReminderText = (reminder, paymentLink = '') => {
   if (reminder.source_kind === 'APPOINTMENT') {
     const reminderKind = String(reminder.payload?.reminderKind || '').trim().toUpperCase();
     if (reminderKind === 'DAY_BEFORE') {
-      return buildDayBeforeAppointmentText(reminder);
+      return buildDayBeforeAppointmentText(reminder, paymentLink);
     }
 
     const appointmentTime = reminder.payload?.time ? ` בשעה ${reminder.payload.time}` : '';
@@ -95,7 +107,7 @@ const isAuthorized = (req) => {
   }
 
   const authHeader = String(req.headers.authorization || '');
-  return authHeader === `Bearer ${cronSecret}`;
+  return safeEqual(authHeader, `Bearer ${cronSecret}`);
 };
 
 export default async function handler(req, res) {
@@ -111,12 +123,27 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Stop taking new work before the function time limit (vercel.json maxDuration: 60s);
+    // anything left stays unsent in the DB and is picked up by the next run.
+    const startedAt = Date.now();
+    const timeBudgetMs = 45 * 1000;
+    const hasTimeLeft = () => Date.now() - startedAt < timeBudgetMs;
+
     const dueReminders = await listDueReminders();
     const results = [];
 
     for (const reminder of dueReminders) {
+      if (!hasTimeLeft()) {
+        results.push({ id: reminder.id, sent: false, reason: 'deferred: time budget reached' });
+        continue;
+      }
       try {
-        const text = buildReminderText(reminder);
+        let paymentLink = '';
+        if (reminder.source_kind === 'APPOINTMENT' && reminder.payload?.reminderKind === 'DAY_BEFORE') {
+          // Grow payment link (card/Bit) when configured; otherwise the static Bit link, if any.
+          paymentLink = await getDepositLinkForAppointment(reminder.source_id).catch(() => null) || bitPaymentLink;
+        }
+        const text = buildReminderText(reminder, paymentLink);
         await sendWhatsAppTextReply(reminder.phone, text);
         await logWhatsAppMessage({
           phone: reminder.phone,
@@ -137,10 +164,47 @@ export default async function handler(req, res) {
       }
     }
 
+    const invoices = [];
+    try {
+      const issued = hasTimeLeft() ? await issuePendingInvoices() : [];
+      const docLabel = documentLabel(issued.length > 0 ? await getTaxSettings() : null);
+      for (const doc of issued) {
+        let sent = false;
+        if (doc.phone && doc.url) {
+          const text =
+            `היי ${doc.customerName || ''} 😊 תודה שבחרתם ב${reminderProviderLabel}!\n` +
+            `${docLabel} שלכם${doc.number ? ` (מס' ${doc.number})` : ''}: ${doc.url}`;
+          try {
+            await sendWhatsAppTextReply(doc.phone, text);
+            sent = true;
+          } catch {
+            // invoice exists; delivery can be retried manually
+          }
+        }
+        invoices.push({ appointmentId: doc.appointmentId, number: doc.number, sent });
+      }
+    } catch (invoiceError) {
+      invoices.push({ error: invoiceError?.message || 'Invoice run failed' });
+    }
+
+    // Daily snapshot of the business tables (see api/_lib/backup.js). Never blocks the run.
+    let backup = null;
+    if (hasTimeLeft()) {
+      try {
+        const done = await runDailyBackup();
+        backup = { ok: true, name: done.name, bytes: done.bytes, counts: done.counts, pruned: done.pruned };
+      } catch (backupError) {
+        console.error('[backup] failed', backupError?.message || backupError);
+        backup = { ok: false, error: 'Backup failed, see logs' };
+      }
+    }
+
     res.status(200).json({
       ok: true,
       processed: dueReminders.length,
-      results
+      results,
+      invoices,
+      backup
     });
   } catch (error) {
     res.status(500).json({

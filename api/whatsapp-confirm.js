@@ -1,3 +1,4 @@
+import './_lib/dryRun.js';
 import { requireAdminSession } from './_lib/adminAuth.js';
 
 const normalizeDigits = (value = '') => value.replace(/\D/g, '');
