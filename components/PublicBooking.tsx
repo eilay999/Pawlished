@@ -63,6 +63,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
   const [step, setStep] = useState<BookingStep>('PHONE');
   const [doneKind, setDoneKind] = useState<'BOOKED' | 'CUSTOMER_CREATED' | null>(null);
   const [phone, setPhone] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState('');
   const [otpSessionToken, setOtpSessionToken] = useState('');
@@ -412,6 +413,11 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
     if (!otpSessionToken) {
       setError('נדרש אימות טלפון מחדש לפני קביעת תור.');
       setStep('PHONE');
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setError('יש לאשר את התקנון ומדיניות הביטולים לפני קביעת התור.');
       return;
     }
 
@@ -796,6 +802,23 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                   </div>
                 ))}
               </div>
+              <div className="flex items-start gap-2">
+                <input
+                  id="booking-terms"
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(event) => setAcceptedTerms(event.target.checked)}
+                  aria-required="true"
+                  className="mt-1 h-5 w-5 focus-visible:ring-2 focus-visible:ring-blue-600"
+                />
+                <label htmlFor="booking-terms" className="text-sm text-gray-700">
+                  קראתי ואני מאשר/ת את{' '}
+                  <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="underline text-blue-700">
+                    התקנון ומדיניות הביטולים
+                  </a>{' '}
+                  ואת קבלת הודעות שירות בוואטסאפ/SMS.
+                </label>
+              </div>
               <button
                 onClick={handleConfirmBooking}
                 disabled={isSubmittingBooking}
@@ -850,6 +873,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
         </div>
         <footer className="px-6 pb-6 text-xs text-gray-600 flex gap-4">
           <a href="/accessibility.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">הצהרת נגישות</a>
+          <a href="/terms.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">תקנון וביטולים</a>
           <a href="/privacy-policy.html" className="underline focus-visible:ring-2 focus-visible:ring-blue-600">מדיניות פרטיות</a>
         </footer>
       </div>
