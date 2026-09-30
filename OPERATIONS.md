@@ -105,7 +105,7 @@ To send them automatically, schedule a job to hit `GET /api/reminders-run`:
 ## 7) Arrival confirmation, Bit deposit, automatic invoices
 
 - The day-before reminder asks the customer to reply `1` to confirm (webhook sets `appointments.arrival_confirmed_at`) and, when `BIT_PAYMENT_LINK` is set, asks for the ₪`DEPOSIT_AMOUNT` (default 50) Bit deposit.
-- `/api/reminders-run` also issues invoices for `COMPLETED` appointments with `price > 0` and no invoice yet (`INVOICE_API_URL` / `INVOICE_API_KEY`), then WhatsApps the link to the customer. Failures are stored in `appointments.invoice_error` and retried on the next run.
+- `/api/reminders-run` also issues invoices for `COMPLETED` appointments with `price > 0` and no invoice yet (`INVOICE_API_URL` / `INVOICE_API_KEY`, and `INVOICE_START_DATE` — nothing is issued without a start date, so history is never back-filled), then WhatsApps the link to the customer. Failures are stored in `appointments.invoice_error` and retried on the next run.
 - The provider request/response mapping is in `callInvoiceProvider` (`api/_lib/invoices.js`) and must be aligned with the provider's API docs.
 - Run migration `20260929120000_add_arrival_confirmation_deposit_invoice.sql` (`npm run supabase:push`).
 - The cron must actually run: schedule an external job hitting `/api/reminders-run` every 5-10 minutes with `Authorization: Bearer <CRON_SECRET>`.

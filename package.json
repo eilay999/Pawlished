@@ -25,7 +25,8 @@
     "vercel:env:ls": "node scripts/control.mjs vercel:env:ls",
     "supabase:link": "node scripts/control.mjs supabase:link",
     "supabase:push": "node scripts/control.mjs supabase:push",
-    "supabase:types": "node scripts/control.mjs supabase:types types/supabase.generated.ts"
+    "supabase:types": "node scripts/control.mjs supabase:types types/supabase.generated.ts",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

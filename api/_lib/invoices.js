@@ -6,7 +6,10 @@ import { createClient } from '@supabase/supabase-js';
 // request/response mapping lives in one place (`callInvoiceProvider`). Adjust that
 // function to the provider's API docs; everything else is provider-agnostic.
 //
-// Env: INVOICE_API_URL, INVOICE_API_KEY, INVOICE_DOCUMENT_TYPE (default "receipt").
+// Env: INVOICE_API_URL, INVOICE_API_KEY, INVOICE_DOCUMENT_TYPE (default "receipt"),
+// INVOICE_START_DATE (required, ISO date e.g. 2026-10-15): only appointments on/after this
+// date are invoiced, so switching invoicing on never back-fills (or messages customers about)
+// historical appointments. Without it nothing is issued.
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -15,7 +18,13 @@ const invoiceApiUrl = (process.env.INVOICE_API_URL || '').trim();
 const invoiceApiKey = (process.env.INVOICE_API_KEY || '').trim();
 const invoiceDocumentType = (process.env.INVOICE_DOCUMENT_TYPE || 'receipt').trim();
 
-export const isInvoicingConfigured = () => Boolean(invoiceApiUrl && invoiceApiKey);
+const invoiceStartDate = (() => {
+  const parsed = new Date((process.env.INVOICE_START_DATE || '').trim());
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+})();
+
+export const isInvoicingConfigured = () =>
+  Boolean(invoiceApiUrl && invoiceApiKey && invoiceStartDate);
 
 const getSupabaseClient = () => {
   if (!supabaseUrl || !supabaseServiceKey) {
@@ -69,6 +78,7 @@ export const issuePendingInvoices = async (limit = 20) => {
     .eq('status', 'COMPLETED')
     .is('invoice_issued_at', null)
     .gt('price', 0)
+    .gte('date', invoiceStartDate.toISOString())
     .order('date', { ascending: true })
     .limit(limit);
 

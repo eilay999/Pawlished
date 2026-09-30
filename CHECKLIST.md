@@ -1,15 +1,17 @@
 # צ'קליסט הפעלה — תזכורות, מקדמה, חשבוניות, אבטחה
 
-## א. מסד נתונים (Supabase) — `npm run supabase:push`
-- [ ] `20260929120000_add_arrival_confirmation_deposit_invoice.sql` (אישור הגעה, מקדמה, חשבונית)
-- [ ] `20260930100000_otp_verify_attempts.sql` (הגבלת ניסיונות אימות)
-- [ ] `20260930110000_otp_ip_rate_limit.sql` (הגבלת קצב לפי IP)
+## א. מסד נתונים (Supabase)
+**הורצו על הפרודקשן ב-30.9.2026 (נבדקו):**
+- [x] `20260929120000_add_arrival_confirmation_deposit_invoice.sql` (אישור הגעה, מקדמה, חשבונית)
+- [x] `20260930100000_otp_verify_attempts.sql` (הגבלת ניסיונות אימות)
+- [x] `20260930110000_otp_ip_rate_limit.sql` (הגבלת קצב לפי IP)
 
 ## ב. משתני סביבה (Vercel → Production + Preview)
 - [ ] `WHATSAPP_WEBHOOK_SECRET` + `?secret=...` בכתובת ה-webhook ב-Meta (**חובה** — בלעדיו ה-webhook פתוח)
 - [ ] `CRON_SECRET`, `OTP_SECRET` (32+ תווים), `ADMIN_PHONES`
 - [ ] `BIT_PAYMENT_LINK`, `DEPOSIT_AMOUNT=50`
 - [ ] `INVOICE_API_URL`, `INVOICE_API_KEY` (אחרי שיש ספק)
+- [ ] `INVOICE_START_DATE` (חובה — מתי מתחילים להנפיק; בלי זה לא מונפקת אף חשבונית, כדי לא להנפיק על תורים היסטוריים)
 
 ## ג. תזמון
 - [ ] מתזמן חיצוני (למשל cron-job.org) שקורא כל 5–10 דקות ל-`/api/reminders-run` עם `Authorization: Bearer <CRON_SECRET>`
@@ -33,3 +35,7 @@
 ## ז. אבטחה — פתוח
 - [ ] אימות חתימה של Meta על ה-webhook
 - [ ] Content-Security-Policy (לבדוק ב-Preview)
+
+## ח. הודעות יזומות בוואטסאפ (חשוב)
+- [ ] תזכורות וחשבוניות נשלחות כהודעת טקסט חופשית. וואטסאפ מאפשרת זאת רק בתוך 24 שעות מהודעת הלקוח האחרונה. ללקוח שלא כתב לכם לאחרונה ההודעה תיחסם (שגיאה 131047).
+- [ ] הפתרון: לאשר ב-Meta תבניות הודעה (תזכורת, בקשת מקדמה, חשבונית) ולעבור לשליחה עם תבנית. אחרי שהתבניות מאושרות אעדכן את הקוד.
