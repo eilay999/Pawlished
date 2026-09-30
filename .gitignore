@@ -35,3 +35,8 @@ tmp-*.html
 *.vsix
 WORK_MEMORY.md
 PLAYER_NOTES.md
+
+# local secrets (the repository is public: never commit these)
+.env
+.env.local
+.env.*.local
