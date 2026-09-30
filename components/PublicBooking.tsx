@@ -839,11 +839,11 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({
                               onClick={() => setSelectedSlot({ date: activeDay.date, time: slotTime.time })}
                               className={`py-3 rounded-xl text-base font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                                 isSelected
-                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-rose-400 ring-offset-1'
                                   : 'border-blue-100 text-blue-700 hover:bg-blue-50'
                               }`}
                             >
-                              {slotTime.time}
+                              {isSelected ? `✓ ${slotTime.time}` : slotTime.time}
                             </button>
                           );
                         })}
