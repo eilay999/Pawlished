@@ -25,7 +25,10 @@ export const BACKUP_TABLES = [
   'calendar_events',
   'tasks',
   'business_schedule',
-  'whatsapp_reminders'
+  'whatsapp_reminders',
+  'business_settings',
+  'expenses',
+  'refunds'
 ];
 
 const fileNameFor = (date) => `pawlished-backup-${date.toISOString().slice(0, 10)}.json`;

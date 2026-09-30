@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Download, FileText, Printer } from 'lucide-react';
 import { Appointment, Customer, Dog, TaxSettings } from '../types';
+import { BooksSection, BookkeepingActions } from './BooksSection';
 import {
   availableYears,
   buildPrintableHtml,
@@ -18,6 +19,9 @@ interface ReportsViewProps {
   dogs: Dog[];
   taxSettings: TaxSettings;
   onSaveTaxSettings: (payload: Partial<TaxSettings>) => Promise<void>;
+  expenses: Record<string, unknown>[];
+  refunds: Record<string, unknown>[];
+  bookkeeping: BookkeepingActions;
 }
 
 type RangeKey = 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_YEAR' | 'LAST_12' | 'CUSTOM';
@@ -62,7 +66,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   customers,
   dogs,
   taxSettings,
-  onSaveTaxSettings
+  onSaveTaxSettings,
+  expenses,
+  refunds,
+  bookkeeping
 }) => {
   const now = useMemo(() => new Date(), []);
   const [rangeKey, setRangeKey] = useState<RangeKey>('THIS_MONTH');
@@ -560,6 +567,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             </div>
           )}
         </section>
+
+        <BooksSection
+          appointments={appointments}
+          customers={customers}
+          dogs={dogs}
+          taxSettings={taxSettings}
+          expenses={expenses}
+          refunds={refunds}
+          actions={bookkeeping}
+        />
       </div>
     </div>
   );

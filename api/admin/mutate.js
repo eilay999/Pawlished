@@ -1,6 +1,14 @@
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminSession } from '../_lib/adminAuth.js';
+import {
+  MAX_RECEIPT_BYTES,
+  detectReceiptType,
+  isUuid,
+  safeFileName,
+  validateExpense,
+  validateRefund
+} from '../_lib/expenseValidation.js';
 import { buildSlotDateFromLocal } from '../_lib/appointments.js';
 import { cancelPendingRemindersForSource, createReminder } from '../_lib/reminders.js';
 
@@ -468,6 +476,89 @@ export default async function handler(req, res) {
         .select('key, value');
       if (error) throw createHttpError(500, error.message);
       res.status(200).json({ ok: true, businessSettings: data || [] });
+      return;
+    }
+
+    if (action === 'upsert_expense') {
+      const row = validateExpense(body.expense);
+      const { data, error } = await supabase.from('expenses').upsert(row).select('*').single();
+      if (error || !data) throw createHttpError(500, error?.message || 'Failed to save expense');
+      res.status(200).json({ ok: true, expense: data });
+      return;
+    }
+
+    if (action === 'delete_expense') {
+      const expenseId = String(body.expenseId || '');
+      if (!isUuid(expenseId)) throw createHttpError(400, 'Invalid expenseId');
+      try {
+        const { data: files } = await supabase.storage.from('expense-receipts').list(expenseId);
+        if (files && files.length > 0) {
+          await supabase.storage.from('expense-receipts').remove(files.map((file) => `${expenseId}/${file.name}`));
+        }
+      } catch {
+        // best-effort: a leftover file must not block the delete
+      }
+      const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+      if (error) throw createHttpError(500, error.message);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (action === 'upload_expense_receipt') {
+      const expenseId = String(body.expenseId || '');
+      if (!isUuid(expenseId)) throw createHttpError(400, 'Invalid expenseId');
+      const { data: expenseRow } = await supabase.from('expenses').select('id').eq('id', expenseId).maybeSingle();
+      if (!expenseRow) throw createHttpError(400, 'Save the expense before attaching a receipt');
+
+      const base64 = String(body.dataBase64 || '');
+      if (!base64 || base64.length > Math.ceil((MAX_RECEIPT_BYTES * 4) / 3) + 8) {
+        throw createHttpError(400, 'File is empty or larger than 3MB');
+      }
+      const buffer = Buffer.from(base64, 'base64');
+      if (buffer.length === 0 || buffer.length > MAX_RECEIPT_BYTES) {
+        throw createHttpError(400, 'File is empty or larger than 3MB');
+      }
+      const detected = detectReceiptType(buffer);
+      if (!detected) throw createHttpError(400, 'Only JPG, PNG, WEBP or PDF files are allowed');
+
+      const baseName = safeFileName(String(body.fileName || 'receipt')).replace(/\.[A-Za-z0-9]+$/, '');
+      const path = `${expenseId}/${Date.now()}-${baseName}.${detected.ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('expense-receipts')
+        .upload(path, buffer, { contentType: detected.type, upsert: false });
+      if (uploadError) throw createHttpError(500, uploadError.message);
+
+      const { error: updateError } = await supabase.from('expenses').update({ receipt_path: path }).eq('id', expenseId);
+      if (updateError) throw createHttpError(500, updateError.message);
+      res.status(200).json({ ok: true, receiptPath: path });
+      return;
+    }
+
+    if (action === 'get_expense_receipt_url') {
+      const expenseId = String(body.expenseId || '');
+      if (!isUuid(expenseId)) throw createHttpError(400, 'Invalid expenseId');
+      const { data: expenseRow } = await supabase.from('expenses').select('receipt_path').eq('id', expenseId).maybeSingle();
+      if (!expenseRow?.receipt_path) throw createHttpError(400, 'No receipt attached');
+      const { data, error } = await supabase.storage.from('expense-receipts').createSignedUrl(expenseRow.receipt_path, 120);
+      if (error || !data?.signedUrl) throw createHttpError(500, error?.message || 'Failed to create link');
+      res.status(200).json({ ok: true, url: data.signedUrl });
+      return;
+    }
+
+    if (action === 'upsert_refund') {
+      const row = validateRefund(body.refund);
+      const { data, error } = await supabase.from('refunds').upsert(row).select('*').single();
+      if (error || !data) throw createHttpError(500, error?.message || 'Failed to save refund');
+      res.status(200).json({ ok: true, refund: data });
+      return;
+    }
+
+    if (action === 'delete_refund') {
+      const refundId = String(body.refundId || '');
+      if (!isUuid(refundId)) throw createHttpError(400, 'Invalid refundId');
+      const { error } = await supabase.from('refunds').delete().eq('id', refundId);
+      if (error) throw createHttpError(500, error.message);
+      res.status(200).json({ ok: true });
       return;
     }
 

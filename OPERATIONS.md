@@ -145,3 +145,12 @@ The admin login has a "הישאר מחובר (30 יום)" checkbox. It only exte
 Admin → "דוחות" (REPORTS): income/receipts report by period (this month, last month, this year, last 12 months, custom range), a yearly table by month, "save as PDF" (print view) and CSV export for the accountant, plus the exempt-dealer ceiling indicator (last 12 months vs `exempt_ceiling`, default 120,000, editable; verify the real figure with the accountant).
 
 Tax status lives in `business_settings` (`tax_status` EXEMPT/LICENSED, `vat_rate`, `exempt_ceiling`; migration `20260930130000_add_business_settings.sql`). The "הכן מעבר לעוסק מורשה" button flips it: reports add VAT columns, the invoice request uses `INVOICE_DOCUMENT_TYPE_LICENSED` (default `tax_invoice_receipt`) with `vatIncluded`, and WhatsApp says "החשבונית" instead of "הקבלה". It does NOT change the static legal pages (`public/terms.html`, `public/privacy-policy.html`) or the WhatsApp template wording: those are manual steps listed in the confirmation box. Income = completed treatments (price) + collected cancellation fees; expenses are not tracked yet.
+
+## 15. הנהלת חשבונות לפי שנה (דוחות ← "הנהלת חשבונות לפי שנה")
+
+- טבלאות לפי שנה: סיכום חודשי (הכנסות / החזרים / הוצאות / רווח), הוצאות, החזרים. הכול נשמר במסד (`expenses`, `refunds`).
+- קבלות הוצאה (JPG/PNG/PDF עד 3MB) נשמרות בבאקט פרטי `expense-receipts`; הקישור לצפייה תקף ל־2 דקות. סוג הקובץ נבדק לפי התוכן, לא לפי השם.
+- "ייצוא תיקיית שנה (ZIP)": תיקייה `YYYY/` עם `הכנסות-וקבלות.csv`, `הוצאות.csv`, `החזרים.csv`, `סיכום-חודשי.csv`.
+- Google Drive: אין חיבור אוטומטי. גוררים את התיקייה ל־Drive ← Pawlished פעם בשנה (או בסוף כל רבעון).
+- ההוצאות, ההחזרים והגדרות המס נכללים בגיבוי היומי (קבצי הקבלות עצמם נשארים בבאקט `expense-receipts`, מחוץ ל-JSON).
+- הסיכום הוא כלי עזר. הדוח הרשמי — מרואה החשבון.

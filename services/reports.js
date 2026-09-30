@@ -223,3 +223,149 @@ export const monthlySummary = ({ appointments = [], customers = [], dogs = [], y
   rows.forEach((row) => months[row.date.getMonth()].rows.push(row));
   return months.map(({ month, rows: monthRows }) => ({ month, ...summarizeRows(monthRows) }));
 };
+
+// ---------- Expenses, refunds and yearly profit ----------
+
+export const EXPENSE_CATEGORIES = [
+  'חומרים וציוד טיפוח',
+  'שכירות',
+  'שיווק ופרסום',
+  'תוכנות ומנויים',
+  'עמלות סליקה',
+  'ביטוח',
+  'רכב ונסיעות',
+  'רואה חשבון',
+  'אחר'
+];
+
+// 'YYYY-MM-DD' -> local date at noon (avoids timezone day shifts).
+const dayToDate = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0) : new Date(NaN);
+};
+
+export const normalizeExpense = (row) => ({
+  id: String(row.id),
+  date: dayToDate(row.expense_date ?? row.date),
+  category: row.category || 'אחר',
+  vendor: row.vendor || '',
+  description: row.description || '',
+  amount: round2(row.amount),
+  vatAmount: round2(row.vat_amount ?? row.vatAmount ?? 0),
+  receiptPath: row.receipt_path ?? row.receiptPath ?? '',
+  notes: row.notes || ''
+});
+
+export const normalizeRefund = (row) => ({
+  id: String(row.id),
+  date: dayToDate(row.refund_date ?? row.date),
+  appointmentId: row.appointment_id ?? row.appointmentId ?? '',
+  customerName: row.customer_name ?? row.customerName ?? '',
+  amount: round2(row.amount),
+  reason: row.reason || ''
+});
+
+const inRange = (date, from, to) => {
+  const time = date.getTime();
+  if (Number.isNaN(time)) return false;
+  return time >= (from ? toDate(from).getTime() : -Infinity) && time <= (to ? toDate(to).getTime() : Infinity);
+};
+
+export const buildExpenseRows = ({ expenses = [], from, to }) =>
+  expenses.filter((expense) => inRange(expense.date, from, to)).sort((a, b) => a.date - b.date);
+
+export const buildRefundRows = ({ refunds = [], from, to }) =>
+  refunds.filter((refund) => inRange(refund.date, from, to)).sort((a, b) => a.date - b.date);
+
+export const sumBy = (rows, key) => round2(rows.reduce((sum, row) => sum + Number(row[key] || 0), 0));
+
+// Expense amount that counts against income: for a licensed dealer the input VAT is reclaimed.
+const expenseCost = (expense, tax) =>
+  tax?.taxStatus === TAX_STATUS.LICENSED ? round2(expense.amount - expense.vatAmount) : expense.amount;
+
+// One row per month of a calendar year: income (net of VAT), refunds (net), expenses, profit.
+export const yearlyProfit = ({ appointments = [], customers = [], dogs = [], expenses = [], refunds = [], year, tax }) => {
+  const from = new Date(year, 0, 1, 0, 0, 0, 0);
+  const to = new Date(year, 11, 31, 23, 59, 59, 999);
+  const incomeRows = buildReceiptRows({ appointments, customers, dogs, from, to, tax });
+  const expenseRows = buildExpenseRows({ expenses, from, to });
+  const refundRows = buildRefundRows({ refunds, from, to });
+
+  const months = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    income: 0,
+    refunds: 0,
+    expenses: 0,
+    profit: 0
+  }));
+  incomeRows.forEach((row) => {
+    months[row.date.getMonth()].income = round2(months[row.date.getMonth()].income + row.net);
+  });
+  refundRows.forEach((refund) => {
+    const net = splitVat(refund.amount, tax).net;
+    months[refund.date.getMonth()].refunds = round2(months[refund.date.getMonth()].refunds + net);
+  });
+  expenseRows.forEach((expense) => {
+    months[expense.date.getMonth()].expenses = round2(months[expense.date.getMonth()].expenses + expenseCost(expense, tax));
+  });
+  months.forEach((month) => {
+    month.profit = round2(month.income - month.refunds - month.expenses);
+  });
+
+  const totals = months.reduce(
+    (acc, month) => ({
+      income: round2(acc.income + month.income),
+      refunds: round2(acc.refunds + month.refunds),
+      expenses: round2(acc.expenses + month.expenses),
+      profit: round2(acc.profit + month.profit)
+    }),
+    { income: 0, refunds: 0, expenses: 0, profit: 0 }
+  );
+  return { months, totals };
+};
+
+// Generic CSV (BOM, quoted, spreadsheet-formula safe).
+export const tableToCsv = (header, rows) =>
+  `﻿${[header, ...rows].map((line) => line.map(csvCell).join(',')).join('\r\n')}\r\n`;
+
+export const expensesToCsv = (expenses) =>
+  tableToCsv(
+    ['תאריך', 'קטגוריה', 'ספק', 'תיאור', 'סכום', 'מע"מ', 'קבלה מצורפת', 'הערות'],
+    expenses.map((expense) => [
+      formatDate(expense.date),
+      expense.category,
+      expense.vendor,
+      expense.description,
+      expense.amount.toFixed(2),
+      expense.vatAmount ? expense.vatAmount.toFixed(2) : '',
+      expense.receiptPath ? 'כן' : 'לא',
+      expense.notes
+    ])
+  );
+
+export const refundsToCsv = (refunds) =>
+  tableToCsv(
+    ['תאריך', 'לקוח', 'סכום', 'סיבה'],
+    refunds.map((refund) => [formatDate(refund.date), refund.customerName, refund.amount.toFixed(2), refund.reason])
+  );
+
+export const profitToCsv = (summary, year) =>
+  tableToCsv(
+    [`חודש ${year}`, 'הכנסות', 'החזרים', 'הוצאות', 'רווח'],
+    [
+      ...summary.months.map((month) => [
+        String(month.month),
+        month.income.toFixed(2),
+        month.refunds.toFixed(2),
+        month.expenses.toFixed(2),
+        month.profit.toFixed(2)
+      ]),
+      [
+        'סה"כ',
+        summary.totals.income.toFixed(2),
+        summary.totals.refunds.toFixed(2),
+        summary.totals.expenses.toFixed(2),
+        summary.totals.profit.toFixed(2)
+      ]
+    ]
+  );

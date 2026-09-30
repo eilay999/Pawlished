@@ -435,6 +435,8 @@ const App: React.FC = () => {
   const [whatsappMessages, setWhatsAppMessages] = useState<WhatsAppMessage[]>([]);
   const [whatsappMessagesTableMissing, setWhatsappMessagesTableMissing] = useState(false);
   const [taxSettings, setTaxSettings] = useState<TaxSettings>(DEFAULT_TAX_SETTINGS as TaxSettings);
+  const [expenses, setExpenses] = useState<Record<string, unknown>[]>([]);
+  const [refunds, setRefunds] = useState<Record<string, unknown>[]>([]);
   const [businessSchedule, setBusinessSchedule] = useState<{
     weeklySlots: Record<string, string[]>;
     maxBookingDaysAhead: number;
@@ -623,6 +625,8 @@ const App: React.FC = () => {
     }
 
     setWhatsappMessagesTableMissing(Boolean(payload.whatsappMessagesMissing));
+    if (Array.isArray(payload.expenses)) setExpenses(payload.expenses as Record<string, unknown>[]);
+    if (Array.isArray(payload.refunds)) setRefunds(payload.refunds as Record<string, unknown>[]);
     if (Array.isArray(payload.businessSettings)) {
       setTaxSettings(normalizeTaxSettings(payload.businessSettings) as TaxSettings);
     }
@@ -1563,6 +1567,36 @@ const App: React.FC = () => {
     [adminMutate, adminSessionToken, loadDataFromCloud]
   );
 
+  const bookkeeping = useMemo(
+    () => ({
+      onSaveExpense: async (expense: Record<string, unknown>, file: { name: string; dataBase64: string } | null) => {
+        const saved = await adminMutate({ action: 'upsert_expense', expense });
+        const id = String((saved.expense as { id?: string } | undefined)?.id || expense.id || '');
+        if (file && id) {
+          await adminMutate({ action: 'upload_expense_receipt', expenseId: id, fileName: file.name, dataBase64: file.dataBase64 });
+        }
+        await loadDataFromCloud('manual');
+      },
+      onDeleteExpense: async (expenseId: string) => {
+        await adminMutate({ action: 'delete_expense', expenseId });
+        await loadDataFromCloud('manual');
+      },
+      onSaveRefund: async (refund: Record<string, unknown>) => {
+        await adminMutate({ action: 'upsert_refund', refund });
+        await loadDataFromCloud('manual');
+      },
+      onDeleteRefund: async (refundId: string) => {
+        await adminMutate({ action: 'delete_refund', refundId });
+        await loadDataFromCloud('manual');
+      },
+      onGetReceiptUrl: async (expenseId: string) => {
+        const result = await adminMutate({ action: 'get_expense_receipt_url', expenseId });
+        return String(result.url || '');
+      }
+    }),
+    [adminMutate, loadDataFromCloud]
+  );
+
   if (!adminSessionToken) {
     return (
       <div className="min-h-[100dvh] w-full bg-gradient-to-br from-pink-100 via-pink-50 to-rose-100 text-gray-800 font-sans">
@@ -1690,6 +1724,9 @@ const App: React.FC = () => {
           dogs={dogs}
           taxSettings={taxSettings}
           onSaveTaxSettings={saveTaxSettings}
+          expenses={expenses}
+          refunds={refunds}
+          bookkeeping={bookkeeping}
         />
       ) : currentView === 'SETTINGS' ? (
         <ScheduleSettingsView

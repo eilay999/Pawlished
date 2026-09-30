@@ -123,11 +123,15 @@ export default async function handler(req, res) {
 
     // Optional table (older DBs): tax status etc. Never fails the whole load.
     const settingsRes = await supabase.from('business_settings').select('key, value');
+    const expensesRes = await supabase.from('expenses').select('*').order('expense_date', { ascending: false });
+    const refundsRes = await supabase.from('refunds').select('*').order('refund_date', { ascending: false });
 
     res.status(200).json({
       ok: true,
       serverTime: new Date().toISOString(),
       businessSettings: settingsRes.error ? [] : settingsRes.data || [],
+      expenses: expensesRes.error ? [] : expensesRes.data || [],
+      refunds: refundsRes.error ? [] : refundsRes.data || [],
       customers: customersRes.data || [],
       dogs: dogsMissing ? [] : dogsRes.data || [],
       dogsMissing,
