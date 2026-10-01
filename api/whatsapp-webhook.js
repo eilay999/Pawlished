@@ -1,5 +1,6 @@
 import './_lib/dryRun.js';
 import { safeEqual } from './_lib/safeCompare.js';
+import { getWebhookSecrets, isWebhookSecretValid } from './_lib/webhookAuth.js';
 import {
   createAppointmentFromStructuredInput,
   findCustomerByPhone,
@@ -59,7 +60,7 @@ import handleGrowWebhook from './_lib/growWebhook.js';
 import { confirmArrivalByPhone, isArrivalConfirmationText } from './_lib/arrivalConfirmation.js';
 
 const verifyToken = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
-const webhookSecret = (process.env.WHATSAPP_WEBHOOK_SECRET || '').trim();
+const webhookSecrets = getWebhookSecrets();
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
 const whatsappPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const ownerPhoneNumbers = (process.env.WHATSAPP_OWNER_PHONES || process.env.MANAGER_APPROVAL_PHONES || '')
@@ -1895,13 +1896,12 @@ export default async function handler(req, res) {
   // be treated as proof of origin. Configure the webhook URL in Meta's App Dashboard
   // as `<url>?secret=<WHATSAPP_WEBHOOK_SECRET>` so real deliveries carry it too.
   // Fail closed in production: a missing secret must never mean "accept anything".
-  if (!webhookSecret && process.env.VERCEL_ENV === 'production') {
+  if (webhookSecrets.length === 0 && process.env.VERCEL_ENV === 'production') {
     res.status(401).json({ ok: false, error: 'Webhook secret not configured' });
     return;
   }
-  if (webhookSecret) {
-    const providedSecret = String(getProvidedSecret(req));
-    if (!providedSecret || !safeEqual(providedSecret, webhookSecret)) {
+  if (webhookSecrets.length > 0) {
+    if (!isWebhookSecretValid(getProvidedSecret(req), webhookSecrets)) {
       res.status(401).json({ ok: false, error: 'Unauthorized webhook call' });
       return;
     }
