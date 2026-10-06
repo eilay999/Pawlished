@@ -1,6 +1,7 @@
 import './_lib/dryRun.js';
 import { safeEqual } from './_lib/safeCompare.js';
 import { getWebhookSecrets, isWebhookSecretValid } from './_lib/webhookAuth.js';
+import { forwardToBako, hasBakoSender, parseForwardPhones } from './_lib/bakoForward.js';
 import {
   createAppointmentFromStructuredInput,
   findCustomerByPhone,
@@ -1864,8 +1865,49 @@ const extractIncomingMessage = (body) => {
   };
 };
 
+// The body is read raw (bodyParser off) so a message meant for Bako can be forwarded byte for
+// byte with Meta's signature intact. req.body is rebuilt here for everything else.
+export const config = { api: { bodyParser: false } };
+
+const MAX_BODY_BYTES = 1024 * 1024;
+
+const readRawBody = async (req) => {
+  if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) return Buffer.from(req.body);
+  if (req.body && typeof req.body === 'object') return Buffer.from(JSON.stringify(req.body));
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_BODY_BYTES) throw new Error('payload too large');
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+};
+
+const parseBody = (raw, contentType = '') => {
+  const text = raw.toString('utf8');
+  if (!text) return {};
+  try {
+    if (/application\/x-www-form-urlencoded/i.test(contentType)) return Object.fromEntries(new URLSearchParams(text));
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+};
+
 export default async function handler(req, res) {
   // Payment callbacks from Grow share this function (Hobby plan: max 12 functions).
+  if (req.method === 'POST') {
+    try {
+      req.rawBody = await readRawBody(req);
+      req.body = parseBody(req.rawBody, String(req.headers?.['content-type'] || ''));
+    } catch {
+      res.status(413).json({ ok: false, error: 'Payload too large' });
+      return;
+    }
+  }
+
   if (String(req.query?.source || '') === 'grow') {
     await handleGrowWebhook(req, res);
     return;
@@ -1905,6 +1947,15 @@ export default async function handler(req, res) {
       res.status(401).json({ ok: false, error: 'Unauthorized webhook call' });
       return;
     }
+  }
+
+  // Messages from Bako's users go to Bako untouched (see _lib/bakoForward.js).
+  const bakoPhones = parseForwardPhones(process.env.BAKO_FORWARD_PHONES);
+  if (bakoPhones.size > 0 && hasBakoSender(req.body, bakoPhones)) {
+    const result = await forwardToBako({ raw: req.rawBody, signature: req.headers['x-hub-signature-256'] });
+    if (!result.ok) console.error('[whatsapp-webhook] forward to Bako failed', result.status, result.error || '');
+    res.status(200).json({ ok: true, forwarded: result.ok });
+    return;
   }
 
   // Narrow exception to the kill switch below: a customer replying "1"/"מאשר" to the
