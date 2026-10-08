@@ -128,6 +128,19 @@ The day-before reminder includes a Grow payment link (card/Bit) for the ₪`DEPO
 
 **Not yet validated against a real Grow account**: test in the sandbox (`GROW_BASE_URL=https://sandbox.meshulam.co.il`) and confirm the request encoding, the `data.url` response field and the callback payload (see `api/_lib/grow.js`) before enabling in production. Balance (remaining amount) links are not implemented yet.
 
+### 10b) Online booking: the slot is held until the deposit is paid
+
+When Grow is configured (`isGrowConfigured()`), a booking made on the public page is **not confirmed immediately**:
+
+1. `api/public-booking/create.js` creates the appointment as `PENDING_PAYMENT` (`deposit_requested_at` = start of the hold) and returns a Grow payment link, which the booking page shows right away. The same link is also sent as a message (free-form WhatsApp inside the 24h window, otherwise SMS if Twilio is configured; best effort).
+2. The slot is blocked for `PAYMENT_HOLD_MINUTES` (default 30). If no payment link can be created, the hold is released at once and the customer is told to retry.
+3. When Grow calls the webhook, `confirmHeldAppointment` turns the appointment `SCHEDULED`, creates the day-before reminder and sends the confirmation. Repeated callbacks are harmless.
+4. An unpaid hold is released (status `EXPIRED`, hidden from the admin) lazily: any availability read, booking, profile read or admin data load first runs `expireStaleHolds`; the daily cron is only a safety net (Hobby plan: no frequent crons).
+5. Paid after the release: if the slot is still free the appointment is reinstated; if somebody else took it, it is kept as `CANCELLED` with `deposit_paid_at` set and a note, so it shows up for a refund.
+6. The owner can also tick "deposit paid" in the admin to confirm a pending booking by hand.
+
+Without Grow nothing changes: bookings are confirmed immediately as before. A static `BIT_PAYMENT_LINK` cannot confirm automatically (no callback), so this flow needs Grow. Needs migration `20261008100000_payment_hold_slot_index.sql` (extends the one-appointment-per-timestamp index to held slots). Tests: `tests/payment-hold.test.mjs`.
+
 ## 11) Daily backup
 
 `/api/reminders-run` (daily cron) also writes a JSON snapshot of the business tables (`appointments`, `customers`, `dogs`, ...) to the private Supabase Storage bucket `backups` (`pawlished-backup-YYYY-MM-DD.json`). It keeps the last 30 days plus the first snapshot of each month for a year, and never overwrites a snapshot when appointments and customers are both empty. It is **not off-site**: download a copy now and then, or use Supabase Pro daily backups. The repository is public, so never commit backups. Needs migration `20260930120000_add_backups_bucket.sql` (already applied to production).

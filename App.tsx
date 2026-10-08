@@ -49,6 +49,7 @@ type DbAppointment = {
   cancellation_fee?: number | null;
   arrival_confirmed_at?: string | null;
   deposit_paid_at?: string | null;
+  deposit_requested_at?: string | null;
   deposit_amount?: number | string | null;
   invoice_number?: string | null;
   invoice_url?: string | null;
@@ -144,6 +145,7 @@ const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
   cancellationFee: row.cancellation_fee ?? undefined,
   arrivalConfirmedAt: row.arrival_confirmed_at ? new Date(row.arrival_confirmed_at) : undefined,
   depositPaidAt: row.deposit_paid_at ? new Date(row.deposit_paid_at) : undefined,
+  depositRequestedAt: row.deposit_requested_at ? new Date(row.deposit_requested_at) : undefined,
   depositAmount: row.deposit_amount == null ? undefined : Number(row.deposit_amount),
   invoiceNumber: row.invoice_number ?? undefined,
   invoiceUrl: row.invoice_url ?? undefined,

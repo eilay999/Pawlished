@@ -183,7 +183,7 @@ export default async function handler(req, res) {
         res.status(400).json({ error: 'Invalid phone' });
         return;
       }
-      await sendSmsMessage(smsPhone, `אישור תור: ${date} בשעה ${time}. תודה שקבעת אצלנו.`);
+      await sendSmsMessage(smsPhone, `אישור תור: ${date} בשעה ${time}. דמי קביעה 50 ₪ ינוכו מהתשלום על הטיפול. ביטול או שינוי עד 24 שעות לפני התור – דמי הקביעה יועברו לתור חלופי. ביטול מאוחר יותר או אי-הגעה – לא יוחזרו. פרטים: pawlished.vercel.app/terms.html`);
     } else {
       if (!canUseWhatsApp()) {
         res.status(500).json({

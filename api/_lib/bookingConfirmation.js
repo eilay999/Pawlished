@@ -140,6 +140,53 @@ const sendManagerApprovalRequest = async ({ date, time, customerName, petName, c
   return { requested: true, sent: true, channel: 'sms' };
 };
 
+const canUseWhatsAppFreeform = () => Boolean(whatsappToken && whatsappPhoneId);
+
+const sendWhatsAppText = async (to, bodyText) => {
+  const resp = await fetch(`https://graph.facebook.com/v19.0/${whatsappPhoneId}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${whatsappToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { preview_url: true, body: bodyText } })
+  });
+
+  if (!resp.ok) {
+    const errorBody = await resp.text();
+    throw new Error(`WhatsApp API error: ${errorBody}`);
+  }
+};
+
+// Sent right after an online booking is held: the deposit link plus how long the slot is kept.
+// Best effort by design — the booking page shows the same link, so a failed message never blocks.
+// A free-form WhatsApp text only reaches a customer inside the 24h window; SMS is the fallback.
+export const sendPaymentRequest = async ({ phone, date, time, url, amount, holdMinutes }) => {
+  const text =
+    `קבענו לך תור ל-${date} בשעה ${time}. כדי לאשר אותו יש לשלם דמי קביעה ₪${amount} (יקוזזו מהתשלום על הטיפול): ${url}
+` +
+    `השעה שמורה לך ${holdMinutes} דקות. אם התשלום לא יתקבל, היא תתפנה.`;
+
+  const waPhone = toWhatsAppNumber(phone);
+  const smsPhone = toE164(phone);
+  if (!waPhone || !smsPhone) return { ok: false, error: 'Invalid phone' };
+
+  const order = messagingChannel === 'sms' ? ['sms', 'whatsapp'] : ['whatsapp', 'sms'];
+  let lastError = null;
+  for (const kind of order) {
+    try {
+      if (kind === 'whatsapp' && canUseWhatsAppFreeform()) {
+        await sendWhatsAppText(waPhone, text);
+        return { ok: true, channel: 'whatsapp' };
+      }
+      if (kind === 'sms' && canUseSms()) {
+        await sendSmsMessage(smsPhone, text);
+        return { ok: true, channel: 'sms' };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  return { ok: false, error: lastError?.message || 'No messaging provider configured' };
+};
+
 export const sendBookingConfirmation = async ({
   phone,
   date,
@@ -169,7 +216,7 @@ export const sendBookingConfirmation = async ({
     if (!smsPhone) {
       throw new Error('Invalid phone');
     }
-    await sendSmsMessage(smsPhone, `אישור תור: ${date} בשעה ${time}. תודה שקבעת אצלנו.`);
+    await sendSmsMessage(smsPhone, `אישור תור: ${date} בשעה ${time}. דמי קביעה 50 ₪ ינוכו מהתשלום על הטיפול. ביטול או שינוי עד 24 שעות לפני התור – דמי הקביעה יועברו לתור חלופי. ביטול מאוחר יותר או אי-הגעה – לא יוחזרו. פרטים: pawlished.vercel.app/terms.html`);
   } else {
     if (!canUseWhatsApp()) {
       throw new Error('Missing WHATSAPP_CONFIRM_TEMPLATE or WhatsApp credentials.');

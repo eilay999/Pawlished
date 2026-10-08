@@ -3,6 +3,7 @@ import { safeEqual } from './_lib/safeCompare.js';
 import { listDueReminders, markReminderSent } from './_lib/reminders.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import { issuePendingInvoices } from './_lib/invoices.js';
+import { expireStaleHolds } from './_lib/appointments.js';
 import { depositAmount, getDepositLinkForAppointment } from './_lib/grow.js';
 import { runDailyBackup } from './_lib/backup.js';
 import { documentLabel, getTaxSettings } from './_lib/taxSettings.js';
@@ -128,6 +129,9 @@ export default async function handler(req, res) {
     const startedAt = Date.now();
     const timeBudgetMs = 45 * 1000;
     const hasTimeLeft = () => Date.now() - startedAt < timeBudgetMs;
+
+    // Safety net for the lazy release of unpaid holds (normally done on the next availability read).
+    await expireStaleHolds().catch(() => 0);
 
     const dueReminders = await listDueReminders();
     const results = [];

@@ -97,6 +97,72 @@ export const verifyOtpSessionToken = (token) => {
   };
 };
 
+const deviceTokenTtlDays = Number(process.env.DEVICE_TOKEN_TTL_DAYS || 60);
+
+const signDevicePayload = (payloadBase64Url) =>
+  crypto
+    .createHmac('sha256', otpSecret)
+    .update(`device_token:${payloadBase64Url}`)
+    .digest('base64url');
+
+const assertOtpSecret = () => {
+  if (!otpSecret || Buffer.byteLength(otpSecret, 'utf8') < minOtpSecretBytes) {
+    throw createHttpError(500, 'OTP_SECRET not configured (or too weak)');
+  }
+};
+
+// Long-lived "remember this device" token. Signed under a different domain prefix than the
+// 20-minute session token, so one can never be presented in place of the other.
+export const createDeviceToken = (phone) => {
+  assertOtpSecret();
+
+  const waPhone = toWhatsAppNumber(phone);
+  if (!waPhone) {
+    throw createHttpError(400, 'Invalid phone');
+  }
+
+  const days = Number.isFinite(deviceTokenTtlDays) && deviceTokenTtlDays > 0 ? deviceTokenTtlDays : 60;
+  const payload = { v: 1, kind: 'device', phone: waPhone, exp: Date.now() + days * 24 * 60 * 60 * 1000 };
+  const payloadBase64Url = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  return `${payloadBase64Url}.${signDevicePayload(payloadBase64Url)}`;
+};
+
+export const verifyDeviceToken = (token) => {
+  assertOtpSecret();
+
+  const [payloadBase64Url, signature] = String(token || '').trim().split('.');
+  if (!payloadBase64Url || !signature) {
+    throw createHttpError(401, 'Invalid device token');
+  }
+
+  if (!timingSafeEqualString(signature, signDevicePayload(payloadBase64Url))) {
+    throw createHttpError(401, 'Invalid device token');
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(payloadBase64Url, 'base64url').toString('utf8'));
+  } catch {
+    throw createHttpError(401, 'Invalid device token');
+  }
+
+  if (
+    !payload ||
+    payload.v !== 1 ||
+    payload.kind !== 'device' ||
+    typeof payload.phone !== 'string' ||
+    typeof payload.exp !== 'number'
+  ) {
+    throw createHttpError(401, 'Invalid device token');
+  }
+
+  if (Date.now() > payload.exp) {
+    throw createHttpError(401, 'Device token expired');
+  }
+
+  return { phone: payload.phone, expiresAt: payload.exp };
+};
+
 export const getOtpTokenFromRequest = (req) => {
   const headerToken =
     (req?.headers?.['x-otp-token'] || req?.headers?.['x-otp-token'.toLowerCase()]) ??

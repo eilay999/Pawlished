@@ -329,6 +329,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   const STATUS_LABELS: Record<string, string> = {
       [AppointmentStatus.SCHEDULED]: 'נקבע',
+      [AppointmentStatus.PENDING_PAYMENT]: 'ממתין לתשלום',
       [AppointmentStatus.COMPLETED]: 'בוצע',
       [AppointmentStatus.CANCELLED]: 'בוטל',
       [AppointmentStatus.LATE]: 'לא הגיע'
@@ -541,6 +542,15 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 <span className={`px-2 py-1 rounded-full border ${appointment.arrivalConfirmedAt ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-white text-gray-600 border-gray-200'}`}>
                   {appointment.arrivalConfirmedAt ? 'הגעה אושרה ✓' : 'הגעה לא אושרה'}
                 </span>
+                {appointment.status === AppointmentStatus.PENDING_PAYMENT && (
+                  <span className="px-2 py-1 rounded-full border bg-amber-50 text-amber-800 border-amber-300">
+                    ⏳ ממתין לתשלום
+                    {appointment.depositRequestedAt
+                      ? ` מאז ${appointment.depositRequestedAt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`
+                      : ''}
+                    {' · '}השעה נשמרת לחצי שעה ואז מתפנה
+                  </span>
+                )}
                 <span className={`px-2 py-1 rounded-full border ${appointment.depositPaidAt ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
                   {appointment.depositPaidAt ? 'מקדמה שולמה ✓' : 'מקדמה לא שולמה'}
                 </span>

@@ -1,6 +1,7 @@
 
 export enum AppointmentStatus {
   SCHEDULED = 'SCHEDULED',
+  PENDING_PAYMENT = 'PENDING_PAYMENT', // online booking holding its slot until the deposit is paid
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
   LATE = 'LATE'
@@ -33,6 +34,7 @@ export interface Appointment {
   cancellationFee?: number;
   arrivalConfirmedAt?: Date;
   depositPaidAt?: Date;
+  depositRequestedAt?: Date;
   depositAmount?: number;
   invoiceNumber?: string;
   invoiceUrl?: string;

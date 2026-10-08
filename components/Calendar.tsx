@@ -512,6 +512,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                   const customer = customers.find((item) => item.id === appointment.customerId);
                   const isCancelled = appointment.status === 'CANCELLED';
                   const isCompleted = appointment.status === 'COMPLETED';
+                  const isPendingPayment = appointment.status === 'PENDING_PAYMENT';
                   const timeLabel = appointment.date.toLocaleTimeString('he-IL', {
                     hour: '2-digit',
                     minute: '2-digit'
@@ -520,7 +521,9 @@ export const Calendar: React.FC<CalendarProps> = ({
                     ? 'bg-gray-100 border-gray-200 text-gray-400 line-through'
                     : isCompleted
                       ? 'bg-green-50 border-green-200 text-green-700'
-                      : 'bg-blue-50 border-blue-200 text-blue-700';
+                      : isPendingPayment
+                        ? 'bg-amber-50 border-amber-300 border-dashed text-amber-800'
+                        : 'bg-blue-50 border-blue-200 text-blue-700';
                   const fullNameLabel = customer ? customer.name : 'לקוח לא ידוע';
                   const shortNameLabel = fullNameLabel.split(' ')[0] || fullNameLabel;
 
@@ -535,7 +538,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                         onAppointmentClick(appointment);
                       }}
                       className={`calendar-event flex items-center gap-1 h-4 sm:h-[18px] text-[9px] sm:text-[10px] leading-[1.15] px-1 sm:px-1.5 rounded-md truncate border transition-colors cursor-grab active:cursor-grabbing shadow-sm hover:brightness-95 select-none font-semibold tracking-[-0.01em] ${statusClasses}`}
-                      title={`${timeLabel} - ${fullNameLabel}`}
+                      title={`${timeLabel} - ${fullNameLabel}${isPendingPayment ? ' (ממתין לתשלום)' : ''}`}
                     >
                       <span
                         className="hidden sm:flex items-center text-[9px] text-gray-500 pr-1 cursor-grab active:cursor-grabbing select-none"
