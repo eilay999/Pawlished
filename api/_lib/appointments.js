@@ -1009,6 +1009,14 @@ const scheduleDayBeforeReminder = async ({ appointmentId, phone, customerName, p
 };
 
 // The appointment, only if it belongs to the verified phone's own customer card.
+// Used before sending a reminder: only a still-scheduled appointment deserves one.
+export const isAppointmentScheduled = async (appointmentId) => {
+  if (!appointmentId) return false;
+  const supabase = getSupabaseClient();
+  const { data } = await supabase.from('appointments').select('status').eq('id', appointmentId).maybeSingle();
+  return data?.status === 'SCHEDULED';
+};
+
 export const getAppointmentForPhone = async (phone, appointmentId) => {
   const supabase = getSupabaseClient();
   const customerRow = await findCustomerRowByPhone(supabase, phone);

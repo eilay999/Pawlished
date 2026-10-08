@@ -19,6 +19,7 @@ import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './consta
 import { applyTheme, loadTheme } from './theme';
 import { normalizePhoneForCompare } from './utils';
 import { HomeDashboard } from './components/HomeDashboard';
+import { AdminErrorBoundary } from './components/AdminErrorBoundary';
 import { DogCardModal } from './components/DogCardModal';
 import { GroomingRecordModal } from './components/GroomingRecordModal';
 import { WhatsAppQuickSendModal } from './components/WhatsAppQuickSendModal';
@@ -1676,6 +1677,7 @@ const App: React.FC = () => {
 
       {/* Center Content */}
       <main className="flex-1 min-w-0 min-h-0 flex flex-col relative h-full overflow-hidden pb-16 md:pb-0">
+        <AdminErrorBoundary resetKey={currentView} label={currentView}>
         {currentView === 'HOME' ? (
           <HomeDashboard
             appointments={appointments}
@@ -1752,19 +1754,22 @@ const App: React.FC = () => {
             onDeleteTask={handleDeleteTask}
           />
         )}
+        </AdminErrorBoundary>
       </main>
 
       {/* Notifications Panel - Only visible on Large screens to avoid squashing the calendar */}
       {currentView === 'CALENDAR' && (
-        <NotificationsPanel
-          appointments={appointments}
-          customers={customers}
-          dogs={dogs}
-          onAppointmentCreate={handleSaveAppointment}
-          onCreateNewCustomer={handleAddCustomer}
-          onCustomerClick={handleEditCustomer}
-          onAppointmentUpdate={handleSaveAppointment}
-        />
+        <AdminErrorBoundary label="notifications" silent>
+          <NotificationsPanel
+            appointments={appointments}
+            customers={customers}
+            dogs={dogs}
+            onAppointmentCreate={handleSaveAppointment}
+            onCreateNewCustomer={handleAddCustomer}
+            onCustomerClick={handleEditCustomer}
+            onAppointmentUpdate={handleSaveAppointment}
+          />
+        </AdminErrorBoundary>
       )}
 
       {currentView === 'CALENDAR' && dayPanelDate && (

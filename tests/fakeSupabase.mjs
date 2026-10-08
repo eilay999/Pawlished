@@ -17,6 +17,7 @@ export const createFakeSupabase = (tables = {}) => {
     let wantCount = false;
     let single = null;
     let order = null;
+    let offset = 0;
 
     const matches = (row) => filters.every((f) => f(row));
     const builder = {
@@ -46,6 +47,7 @@ export const createFakeSupabase = (tables = {}) => {
       contains(col, obj) { filters.push((r) => Object.entries(obj).every(([k, v]) => r[col]?.[k] === v)); return builder; },
       order(col, opts) { order = { col, asc: opts?.ascending !== false }; return builder; },
       limit(n) { limit = n; return builder; },
+      range(from, to) { offset = from; limit = to - from + 1; return builder; },
       maybeSingle() { single = 'maybe'; return builder; },
       single() { single = 'one'; return builder; },
       then(resolve, reject) {
@@ -69,7 +71,7 @@ export const createFakeSupabase = (tables = {}) => {
       }
       if (order) rows = [...rows].sort((a, b) => (a[order.col] > b[order.col] ? 1 : -1) * (order.asc ? 1 : -1));
       const total = rows.length;
-      rows = rows.slice(0, limit).map((row) => ({ ...row }));
+      rows = rows.slice(offset, offset + limit).map((row) => ({ ...row }));
       if (head) return { data: null, error: null, count: total };
       const count = wantCount ? total : null;
       if (single === 'maybe') return { data: rows[0] ?? null, error: null, count };

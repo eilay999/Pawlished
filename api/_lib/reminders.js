@@ -90,6 +90,18 @@ export const createReminder = async ({
   return data;
 };
 
+const israelDate = (value = new Date()) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(value);
+
+// A "tomorrow" reminder is only true while its appointment is still in the future. After the cron
+// had been broken for months, one run sent 20 of them for appointments in May.
+export const isStaleDayBeforeReminder = (reminder, now = new Date()) => {
+  if (reminder?.source_kind !== 'APPOINTMENT' || reminder?.payload?.reminderKind !== 'DAY_BEFORE') return false;
+  const appointmentDate = String(reminder.payload?.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)) return false;
+  return appointmentDate <= israelDate(now);
+};
+
 export const listDueReminders = async (limit = 50) => {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
