@@ -26,6 +26,12 @@ export const depositAmount = () => {
   return Number.isFinite(value) && value > 0 ? value : 50;
 };
 
+// How long an unpaid online booking keeps its slot before it is released.
+export const paymentHoldMinutes = () => {
+  const value = Number(process.env.PAYMENT_HOLD_MINUTES || 30);
+  return Number.isFinite(value) && value >= 1 ? value : 30;
+};
+
 export const isGrowConfigured = () =>
   Boolean(growUserId && growPageCode && notifySecret && publicBaseUrl.startsWith('https://'));
 
@@ -121,10 +127,18 @@ export const getDepositLinkForAppointment = async (appointmentId) => {
   const supabase = getSupabaseClient();
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('id, customer_id, status, deposit_paid_at')
+    .select('id, customer_id, status, deposit_paid_at, deposit_requested_at')
     .eq('id', appointmentId)
     .maybeSingle();
-  if (!appointment || appointment.status !== 'SCHEDULED' || appointment.deposit_paid_at) return null;
+  if (!appointment || appointment.deposit_paid_at) return null;
+
+  const isHeld = appointment.status === 'PENDING_PAYMENT';
+  if (!isHeld && appointment.status !== 'SCHEDULED') return null;
+  if (isHeld) {
+    // A hold is only payable while it is alive; the slot may already belong to someone else.
+    const holdEndsAt = new Date(appointment.deposit_requested_at || 0).getTime() + paymentHoldMinutes() * 60 * 1000;
+    if (!(holdEndsAt > Date.now())) return null;
+  }
 
   const { data: customer } = await supabase
     .from('customers')
@@ -142,9 +156,11 @@ export const getDepositLinkForAppointment = async (appointmentId) => {
     phone: customer?.phone
   });
 
+  // For a held appointment deposit_requested_at is the start of the hold: never move it, or a
+  // customer could keep a slot forever by asking for new links.
   await supabase
     .from('appointments')
-    .update({ deposit_amount: sum, deposit_requested_at: new Date().toISOString() })
+    .update(isHeld ? { deposit_amount: sum } : { deposit_amount: sum, deposit_requested_at: new Date().toISOString() })
     .eq('id', appointmentId);
 
   return url;

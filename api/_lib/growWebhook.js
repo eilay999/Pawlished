@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { confirmHeldAppointment } from './appointments.js';
+import { sendBookingConfirmation } from './bookingConfirmation.js';
 import {
   approveGrowTransaction,
   depositAmount,
@@ -55,6 +57,30 @@ export default async function handleGrowWebhook(req, res) {
         .eq('id', appointmentId)
         .is('deposit_paid_at', null);
       if (error) throw new Error('Failed to record deposit');
+
+      // A paid deposit confirms a held booking. Safe to repeat: Grow may call this more than once.
+      const confirmed = await confirmHeldAppointment(appointmentId);
+      if (confirmed.outcome === 'confirmed' || confirmed.outcome === 'reinstated') {
+        const customer = confirmed.customer;
+        if (customer?.phone) {
+          const { count } = await supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .eq('customer_id', customer.id)
+            .in('status', ['SCHEDULED', 'COMPLETED']);
+          await sendBookingConfirmation({
+            phone: customer.phone,
+            date: confirmed.slotLocalDate,
+            time: confirmed.slotLocalTime,
+            requestManagerApproval: (count || 0) <= 1,
+            customerName: customer.name,
+            petName: confirmed.dog?.name || customer.pet_name,
+            customerPhone: customer.phone
+          }).catch((err) => console.error('[grow-webhook] confirmation message failed', err?.message || err));
+        }
+      } else if (confirmed.outcome === 'conflict') {
+        console.error('[grow-webhook] deposit paid after the hold was released and the slot is taken', appointmentId);
+      }
     } else {
       res.status(400).json({ ok: false, error: 'Unsupported kind' });
       return;

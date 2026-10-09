@@ -12,6 +12,7 @@ interface HomeDashboardProps {
 
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
   [AppointmentStatus.SCHEDULED]: 'נקבע',
+  [AppointmentStatus.PENDING_PAYMENT]: 'ממתין לתשלום',
   [AppointmentStatus.COMPLETED]: 'הסתיים',
   [AppointmentStatus.CANCELLED]: 'בוטל',
   [AppointmentStatus.LATE]: 'באיחור',

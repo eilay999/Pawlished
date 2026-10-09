@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createReminder } from './reminders.js';
+import { depositAmount, paymentHoldMinutes } from './grow.js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 const DEFAULT_SERVICE = 'תספורת';
@@ -321,6 +322,7 @@ export const listAppointmentsForLocalDate = async (
   timeZone = ISRAEL_TIME_ZONE
 ) => {
   const supabase = getSupabaseClient();
+  await expireStaleHolds(supabase);
   const normalizedDate = normalizeDateString(dateValue);
   const nextDate = addDaysToDateString(normalizedDate, 1);
   const start = buildSlotDateFromLocal(normalizedDate, '00:00', timeZone).toISOString();
@@ -332,6 +334,7 @@ export const listAppointmentsForLocalDate = async (
     .gte('date', start)
     .lt('date', end)
     .neq('status', 'CANCELLED')
+    .neq('status', 'EXPIRED')
     .order('date', { ascending: true });
 
   if (error) {
@@ -387,12 +390,15 @@ export const listAppointmentsForIsoRange = async (
     throw createHttpError(400, 'Missing date range for appointments query');
   }
 
+  await expireStaleHolds(supabase);
+
   const { data, error } = await supabase
     .from('appointments')
     .select('id, date, status')
     .gte('date', start)
     .lt('date', end)
     .neq('status', 'CANCELLED')
+    .neq('status', 'EXPIRED')
     .order('date', { ascending: true });
 
   if (error) {
@@ -465,6 +471,7 @@ const buildDayBoundsFromSlot = (slotDateIso) => {
 };
 
 const ensureSlotAvailable = async (supabase, slotDateIso) => {
+  await expireStaleHolds(supabase);
   const targetEndIso = addMinutes(slotDateIso, APPOINTMENT_DURATION_MINUTES).toISOString();
   const bounds = buildDayBoundsFromSlot(slotDateIso);
 
@@ -474,6 +481,7 @@ const ensureSlotAvailable = async (supabase, slotDateIso) => {
     .gte('date', bounds.start)
     .lt('date', bounds.end)
     .neq('status', 'CANCELLED')
+    .neq('status', 'EXPIRED')
     .order('date', { ascending: true });
 
   if (error) {
@@ -584,13 +592,14 @@ export const findCustomerByPhone = async (phone) => {
 // How many future, still-scheduled appointments this phone already holds (anti slot-hoarding).
 export const countUpcomingScheduledForPhone = async (phone) => {
   const supabase = getSupabaseClient();
+  await expireStaleHolds(supabase);
   const customerRow = await findCustomerRowByPhone(supabase, phone);
   if (!customerRow) return 0;
   const { count, error } = await supabase
     .from('appointments')
     .select('id', { count: 'exact', head: true })
     .eq('customer_id', customerRow.id)
-    .eq('status', 'SCHEDULED')
+    .in('status', ['SCHEDULED', 'PENDING_PAYMENT'])
     .gte('date', new Date().toISOString());
   if (error) throw createHttpError(500, 'Failed to check existing appointments');
   return count || 0;
@@ -772,18 +781,340 @@ const createCustomerRecord = async (
   });
 };
 
+const mapDogResponse = (row) => ({
+  id: row.id,
+  customerId: row.customer_id,
+  name: row.name,
+  breed: row.breed ?? '',
+  sex: row.sex ?? '',
+  allergies: row.allergies ?? '',
+  notes: row.notes ?? ''
+});
+
+const DOG_COLUMNS = 'id, customer_id, name, breed, sex, allergies, notes';
+
+const trimTo = (value, max) => String(value ?? '').trim().slice(0, max);
+
+const cleanDogInput = (input = {}, { requireName = true } = {}) => {
+  const name = trimTo(input?.name, 40);
+  if (requireName && !name) {
+    throw createHttpError(400, 'חסר שם כלב.');
+  }
+
+  const sex = String(input?.sex || '').toUpperCase();
+  return {
+    name,
+    breed: trimTo(input?.breed, 60) || null,
+    sex: sex === 'MALE' || sex === 'FEMALE' ? sex : null,
+    allergies: trimTo(input?.allergies, 300) || null,
+    notes: trimTo(input?.notes, 500) || null
+  };
+};
+
+const listDogsForCustomer = async (supabase, customerId) => {
+  const { data, error } = await supabase
+    .from('dogs')
+    .select(DOG_COLUMNS)
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw createHttpError(500, `Failed to load dogs: ${error.message}`);
+  }
+
+  return data || [];
+};
+
+const loadDogForCustomer = async (supabase, customerId, dogId) => {
+  const { data, error } = await supabase
+    .from('dogs')
+    .select(DOG_COLUMNS)
+    .eq('id', String(dogId || ''))
+    .eq('customer_id', customerId)
+    .maybeSingle();
+
+  if (error) {
+    throw createHttpError(500, `Failed to load dog: ${error.message}`);
+  }
+  if (!data) {
+    throw createHttpError(404, 'הכלב שנבחר לא נמצא בכרטיס שלך.');
+  }
+
+  return data;
+};
+
+const insertDogRow = async (supabase, customerId, input) => {
+  const clean = cleanDogInput(input);
+  const { data, error } = await supabase
+    .from('dogs')
+    .insert({ id: crypto.randomUUID(), customer_id: customerId, ...clean })
+    .select(DOG_COLUMNS)
+    .single();
+
+  if (error || !data) {
+    throw createHttpError(500, error?.message || 'Failed to create dog');
+  }
+
+  return data;
+};
+
+export const addDogForPhone = async (phone, dogInput) => {
+  const supabase = getSupabaseClient();
+  const customerRow = await findCustomerRowByPhone(supabase, phone);
+  if (!customerRow) {
+    throw createHttpError(404, 'לא נמצא כרטיס לקוח למספר הזה.');
+  }
+  return mapDogResponse(await insertDogRow(supabase, customerRow.id, dogInput));
+};
+
+export const updateDogForPhone = async (phone, dogId, dogInput) => {
+  const supabase = getSupabaseClient();
+  const customerRow = await findCustomerRowByPhone(supabase, phone);
+  if (!customerRow) {
+    throw createHttpError(404, 'לא נמצא כרטיס לקוח למספר הזה.');
+  }
+
+  await loadDogForCustomer(supabase, customerRow.id, dogId);
+  const clean = cleanDogInput(dogInput);
+  const { data, error } = await supabase
+    .from('dogs')
+    .update({ ...clean, updated_at: new Date().toISOString() })
+    .eq('id', dogId)
+    .eq('customer_id', customerRow.id)
+    .select(DOG_COLUMNS)
+    .single();
+
+  if (error || !data) {
+    throw createHttpError(500, error?.message || 'Failed to update dog');
+  }
+
+  return mapDogResponse(data);
+};
+
+export const getCustomerProfileByPhone = async (phone) => {
+  const supabase = getSupabaseClient();
+  const customerRow = await findCustomerRowByPhone(supabase, phone);
+  if (!customerRow) return null;
+
+  await expireStaleHolds(supabase);
+  const dogRows = await listDogsForCustomer(supabase, customerRow.id);
+  const dogNameById = new Map(dogRows.map((row) => [row.id, row.name]));
+
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('id, date, dog_id, status, deposit_requested_at')
+    .eq('customer_id', customerRow.id)
+    .in('status', ['SCHEDULED', 'PENDING_PAYMENT'])
+    .gte('date', new Date().toISOString())
+    .order('date', { ascending: true })
+    .limit(10);
+
+  if (error) {
+    throw createHttpError(500, `Failed to load appointments: ${error.message}`);
+  }
+
+  return {
+    customer: { id: customerRow.id, name: customerRow.name },
+    dogs: dogRows.map(mapDogResponse),
+    upcomingAppointments: (data || []).map((row) => ({
+      id: row.id,
+      date: row.date,
+      localDate: toLocalDateLabel(row.date),
+      localTime: toLocalTimeLabel(row.date),
+      dogId: row.dog_id ?? null,
+      dogName: row.dog_id ? dogNameById.get(row.dog_id) ?? null : null,
+      status: row.status,
+      holdExpiresAt: row.status === 'PENDING_PAYMENT' ? holdExpiryIso(row.deposit_requested_at) : null
+    }))
+  };
+};
+
+// ---- Payment holds ---------------------------------------------------------------------------
+// An online booking can be held as PENDING_PAYMENT until the deposit is paid. The hold blocks the
+// slot for PAYMENT_HOLD_MINUTES, then it is released (status EXPIRED) the next time anything
+// looks at availability. Vercel Hobby only allows daily crons, so release happens lazily on read.
+export const PAYMENT_HOLD_MINUTES = paymentHoldMinutes();
+
+export const holdExpiryIso = (requestedAt) => {
+  const start = new Date(requestedAt || 0).getTime();
+  return Number.isFinite(start) && start > 0
+    ? new Date(start + PAYMENT_HOLD_MINUTES * 60 * 1000).toISOString()
+    : null;
+};
+
+export const expireStaleHolds = async (supabase = getSupabaseClient()) => {
+  const cutoff = new Date(Date.now() - PAYMENT_HOLD_MINUTES * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('id')
+    .eq('status', 'PENDING_PAYMENT')
+    .is('deposit_paid_at', null)
+    .lt('deposit_requested_at', cutoff);
+  if (error) return 0;
+
+  const ids = (data || []).map((row) => row.id);
+  if (ids.length === 0) return 0;
+
+  // Conditional update: a payment that lands in the same instant wins (deposit_paid_at is set).
+  const { error: updateError } = await supabase
+    .from('appointments')
+    .update({ status: 'EXPIRED', updated_at: new Date().toISOString() })
+    .in('id', ids)
+    .eq('status', 'PENDING_PAYMENT')
+    .is('deposit_paid_at', null);
+  return updateError ? 0 : ids.length;
+};
+
+// Gives a held slot back right away (e.g. the payment link could not be created).
+export const releaseHold = async (appointmentId) => {
+  const supabase = getSupabaseClient();
+  await supabase
+    .from('appointments')
+    .update({ status: 'EXPIRED', updated_at: new Date().toISOString() })
+    .eq('id', appointmentId)
+    .eq('status', 'PENDING_PAYMENT')
+    .is('deposit_paid_at', null);
+};
+
+const scheduleDayBeforeReminder = async ({ appointmentId, phone, customerName, petName, slotLocalDate, slotLocalTime }) => {
+  try {
+    const reminderPhone = toWhatsAppNumber(phone || '');
+    if (!reminderPhone) return;
+
+    const remindLocalDate = addDaysToDateString(slotLocalDate, -1);
+    const computedRemindAt = buildSlotDateFromLocal(remindLocalDate, reminderDayBeforeTime);
+    const now = Date.now();
+    const remindAt =
+      computedRemindAt instanceof Date && computedRemindAt.getTime() > now
+        ? computedRemindAt
+        : new Date(now + 60 * 1000);
+
+    await createReminder({
+      sourceKind: 'APPOINTMENT',
+      sourceId: appointmentId,
+      phone: reminderPhone,
+      title: String(customerName || 'תור').trim() || 'תור',
+      remindAt,
+      payload: {
+        reminderKind: 'DAY_BEFORE',
+        customerName: customerName || '',
+        petName: petName || '',
+        date: slotLocalDate,
+        time: slotLocalTime
+      }
+    });
+  } catch {
+    // Reminder scheduling is best-effort; the appointment itself must still succeed.
+  }
+};
+
+// The appointment, only if it belongs to the verified phone's own customer card.
+// Used before sending a reminder: only a still-scheduled appointment deserves one.
+export const isAppointmentScheduled = async (appointmentId) => {
+  if (!appointmentId) return false;
+  const supabase = getSupabaseClient();
+  const { data } = await supabase.from('appointments').select('status').eq('id', appointmentId).maybeSingle();
+  return data?.status === 'SCHEDULED';
+};
+
+export const getAppointmentForPhone = async (phone, appointmentId) => {
+  const supabase = getSupabaseClient();
+  const customerRow = await findCustomerRowByPhone(supabase, phone);
+  if (!customerRow || !appointmentId) return null;
+  const { data } = await supabase
+    .from('appointments')
+    .select('*')
+    .eq('id', String(appointmentId))
+    .eq('customer_id', customerRow.id)
+    .maybeSingle();
+  return data || null;
+};
+
+// Called once the deposit is recorded as paid (Grow callback, or the owner ticking it by hand).
+// confirmed  – the hold was still alive, the appointment is now SCHEDULED
+// reinstated – the hold had been released but the slot was still free, so it is SCHEDULED again
+// conflict   – paid too late and somebody else took the slot: kept as CANCELLED so it shows up for a refund
+// already    – nothing to do (already scheduled/completed, or not a held appointment)
+export const confirmHeldAppointment = async (appointmentId) => {
+  const supabase = getSupabaseClient();
+  const { data: row } = await supabase.from('appointments').select('*').eq('id', appointmentId).maybeSingle();
+  if (!row) return { outcome: 'missing' };
+
+  const finish = async (outcome) => {
+    const { data: customerRow } = await supabase
+      .from('customers')
+      .select('id, name, phone, pet_name')
+      .eq('id', row.customer_id)
+      .maybeSingle();
+    const dogRow = row.dog_id
+      ? (await supabase.from('dogs').select(DOG_COLUMNS).eq('id', row.dog_id).maybeSingle()).data
+      : null;
+    const slotLocalDate = toLocalDateLabel(row.date);
+    const slotLocalTime = toLocalTimeLabel(row.date);
+    await scheduleDayBeforeReminder({
+      appointmentId: row.id,
+      phone: customerRow?.phone || '',
+      customerName: customerRow?.name || '',
+      petName: dogRow?.name || customerRow?.pet_name || '',
+      slotLocalDate,
+      slotLocalTime
+    });
+    return { outcome, appointment: row, customer: customerRow, dog: dogRow, slotLocalDate, slotLocalTime };
+  };
+
+  if (row.status === 'PENDING_PAYMENT') {
+    const { data: updated, error } = await supabase
+      .from('appointments')
+      .update({ status: 'SCHEDULED', updated_at: new Date().toISOString() })
+      .eq('id', row.id)
+      .eq('status', 'PENDING_PAYMENT')
+      .select('id');
+    if (error) return { outcome: 'conflict', appointment: row };
+    if (!updated || updated.length === 0) return { outcome: 'already', appointment: row };
+    return finish('confirmed');
+  }
+
+  if (row.status === 'EXPIRED') {
+    const slotFree = await ensureSlotAvailable(supabase, new Date(row.date).toISOString());
+    if (slotFree) {
+      const { data: updated, error } = await supabase
+        .from('appointments')
+        .update({ status: 'SCHEDULED', updated_at: new Date().toISOString() })
+        .eq('id', row.id)
+        .eq('status', 'EXPIRED')
+        .select('id');
+      if (!error && updated && updated.length > 0) return finish('reinstated');
+    }
+    await supabase
+      .from('appointments')
+      .update({
+        status: 'CANCELLED',
+        notes: 'שולמו דמי קביעה אחרי שהשעה שוחררה והיא כבר נתפסה – נדרש החזר או תיאום תור חדש.',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', row.id)
+      .eq('status', 'EXPIRED');
+    return { outcome: 'conflict', appointment: row };
+  }
+
+  return { outcome: 'already', appointment: row };
+};
+
 export const createAppointmentRecord = async ({
   phone,
   slotDate,
   existingCustomerId,
   customer,
   customerName,
+  dogId,
+  newDog,
   service,
   notes,
   price,
   visitFrequencyWeeks,
   allowNewCustomerDefaults = false,
-  phoneOnly = false
+  phoneOnly = false,
+  holdForPayment = false
 }) => {
   const supabase = getSupabaseClient();
   const parsedSlotDate = slotDate instanceof Date ? slotDate : new Date(slotDate);
@@ -846,6 +1177,11 @@ export const createAppointmentRecord = async ({
     phoneOnly
   });
   let createdCustomer = false;
+  let dogRow = null;
+
+  if (customerRow && dogId) {
+    dogRow = await loadDogForCustomer(supabase, customerRow.id, dogId);
+  }
 
   if (!customerRow) {
     const hasNewCustomerBasics = Boolean(
@@ -875,6 +1211,11 @@ export const createAppointmentRecord = async ({
       visitFrequencyWeeks
     });
     createdCustomer = true;
+    dogRow = await insertDogRow(supabase, customerRow.id, {
+      breed: customer?.petType,
+      ...(newDog || {}),
+      name: newDog?.name || customer?.petName
+    });
   } else if (customerRow.lifecycle_status === 'ON_HOLD') {
     const { data, error } = await supabase
       .from('customers')
@@ -888,6 +1229,15 @@ export const createAppointmentRecord = async ({
     }
 
     customerRow = data;
+  }
+
+  if (!dogRow && !createdCustomer) {
+    if (newDog?.name) {
+      dogRow = await insertDogRow(supabase, customerRow.id, newDog);
+    } else {
+      const existingDogs = await listDogsForCustomer(supabase, customerRow.id);
+      if (existingDogs.length === 1) dogRow = existingDogs[0];
+    }
   }
 
   const slotStillAvailable = await ensureSlotAvailable(supabase, slotDateIso);
@@ -912,11 +1262,13 @@ export const createAppointmentRecord = async ({
     .insert({
       id: crypto.randomUUID(),
       customer_id: customerRow.id,
+      dog_id: dogRow?.id ?? null,
       date: slotDateIso,
       service: String(service || DEFAULT_SERVICE).trim() || DEFAULT_SERVICE,
-      status: 'SCHEDULED',
+      status: holdForPayment ? 'PENDING_PAYMENT' : 'SCHEDULED',
       notes: typeof notes === 'string' ? notes : '',
-      price: normalizedPrice
+      price: normalizedPrice,
+      ...(holdForPayment ? { deposit_amount: depositAmount(), deposit_requested_at: new Date().toISOString() } : {})
     })
     .select('*')
     .single();
@@ -925,41 +1277,24 @@ export const createAppointmentRecord = async ({
     throw createHttpError(500, appointmentError?.message || 'Failed to create appointment');
   }
 
-  // Schedule a "day before" reminder for customers.
-  try {
-    const reminderPhone = toWhatsAppNumber(phone || customerRow.phone || customer?.phone || '');
-    if (reminderPhone) {
-      const remindLocalDate = addDaysToDateString(slotLocalDate, -1);
-      const computedRemindAt = buildSlotDateFromLocal(remindLocalDate, reminderDayBeforeTime);
-      const now = Date.now();
-      const remindAt =
-        computedRemindAt instanceof Date && computedRemindAt.getTime() > now
-          ? computedRemindAt
-          : new Date(now + 60 * 1000);
-
-      await createReminder({
-        sourceKind: 'APPOINTMENT',
-        sourceId: appointmentRow.id,
-        phone: reminderPhone,
-        title: (customerRow?.name || customerName || customer?.name || 'תור').toString().trim() || 'תור',
-        remindAt,
-        payload: {
-          reminderKind: 'DAY_BEFORE',
-          customerName: customerRow?.name || customerName || customer?.name || '',
-          petName: customerRow?.pet_name || customer?.petName || '',
-          date: slotLocalDate,
-          time: slotLocalTime
-        }
-      });
-    }
-  } catch {
-    // Reminder scheduling is best-effort; appointment creation should still succeed.
+  // A held slot gets its reminder only once the deposit is paid and the appointment is confirmed.
+  if (!holdForPayment) {
+    await scheduleDayBeforeReminder({
+      appointmentId: appointmentRow.id,
+      phone: phone || customerRow.phone || customer?.phone || '',
+      customerName: customerRow?.name || customerName || customer?.name || '',
+      petName: dogRow?.name || customerRow?.pet_name || customer?.petName || '',
+      slotLocalDate,
+      slotLocalTime
+    });
   }
 
   return {
     createdCustomer,
     customer: mapCustomerResponse(customerRow),
-    appointment: mapAppointmentResponse(appointmentRow)
+    dog: dogRow ? mapDogResponse(dogRow) : null,
+    appointment: { ...mapAppointmentResponse(appointmentRow), dogId: dogRow?.id ?? undefined },
+    hold: holdForPayment ? { expiresAt: holdExpiryIso(appointmentRow.deposit_requested_at) } : null
   };
 };
 
@@ -1058,8 +1393,14 @@ export const createCustomerFromStructuredInput = async ({
     lastVisit
   });
 
+  const createdDog = await insertDogRow(supabase, createdCustomer.id, {
+    name: petName,
+    breed: petType
+  });
+
   return {
-    customer: mapCustomerResponse(createdCustomer)
+    customer: mapCustomerResponse(createdCustomer),
+    dog: mapDogResponse(createdDog)
   };
 };
 

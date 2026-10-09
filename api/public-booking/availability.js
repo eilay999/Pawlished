@@ -6,6 +6,7 @@ import {
   listAppointmentsForIsoRange,
   toApiError
 } from '../_lib/appointments.js';
+import { depositAmount, isGrowConfigured, paymentHoldMinutes } from '../_lib/grow.js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
 
@@ -116,12 +117,19 @@ export default async function handler(req, res) {
         weekdayIndex,
         times: allowedSlots.map((time) => ({
           time,
-          available: freeSlots.includes(time)
+          available:
+            freeSlots.includes(time) &&
+            buildSlotDateFromLocal(date, time, ISRAEL_TIME_ZONE).getTime() > Date.now()
         }))
       });
     }
 
-    res.status(200).json({ ok: true, days });
+    res.status(200).json({
+      ok: true,
+      days,
+      // Lets the booking page say up front whether a deposit is part of booking.
+      payment: { required: isGrowConfigured(), amount: depositAmount(), holdMinutes: paymentHoldMinutes() }
+    });
   } catch (error) {
     const apiError = toApiError(error);
     res.status(apiError.statusCode).json({ ok: false, error: apiError.message });

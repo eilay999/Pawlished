@@ -128,9 +128,44 @@ The day-before reminder includes a Grow payment link (card/Bit) for the ₪`DEPO
 
 **Not yet validated against a real Grow account**: test in the sandbox (`GROW_BASE_URL=https://sandbox.meshulam.co.il`) and confirm the request encoding, the `data.url` response field and the callback payload (see `api/_lib/grow.js`) before enabling in production. Balance (remaining amount) links are not implemented yet.
 
+### 10b) Online booking: the slot is held until the deposit is paid
+
+When Grow is configured (`isGrowConfigured()`), a booking made on the public page is **not confirmed immediately**:
+
+1. `api/public-booking/create.js` creates the appointment as `PENDING_PAYMENT` (`deposit_requested_at` = start of the hold) and returns a Grow payment link, which the booking page shows right away. The same link is also sent as a message (free-form WhatsApp inside the 24h window, otherwise SMS if Twilio is configured; best effort).
+2. The slot is blocked for `PAYMENT_HOLD_MINUTES` (default 30). If no payment link can be created, the hold is released at once and the customer is told to retry.
+3. When Grow calls the webhook, `confirmHeldAppointment` turns the appointment `SCHEDULED`, creates the day-before reminder and sends the confirmation. Repeated callbacks are harmless.
+4. An unpaid hold is released (status `EXPIRED`, hidden from the admin) lazily: any availability read, booking, profile read or admin data load first runs `expireStaleHolds`; the daily cron is only a safety net (Hobby plan: no frequent crons).
+5. Paid after the release: if the slot is still free the appointment is reinstated; if somebody else took it, it is kept as `CANCELLED` with `deposit_paid_at` set and a note, so it shows up for a refund.
+6. The owner can also tick "deposit paid" in the admin to confirm a pending booking by hand.
+
+Without Grow nothing changes: bookings are confirmed immediately as before. A static `BIT_PAYMENT_LINK` cannot confirm automatically (no callback), so this flow needs Grow. Needs migration `20261008100000_payment_hold_slot_index.sql` (extends the one-appointment-per-timestamp index to held slots). Tests: `tests/payment-hold.test.mjs`.
+
 ## 11) Daily backup
 
 `/api/reminders-run` (daily cron) also writes a JSON snapshot of the business tables (`appointments`, `customers`, `dogs`, ...) to the private Supabase Storage bucket `backups` (`pawlished-backup-YYYY-MM-DD.json`). It keeps the last 30 days plus the first snapshot of each month for a year, and never overwrites a snapshot when appointments and customers are both empty. It is **not off-site**: download a copy now and then, or use Supabase Pro daily backups. The repository is public, so never commit backups. Needs migration `20260930120000_add_backups_bucket.sql` (already applied to production).
+
+### 11b) Weekly off-site copy to the owner's computer
+
+The daily snapshot lives inside Supabase, so it does not survive losing the Supabase project. A second copy is pulled to the owner's own computer:
+
+1. Generate a long random secret (32+ characters) and set it in Vercel as `BACKUP_EXPORT_SECRET` (Production). Until it is set the export answers 401 to everyone.
+2. On the computer, set the same value as a **user** environment variable `BACKUP_EXPORT_SECRET` (System Properties > Environment Variables; never in a file that is committed).
+3. Run `scripts/schedule-backup-to-pc.ps1` once. It registers a weekly task (Sundays 21:00, runs on next start if the computer was off) that runs `scripts/backup-to-pc.ps1`.
+4. Copies land in `Documents\PawlishedBackups\pawlished-offsite-YYYY-MM-DD.json` (last 26 kept). A failed or empty export is never saved as a backup and the task shows a failure.
+
+How it works: `GET /api/reminders-run?export=backup` with `Authorization: Bearer <BACKUP_EXPORT_SECRET>` returns the same snapshot as the daily backup (no OTP codes or chat history). It uses its own secret, not `CRON_SECRET`, and is a switch inside the existing endpoint because the Hobby plan caps the project at 12 functions. The files hold customers' personal data: keep them off public repositories and shared drives. Tests: `tests/safety-net.test.mjs`.
+
+### 11c) Monitoring and alerts
+
+Two free external checks (e.g. UptimeRobot, 5-minute interval, e-mail/SMS/push alerts to the owner):
+
+1. HTTPS monitor on `https://pawlished.vercel.app/booking/` - alerts when the site is down.
+2. Keyword monitor on `https://pawlished.vercel.app/api/public-booking/availability?days=2` for the text `"ok":true` - alerts when the API or the database behind it is down. A paused Supabase project (free plan pauses after a week without traffic) shows up here first.
+
+Message delivery failures (e.g. WhatsApp `failed` statuses such as code 131047) are written to the Vercel runtime logs as `[whatsapp-status] delivery failed` (last four digits of the number only). Search for that text when a customer says a message never arrived.
+
+In the admin app, a crash in one screen shows a "something went wrong" card instead of a white page (`components/AdminErrorBoundary.tsx`); the rest of the app keeps working. Day-before reminders for appointments that are already past, or no longer scheduled, are cancelled instead of sent.
 
 ## 12) Local testing
 

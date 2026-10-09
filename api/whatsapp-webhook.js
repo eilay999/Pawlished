@@ -58,6 +58,7 @@ import {
 } from './_lib/whatsappContext.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import handleGrowWebhook from './_lib/growWebhook.js';
+import { logFailedStatuses } from './_lib/whatsappStatus.js';
 import { confirmArrivalByPhone, isArrivalConfirmationText } from './_lib/arrivalConfirmation.js';
 
 const verifyToken = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
@@ -1947,6 +1948,13 @@ export default async function handler(req, res) {
       res.status(401).json({ ok: false, error: 'Unauthorized webhook call' });
       return;
     }
+  }
+
+  // Delivery failures only ever show up here (the send itself answers 200), so record them.
+  try {
+    logFailedStatuses(req.body);
+  } catch {
+    // logging must never get in the way of the webhook
   }
 
   // Messages from Bako's users go to Bako untouched (see _lib/bakoForward.js).

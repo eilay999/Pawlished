@@ -9,7 +9,7 @@ import {
   validateExpense,
   validateRefund
 } from '../_lib/expenseValidation.js';
-import { buildSlotDateFromLocal } from '../_lib/appointments.js';
+import { buildSlotDateFromLocal, confirmHeldAppointment } from '../_lib/appointments.js';
 import { cancelPendingRemindersForSource, createReminder } from '../_lib/reminders.js';
 
 const getGeminiApiKeys = () =>
@@ -359,7 +359,10 @@ export default async function handler(req, res) {
         .update({ deposit_paid_at: paid ? new Date().toISOString() : null })
         .eq('id', appointmentId);
       if (error) throw createHttpError(500, error.message);
-      res.status(200).json({ ok: true });
+
+      // Ticking "deposit paid" on a booking that was waiting for payment confirms it.
+      const confirmation = paid ? await confirmHeldAppointment(appointmentId) : null;
+      res.status(200).json({ ok: true, outcome: confirmation?.outcome || null });
       return;
     }
 

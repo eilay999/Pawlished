@@ -1,7 +1,7 @@
 import './_lib/dryRun.js';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { createOtpSessionToken } from './_lib/otpSession.js';
+import { createDeviceToken, createOtpSessionToken, verifyDeviceToken } from './_lib/otpSession.js';
 import { isAdminPhone } from './_lib/adminAuth.js';
 import { safeEqual } from './_lib/safeCompare.js';
 
@@ -200,11 +200,30 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { action, phone, code, remember } = req.body || {};
+    const { action, phone, code, remember, deviceToken } = req.body || {};
     if (!action) {
       res.status(400).json({ error: 'Missing action' });
       return;
     }
+
+    // "Remember this device": exchange a valid long-lived device token for a fresh
+    // short-lived session token, without sending another code.
+    if (action === 'resume') {
+      let device;
+      try {
+        device = verifyDeviceToken(deviceToken);
+      } catch (err) {
+        res.status(Number(err?.statusCode) || 401).json({ error: err?.message || 'Invalid device token' });
+        return;
+      }
+      if (isAdminPhone(device.phone)) {
+        res.status(401).json({ error: 'Invalid device token' });
+        return;
+      }
+      res.status(200).json({ ok: true, sessionToken: createOtpSessionToken(device.phone), phone: device.phone });
+      return;
+    }
+
     if (!phone) {
       res.status(400).json({ error: 'Missing phone' });
       return;
@@ -430,7 +449,13 @@ export default async function handler(req, res) {
       const extendedMinutes =
         remember === true && isAdminPhone(waPhone) && adminRememberDays > 0 ? adminRememberDays * 24 * 60 : undefined;
       const sessionToken = createOtpSessionToken(waPhone, extendedMinutes);
-      res.status(200).json({ ok: true, sessionToken });
+      // Customers can opt in to a remembered device. Admin phones never get one: their
+      // long-lived access is the dedicated admin session above.
+      res.status(200).json({
+        ok: true,
+        sessionToken,
+        ...(remember === true && !isAdminPhone(waPhone) ? { deviceToken: createDeviceToken(waPhone) } : {})
+      });
       return;
     }
 

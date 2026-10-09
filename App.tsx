@@ -19,6 +19,7 @@ import { CANCELLATION_FEE_AMOUNT, CANCELLATION_FEE_WINDOW_HOURS } from './consta
 import { applyTheme, loadTheme } from './theme';
 import { normalizePhoneForCompare } from './utils';
 import { HomeDashboard } from './components/HomeDashboard';
+import { AdminErrorBoundary } from './components/AdminErrorBoundary';
 import { DogCardModal } from './components/DogCardModal';
 import { GroomingRecordModal } from './components/GroomingRecordModal';
 import { WhatsAppQuickSendModal } from './components/WhatsAppQuickSendModal';
@@ -49,6 +50,7 @@ type DbAppointment = {
   cancellation_fee?: number | null;
   arrival_confirmed_at?: string | null;
   deposit_paid_at?: string | null;
+  deposit_requested_at?: string | null;
   deposit_amount?: number | string | null;
   invoice_number?: string | null;
   invoice_url?: string | null;
@@ -144,6 +146,7 @@ const mapAppointmentFromDb = (row: DbAppointment): Appointment => ({
   cancellationFee: row.cancellation_fee ?? undefined,
   arrivalConfirmedAt: row.arrival_confirmed_at ? new Date(row.arrival_confirmed_at) : undefined,
   depositPaidAt: row.deposit_paid_at ? new Date(row.deposit_paid_at) : undefined,
+  depositRequestedAt: row.deposit_requested_at ? new Date(row.deposit_requested_at) : undefined,
   depositAmount: row.deposit_amount == null ? undefined : Number(row.deposit_amount),
   invoiceNumber: row.invoice_number ?? undefined,
   invoiceUrl: row.invoice_url ?? undefined,
@@ -1674,6 +1677,7 @@ const App: React.FC = () => {
 
       {/* Center Content */}
       <main className="flex-1 min-w-0 min-h-0 flex flex-col relative h-full overflow-hidden pb-16 md:pb-0">
+        <AdminErrorBoundary resetKey={currentView} label={currentView}>
         {currentView === 'HOME' ? (
           <HomeDashboard
             appointments={appointments}
@@ -1750,19 +1754,22 @@ const App: React.FC = () => {
             onDeleteTask={handleDeleteTask}
           />
         )}
+        </AdminErrorBoundary>
       </main>
 
       {/* Notifications Panel - Only visible on Large screens to avoid squashing the calendar */}
       {currentView === 'CALENDAR' && (
-        <NotificationsPanel
-          appointments={appointments}
-          customers={customers}
-          dogs={dogs}
-          onAppointmentCreate={handleSaveAppointment}
-          onCreateNewCustomer={handleAddCustomer}
-          onCustomerClick={handleEditCustomer}
-          onAppointmentUpdate={handleSaveAppointment}
-        />
+        <AdminErrorBoundary label="notifications" silent>
+          <NotificationsPanel
+            appointments={appointments}
+            customers={customers}
+            dogs={dogs}
+            onAppointmentCreate={handleSaveAppointment}
+            onCreateNewCustomer={handleAddCustomer}
+            onCustomerClick={handleEditCustomer}
+            onAppointmentUpdate={handleSaveAppointment}
+          />
+        </AdminErrorBoundary>
       )}
 
       {currentView === 'CALENDAR' && dayPanelDate && (

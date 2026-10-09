@@ -1,10 +1,11 @@
 import './_lib/dryRun.js';
 import { safeEqual } from './_lib/safeCompare.js';
-import { listDueReminders, markReminderSent } from './_lib/reminders.js';
+import { isStaleDayBeforeReminder, listDueReminders, markReminderCancelled, markReminderSent } from './_lib/reminders.js';
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import { issuePendingInvoices } from './_lib/invoices.js';
+import { expireStaleHolds, isAppointmentScheduled } from './_lib/appointments.js';
 import { depositAmount, getDepositLinkForAppointment } from './_lib/grow.js';
-import { runDailyBackup } from './_lib/backup.js';
+import { exportSnapshot, runDailyBackup } from './_lib/backup.js';
 import { documentLabel, getTaxSettings } from './_lib/taxSettings.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
@@ -110,7 +111,35 @@ const isAuthorized = (req) => {
   return safeEqual(authHeader, `Bearer ${cronSecret}`);
 };
 
+// Off-site copy: a script on the owner's computer pulls the snapshot with its OWN secret (not the
+// cron secret), so this stays switched off until BACKUP_EXPORT_SECRET is set.
+const handleBackupExport = async (req, res) => {
+  const exportSecret = (process.env.BACKUP_EXPORT_SECRET || '').trim();
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    res.status(405).json({ ok: false, error: 'Method not allowed' });
+    return;
+  }
+  if (exportSecret.length < 32 || !safeEqual(String(req.headers.authorization || ''), `Bearer ${exportSecret}`)) {
+    res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return;
+  }
+  try {
+    const { snapshot } = await exportSnapshot();
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json(snapshot);
+  } catch (error) {
+    console.error('[backup-export] failed', error?.message || error);
+    res.status(500).json({ ok: false, error: 'Export failed, see logs' });
+  }
+};
+
 export default async function handler(req, res) {
+  if (req.query?.export === 'backup') {
+    await handleBackupExport(req, res);
+    return;
+  }
+
   if (!['GET', 'POST'].includes(req.method)) {
     res.setHeader('Allow', 'GET, POST');
     res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -129,6 +158,9 @@ export default async function handler(req, res) {
     const timeBudgetMs = 45 * 1000;
     const hasTimeLeft = () => Date.now() - startedAt < timeBudgetMs;
 
+    // Safety net for the lazy release of unpaid holds (normally done on the next availability read).
+    await expireStaleHolds().catch(() => 0);
+
     const dueReminders = await listDueReminders();
     const results = [];
 
@@ -138,6 +170,17 @@ export default async function handler(req, res) {
         continue;
       }
       try {
+        // Never tell a customer "tomorrow" about an appointment that already passed or was cancelled.
+        if (
+          isStaleDayBeforeReminder(reminder) ||
+          (reminder.source_kind === 'APPOINTMENT' &&
+            reminder.payload?.reminderKind === 'DAY_BEFORE' &&
+            !(await isAppointmentScheduled(reminder.source_id)))
+        ) {
+          await markReminderCancelled(reminder.id);
+          results.push({ id: reminder.id, sent: false, reason: 'skipped: appointment is past or no longer scheduled' });
+          continue;
+        }
         let paymentLink = '';
         if (reminder.source_kind === 'APPOINTMENT' && reminder.payload?.reminderKind === 'DAY_BEFORE') {
           // Grow payment link (card/Bit) when configured; otherwise the static Bit link, if any.

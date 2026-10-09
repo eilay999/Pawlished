@@ -60,10 +60,7 @@ const fetchAllRows = async (supabase, table) => {
   return rows;
 };
 
-export const runDailyBackup = async (now = new Date()) => {
-  if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase service role not configured');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
-
+const buildSnapshot = async (supabase, now) => {
   const snapshot = { exported_at: now.toISOString(), project: 'pawlished' };
   const counts = {};
   for (const table of BACKUP_TABLES) {
@@ -71,10 +68,26 @@ export const runDailyBackup = async (now = new Date()) => {
     counts[table] = snapshot[table].length;
   }
 
-  // Safety net: never overwrite a good snapshot with an empty one.
+  // Safety net: never hand out (or overwrite a good snapshot with) an empty one.
   if (counts.appointments === 0 && counts.customers === 0) {
     throw new Error('Backup skipped: appointments and customers are both empty');
   }
+  return { snapshot, counts };
+};
+
+// Same snapshot, returned to the caller instead of stored: used for the weekly copy that a script
+// on the owner's own computer pulls (see OPERATIONS.md), so a copy exists outside Supabase.
+export const exportSnapshot = async (now = new Date()) => {
+  if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase service role not configured');
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+  return buildSnapshot(supabase, now);
+};
+
+export const runDailyBackup = async (now = new Date()) => {
+  if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase service role not configured');
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
+
+  const { snapshot, counts } = await buildSnapshot(supabase, now);
 
   const body = JSON.stringify(snapshot);
   const name = fileNameFor(now);

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminSession } from '../_lib/adminAuth.js';
+import { expireStaleHolds } from '../_lib/appointments.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -31,6 +32,8 @@ export default async function handler(req, res) {
   try {
     requireAdminSession(req);
     const supabase = getSupabaseClient();
+    // Release any unpaid holds whose time ran out, so the calendar never shows a dead one.
+    await expireStaleHolds(supabase);
 
     const [
       customersRes,
@@ -45,7 +48,7 @@ export default async function handler(req, res) {
       supabase.from('customers').select('*').order('id', { ascending: true }),
       supabase.from('dogs').select('*').order('id', { ascending: true }),
       supabase.from('grooming_records').select('*').order('visit_date', { ascending: false }),
-      supabase.from('appointments').select('*').order('date', { ascending: true }),
+      supabase.from('appointments').select('*').neq('status', 'EXPIRED').order('date', { ascending: true }),
       supabase.from('calendar_events').select('*').order('starts_at', { ascending: true }),
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       supabase
