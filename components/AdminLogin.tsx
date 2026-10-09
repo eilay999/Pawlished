@@ -34,14 +34,23 @@ export const AdminLogin: React.FC<{
   onAuthenticated: (payload: { phone: string; sessionToken: string }) => void;
 }> = ({ onAuthenticated }) => {
   const [step, setStep] = useState<LoginStep>('PHONE');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pawlished_admin_phone') || '';
+      const digits = normalizeDigits(saved);
+      if (digits.startsWith('972')) return `0${digits.slice(3)}`;
+      return digits;
+    } catch {
+      return '';
+    }
+  });
   const [pendingPhone, setPendingPhone] = useState('');
   const [code, setCode] = useState('');
   const [channel, setChannel] = useState<'sms' | 'whatsapp' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [remember, setRemember] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
   const codeRef = useRef<HTMLInputElement | null>(null);
@@ -192,6 +201,20 @@ export const AdminLogin: React.FC<{
                   placeholder="05X-XXXXXXX"
                   className="w-full bg-transparent outline-none text-gray-900 placeholder:text-gray-400"
                 />
+              </div>
+
+              <div className="mt-4 flex items-start gap-2">
+                <input
+                  id="admin-remember"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="mt-1 h-5 w-5 accent-rose-600"
+                />
+                <label htmlFor="admin-remember" className="text-sm text-gray-700">
+                  הישאר מחובר במכשיר הזה (30 יום)
+                  <span className="block text-xs text-gray-600">מומלץ רק במכשיר אישי. אפשר להתנתק בכל רגע.</span>
+                </label>
               </div>
 
               <button
