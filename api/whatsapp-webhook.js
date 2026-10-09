@@ -1,7 +1,6 @@
 import './_lib/dryRun.js';
 import { safeEqual } from './_lib/safeCompare.js';
 import { getWebhookSecrets, isWebhookSecretValid } from './_lib/webhookAuth.js';
-import { forwardToBako, hasBakoSender, parseForwardPhones } from './_lib/bakoForward.js';
 import {
   createAppointmentFromStructuredInput,
   findCustomerByPhone,
@@ -1866,8 +1865,7 @@ const extractIncomingMessage = (body) => {
   };
 };
 
-// The body is read raw (bodyParser off) so a message meant for Bako can be forwarded byte for
-// byte with Meta's signature intact. req.body is rebuilt here for everything else.
+// The body is read raw (bodyParser off) and req.body is rebuilt from it below.
 export const config = { api: { bodyParser: false } };
 
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -1955,15 +1953,6 @@ export default async function handler(req, res) {
     logFailedStatuses(req.body);
   } catch {
     // logging must never get in the way of the webhook
-  }
-
-  // Messages from Bako's users go to Bako untouched (see _lib/bakoForward.js).
-  const bakoPhones = parseForwardPhones(process.env.BAKO_FORWARD_PHONES);
-  if (bakoPhones.size > 0 && hasBakoSender(req.body, bakoPhones)) {
-    const result = await forwardToBako({ raw: req.rawBody, signature: req.headers['x-hub-signature-256'] });
-    if (!result.ok) console.error('[whatsapp-webhook] forward to Bako failed', result.status, result.error || '');
-    res.status(200).json({ ok: true, forwarded: result.ok });
-    return;
   }
 
   // Narrow exception to the kill switch below: a customer replying "1"/"מאשר" to the
