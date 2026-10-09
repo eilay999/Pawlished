@@ -28,7 +28,7 @@ import { WhatsAppButton } from './booking/WhatsAppButton';
 import { POLICY_TEXT, REMEMBER_DEVICE_DAYS, otpSenderLink, whatsappLink } from './booking/config';
 import { firstName, formatDateLong, maskedPhone, parseIsraeliMobile } from './booking/format';
 import { downloadAppointmentIcs } from './booking/ics';
-import { clearDeviceToken, loadDeviceToken, saveDeviceToken } from './booking/storage';
+import { clearDeviceToken, clearLastPhone, loadDeviceToken, loadLastPhone, saveDeviceToken, saveLastPhone } from './booking/storage';
 import './booking/booking.css';
 
 type Step = 'BOOT' | 'PHONE' | 'OTP' | 'HUB' | 'NEW_CUSTOMER' | 'BOOKING' | 'CONFIRM' | 'PAY' | 'PAID_THANKS' | 'DONE';
@@ -96,7 +96,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ onBookingCreated, 
   const [step, setStep] = useState<Step>('BOOT');
   const [error, setError] = useState<string | null>(null);
 
-  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState(() => loadLastPhone());
   const [consent, setConsent] = useState(false);
   const [remember, setRemember] = useState(true);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -404,8 +404,13 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ onBookingCreated, 
     setBusy(true);
     try {
       const verified = await verifyOtp(otpPhone, code, remember);
-      if (remember && verified.deviceToken) saveDeviceToken(verified.deviceToken);
-      else clearDeviceToken();
+      if (remember && verified.deviceToken) {
+        saveDeviceToken(verified.deviceToken);
+        saveLastPhone(phoneInput);
+      } else {
+        clearDeviceToken();
+        clearLastPhone();
+      }
       await routeAfterAuth(verified.sessionToken);
     } catch (err) {
       setOtpCode('');
@@ -417,6 +422,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ onBookingCreated, 
 
   const handleLogout = () => {
     clearDeviceToken();
+    clearLastPhone();
     setPhoneInput('');
     setConsent(false);
     resetToPhone();

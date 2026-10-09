@@ -8,6 +8,7 @@ export const APPOINTMENT_DURATION_MINUTES = 180;
 export const REMEMBER_DEVICE_DAYS = 60;
 
 export const DEVICE_STORAGE_KEY = 'pawlished.booking.device';
+export const PHONE_STORAGE_KEY = 'pawlished.booking.phone';
 
 // Mirrors public/terms.html section 3 — keep the two in sync.
 export const POLICY_TEXT = `לשריון התור נגבים דמי קביעה בסך ${BOOKING_FEE_ILS} ₪, שיקוזזו מהתשלום על הטיפול. ביטול או שינוי עד ${CANCEL_WINDOW_HOURS} שעות לפני התור – דמי הקביעה יועברו לתור חלופי. ביטול מאוחר יותר או אי-הגעה – דמי הקביעה לא יוחזרו.`;
