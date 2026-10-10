@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { createReminder } from './reminders.js';
+import { createReminder, shouldScheduleDayBeforeReminder } from './reminders.js';
 import { depositAmount, paymentHoldMinutes } from './grow.js';
 
 const ISRAEL_TIME_ZONE = 'Asia/Jerusalem';
@@ -980,6 +980,8 @@ const scheduleDayBeforeReminder = async ({ appointmentId, phone, customerName, p
   try {
     const reminderPhone = toWhatsAppNumber(phone || '');
     if (!reminderPhone) return;
+    // Callers book or confirm a SCHEDULED appointment; never remind about a day that already started.
+    if (!shouldScheduleDayBeforeReminder({ localDate: slotLocalDate, status: 'SCHEDULED' })) return;
 
     const remindLocalDate = addDaysToDateString(slotLocalDate, -1);
     const computedRemindAt = buildSlotDateFromLocal(remindLocalDate, reminderDayBeforeTime);

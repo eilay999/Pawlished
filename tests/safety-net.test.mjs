@@ -108,3 +108,18 @@ test('backup export returns the business tables with the right secret', async ()
   assert.equal(result.body.customers.length, 1);
   assert.equal(result.body.appointments.length, 2);
 });
+
+// ---- no reminders for past or non-scheduled appointments ----
+const { shouldScheduleDayBeforeReminder } = await import('../api/_lib/reminders.js');
+
+test('reminders are only created for scheduled appointments whose day has not started', () => {
+  const now = new Date('2026-10-10T09:00:00Z'); // 12:00 in Israel
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '2026-10-11', status: 'SCHEDULED', now }), true);
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '2026-10-10', status: 'SCHEDULED', now }), false);
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '2026-05-25', status: 'SCHEDULED', now }), false);
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '2026-05-25', status: 'COMPLETED', now }), false);
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '2026-10-20', status: 'COMPLETED', now }), false);
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '2026-10-20', status: 'CANCELLED', now }), false);
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '2026-10-20', status: 'PENDING_PAYMENT', now }), false);
+  assert.equal(shouldScheduleDayBeforeReminder({ localDate: '', status: 'SCHEDULED', now }), false);
+});

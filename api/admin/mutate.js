@@ -10,7 +10,7 @@ import {
   validateRefund
 } from '../_lib/expenseValidation.js';
 import { buildSlotDateFromLocal, confirmHeldAppointment } from '../_lib/appointments.js';
-import { cancelPendingRemindersForSource, createReminder } from '../_lib/reminders.js';
+import { cancelPendingRemindersForSource, createReminder, shouldScheduleDayBeforeReminder } from '../_lib/reminders.js';
 
 const getGeminiApiKeys = () =>
   Array.from(
@@ -297,7 +297,7 @@ export default async function handler(req, res) {
             reminderKind: 'DAY_BEFORE'
           });
 
-          if (String(data.status || '').toUpperCase() !== 'CANCELLED') {
+          if (shouldScheduleDayBeforeReminder({ localDate: formatIsraelDate(data.date), status: data.status })) {
             const { data: customerRow } = await supabase
               .from('customers')
               .select('name, phone, pet_name')

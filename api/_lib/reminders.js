@@ -93,6 +93,16 @@ export const createReminder = async ({
 const israelDate = (value = new Date()) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(value);
 
+// The one rule for creating a day-before reminder: only for a still-scheduled appointment whose
+// day has not started. Saving an old appointment in the admin (e.g. marking it completed) used to
+// schedule a "tomorrow" reminder for it, which the cron then sent to the customer.
+export const shouldScheduleDayBeforeReminder = ({ localDate, status, now = new Date() }) => {
+  if (String(status || '').toUpperCase() !== 'SCHEDULED') return false;
+  const date = String(localDate || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  return date > israelDate(now);
+};
+
 // A "tomorrow" reminder is only true while its appointment is still in the future. After the cron
 // had been broken for months, one run sent 20 of them for appointments in May.
 export const isStaleDayBeforeReminder = (reminder, now = new Date()) => {

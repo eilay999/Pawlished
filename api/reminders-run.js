@@ -163,8 +163,18 @@ export default async function handler(req, res) {
 
     const dueReminders = await listDueReminders();
     const results = [];
+    // A burst far above a normal day (about 5-10 appointments) means something is wrong, e.g. a
+    // backlog after an outage. Send up to the cap and leave the rest pending instead of
+    // messaging dozens of customers at once.
+    const maxPerRun = Math.max(1, Number(process.env.REMINDERS_MAX_PER_RUN) || 15);
+    let sentThisRun = 0;
 
     for (const reminder of dueReminders) {
+      if (sentThisRun >= maxPerRun) {
+        console.error('[reminders-run] send cap reached, leaving the rest pending', maxPerRun);
+        results.push({ id: reminder.id, sent: false, reason: 'deferred: per-run cap reached' });
+        continue;
+      }
       if (!hasTimeLeft()) {
         results.push({ id: reminder.id, sent: false, reason: 'deferred: time budget reached' });
         continue;
@@ -201,6 +211,7 @@ export default async function handler(req, res) {
           }
         }).catch(() => null);
         await markReminderSent(reminder.id);
+        sentThisRun += 1;
         results.push({ id: reminder.id, sent: true });
       } catch (error) {
         results.push({ id: reminder.id, sent: false, reason: error?.message || 'Failed to send' });
