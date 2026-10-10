@@ -1,4 +1,7 @@
 import './dryRun.js';
+import { deliverCustomerMessage } from './outbound.js';
+
+const firstWord = (value = '') => String(value || '').trim().split(/\s+/)[0] || '';
 const normalizeDigits = (value = '') => String(value || '').replace(/\D/g, '');
 
 const toWhatsAppNumber = (value = '') => {
@@ -156,35 +159,27 @@ const sendWhatsAppText = async (to, bodyText) => {
 };
 
 // Sent right after an online booking is held: the deposit link plus how long the slot is kept.
-// Best effort by design — the booking page shows the same link, so a failed message never blocks.
-// A free-form WhatsApp text only reaches a customer inside the 24h window; SMS is the fallback.
-export const sendPaymentRequest = async ({ phone, date, time, url, amount, holdMinutes }) => {
+// Best effort by design: the booking page shows the same link, so a failed message never blocks.
+// WHATSAPP_PAYMENT_TEMPLATE (approved utility template, params: name, date, time, amount, minutes,
+// link) reaches the customer at any time; without it the message falls back to SMS, then to a
+// free-form WhatsApp text that only arrives inside the 24h window (see _lib/outbound.js).
+export const sendPaymentRequest = async ({ phone, date, time, url, amount, holdMinutes, customerName }) => {
   const text =
-    `קבענו לך תור ל-${date} בשעה ${time}. כדי לאשר אותו יש לשלם דמי קביעה ₪${amount} (יקוזזו מהתשלום על הטיפול): ${url}
-` +
+    `קבענו לך תור ל-${date} בשעה ${time}. כדי לאשר אותו יש לשלם דמי קביעה ₪${amount} (יקוזזו מהתשלום על הטיפול): ${url}\n` +
     `השעה שמורה לך ${holdMinutes} דקות. אם התשלום לא יתקבל, היא תתפנה.`;
 
-  const waPhone = toWhatsAppNumber(phone);
-  const smsPhone = toE164(phone);
-  if (!waPhone || !smsPhone) return { ok: false, error: 'Invalid phone' };
-
-  const order = messagingChannel === 'sms' ? ['sms', 'whatsapp'] : ['whatsapp', 'sms'];
-  let lastError = null;
-  for (const kind of order) {
-    try {
-      if (kind === 'whatsapp' && canUseWhatsAppFreeform()) {
-        await sendWhatsAppText(waPhone, text);
-        return { ok: true, channel: 'whatsapp' };
-      }
-      if (kind === 'sms' && canUseSms()) {
-        await sendSmsMessage(smsPhone, text);
-        return { ok: true, channel: 'sms' };
-      }
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  return { ok: false, error: lastError?.message || 'No messaging provider configured' };
+  const templateName = (process.env.WHATSAPP_PAYMENT_TEMPLATE || '').trim();
+  return deliverCustomerMessage({
+    phone,
+    text,
+    template: templateName
+      ? {
+          name: templateName,
+          lang: (process.env.WHATSAPP_PAYMENT_LANG || 'he').trim(),
+          params: [firstWord(customerName) || 'שלום', date, time, amount, holdMinutes, url]
+        }
+      : null
+  });
 };
 
 export const sendBookingConfirmation = async ({

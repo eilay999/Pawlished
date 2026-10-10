@@ -6,6 +6,7 @@ import { issuePendingInvoices } from './_lib/invoices.js';
 import { expireStaleHolds, isAppointmentScheduled } from './_lib/appointments.js';
 import { depositAmount, getDepositLinkForAppointment } from './_lib/grow.js';
 import { exportSnapshot, runDailyBackup } from './_lib/backup.js';
+import { deliverCustomerMessage } from './_lib/outbound.js';
 import { documentLabel, getTaxSettings } from './_lib/taxSettings.js';
 
 const whatsappToken = (process.env.WHATSAPP_TOKEN || '').trim();
@@ -197,7 +198,26 @@ export default async function handler(req, res) {
           paymentLink = await getDepositLinkForAppointment(reminder.source_id).catch(() => null) || bitPaymentLink;
         }
         const text = buildReminderText(reminder, paymentLink);
-        await sendWhatsAppTextReply(reminder.phone, text);
+        const isDayBefore =
+          reminder.source_kind === 'APPOINTMENT' &&
+          String(reminder.payload?.reminderKind || '').trim().toUpperCase() === 'DAY_BEFORE';
+        const reminderTemplate = (process.env.WHATSAPP_REMINDER_TEMPLATE || '').trim();
+        const delivery = await deliverCustomerMessage({
+          phone: reminder.phone,
+          text,
+          template:
+            isDayBefore && reminderTemplate
+              ? {
+                  name: reminderTemplate,
+                  lang: (process.env.WHATSAPP_REMINDER_LANG || 'he').trim(),
+                  params: [
+                    `${reminder.payload?.customerName || reminder.title}${reminder.payload?.petName ? ` (${reminder.payload.petName})` : ''}`,
+                    reminder.payload?.time || ''
+                  ]
+                }
+              : null
+        });
+        if (!delivery.ok) throw new Error(delivery.error || 'Failed to send');
         await logWhatsAppMessage({
           phone: reminder.phone,
           direction: 'OUTGOING',

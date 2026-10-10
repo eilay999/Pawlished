@@ -159,7 +159,8 @@ export default async function handler(req, res) {
         time: confirmationDateTime.time,
         url: paymentUrl,
         amount: depositAmount(),
-        holdMinutes: paymentHoldMinutes()
+        holdMinutes: paymentHoldMinutes(),
+        customerName: result?.customer?.name
       }).catch(() => undefined);
 
       res.status(200).json({
