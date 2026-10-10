@@ -1960,7 +1960,11 @@ export default async function handler(req, res) {
   // the 24h window, so the code that WhatsApp refused earlier can be delivered now.
   try {
     const inbound = extractIncomingMessage(req.body || {});
-    if (inbound.from) await deliverOtpOnInbound(inbound.from);
+    if (inbound.from) {
+      const otpResult = await deliverOtpOnInbound(inbound.from);
+      // Last four digits only: enough to follow one person's test without logging phone numbers.
+      console.log('[whatsapp-webhook] inbound message from …' + String(inbound.from).slice(-4), 'otp:', otpResult.sent ? 'sent' : otpResult.reason);
+    }
   } catch (error) {
     console.error('[whatsapp-webhook] otp delivery on inbound failed', error?.message || error);
   }
