@@ -714,7 +714,7 @@ export const PublicBooking: React.FC<PublicBookingProps> = ({ onBookingCreated, 
             <a href={otpSenderLink('היי')} target="_blank" rel="noopener noreferrer" className="bk-link" style={{ padding: 0, minHeight: 0 }}>
               שלחו "היי" בוואטסאפ
             </a>
-            , ואז לחצו על "שלחו שוב".
+            , והקוד יגיע אליכם לשם אוטומטית תוך כמה שניות.
           </span>
         </div>
       )}

@@ -58,6 +58,7 @@ import {
 import { logWhatsAppMessage } from './_lib/whatsappMessages.js';
 import handleGrowWebhook from './_lib/growWebhook.js';
 import { logFailedStatuses } from './_lib/whatsappStatus.js';
+import { deliverOtpOnInbound } from './whatsapp-otp.js';
 import { confirmArrivalByPhone, isArrivalConfirmationText } from './_lib/arrivalConfirmation.js';
 
 const verifyToken = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
@@ -1953,6 +1954,15 @@ export default async function handler(req, res) {
     logFailedStatuses(req.body);
   } catch {
     // logging must never get in the way of the webhook
+  }
+
+  // Someone who asked for a login code and then wrote to this number ("send hi") has just opened
+  // the 24h window, so the code that WhatsApp refused earlier can be delivered now.
+  try {
+    const inbound = extractIncomingMessage(req.body || {});
+    if (inbound.from) await deliverOtpOnInbound(inbound.from);
+  } catch (error) {
+    console.error('[whatsapp-webhook] otp delivery on inbound failed', error?.message || error);
   }
 
   // Narrow exception to the kill switch below: a customer replying "1"/"מאשר" to the

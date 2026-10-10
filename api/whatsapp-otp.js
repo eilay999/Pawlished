@@ -187,6 +187,56 @@ const sendSmsMessage = async (to, bodyText) => {
   }
 };
 
+// WhatsApp refuses a free-form code when the phone has not written to the business in the last
+// 24h (code 131047), and nothing approved can replace it until Meta verifies the business. So the
+// page offers a "send hi" link, and the webhook calls this the moment that message arrives: the
+// window is open now, so a fresh code goes out for the request the person already made. The code
+// only ever goes to the number that sent the message (authenticated by Meta's webhook), and only
+// when that number asked for a code in the last few minutes.
+export const deliverOtpOnInbound = async (fromPhone) => {
+  try {
+    if (!otpSecret || Buffer.byteLength(otpSecret, 'utf8') < minOtpSecretBytes) return { sent: false, reason: 'not-configured' };
+    if (!canUseWhatsAppFreeform()) return { sent: false, reason: 'no-credentials' };
+    const waPhone = toWhatsAppNumber(fromPhone);
+    if (!waPhone) return { sent: false, reason: 'no-phone' };
+    const supabase = getSupabaseClient();
+    if (!supabase) return { sent: false, reason: 'no-database' };
+
+    const now = Date.now();
+    const { data: latest } = await supabase
+      .from('wa_otp')
+      .select('created_at, used_at, expires_at')
+      .eq('phone', waPhone)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const asked = latest && !latest.used_at && latest.expires_at > new Date(now).toISOString();
+    if (!asked) return { sent: false, reason: 'no-pending-request' };
+
+    const windowSince = new Date(now - 10 * 60 * 1000).toISOString();
+    const { count } = await supabase
+      .from('wa_otp')
+      .select('*', { count: 'exact', head: true })
+      .eq('phone', waPhone)
+      .gte('created_at', windowSince);
+    if ((count || 0) >= otpMaxPer10Min) return { sent: false, reason: 'rate-limited' };
+
+    const otpCode = crypto.randomInt(100000, 999999).toString();
+    const { error: insertError } = await supabase.from('wa_otp').insert({
+      phone: waPhone,
+      code_hash: hashCode(otpCode),
+      expires_at: new Date(now + otpTtlMin * 60 * 1000).toISOString()
+    });
+    if (insertError) return { sent: false, reason: 'store-failed' };
+
+    await sendWhatsAppFreeformText(waPhone, `קוד האימות שלך: ${otpCode}. תקף ל-${otpTtlMin} דקות.`);
+    return { sent: true };
+  } catch (error) {
+    console.error('[whatsapp-otp] deliver on inbound failed', error?.message || error);
+    return { sent: false, reason: 'error' };
+  }
+};
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {

@@ -246,6 +246,21 @@ export const AdminLogin: React.FC<{
                 className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-200 tracking-widest text-center text-lg font-semibold"
               />
 
+              {channel !== 'sms' && (
+                <div className="mt-3 rounded-2xl bg-rose-50 border border-rose-100 text-rose-900 text-xs px-3 py-2 leading-relaxed">
+                  הקוד לא מגיע? וואטסאפ מאפשר לשלוח קוד רק אחרי שכתבת למספר העסק.{' '}
+                  <a
+                    href={`https://wa.me/972549377773?text=${encodeURIComponent('היי')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold underline"
+                  >
+                    שלח "היי" בוואטסאפ
+                  </a>
+                  {' '}והקוד יישלח אליך שם אוטומטית.
+                </div>
+              )}
+
               <div className="mt-4 flex items-start gap-2">
                 <input
                   id="admin-remember"
