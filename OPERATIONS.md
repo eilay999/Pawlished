@@ -167,6 +167,10 @@ Message delivery failures (e.g. WhatsApp `failed` statuses such as code 131047) 
 
 In the admin app, a crash in one screen shows a "something went wrong" card instead of a white page (`components/AdminErrorBoundary.tsx`); the rest of the app keeps working. Day-before reminders for appointments that are already past, or no longer scheduled, are cancelled instead of sent.
 
+### 11d) Messages outside the 24h window (reminders, payment, confirmation)
+
+WhatsApp delivers a free-form text only within 24h of the customer's last message and still answers 200 when it will not deliver. Customer-facing messages therefore go through `api/_lib/outbound.js`: approved template first, SMS second (when Twilio is set), free-form last. Utility templates (created in WhatsApp Manager, Hebrew): `pawlished_confirm_he` (`WHATSAPP_CONFIRM_TEMPLATE`, params: date, time), `pawlished_day_before_he` (`WHATSAPP_REMINDER_TEMPLATE`, params: customer and dog, time), `pawlished_payment_he` (`WHATSAPP_PAYMENT_TEMPLATE`, params: name, date, time, amount, minutes, link). Login-code (Authentication) templates need business verification and cannot be created yet; login codes use the "send hi" flow instead. Tests: `tests/outbound.test.mjs`.
+
 ## 12) Local testing
 
 See `LOCAL_TESTING.md`: `MESSAGING_DRY_RUN=true` logs instead of sending WhatsApp/SMS/Grow/invoice requests, refuses a non-local database, is ignored on Vercel production, and `npm run dev:api` serves `/api` locally without the Vercel CLI.
